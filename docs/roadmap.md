@@ -20,8 +20,9 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 0 — Projekt- und Architekturfundament
 - [x] Phase 1 — Nextcloud-App-Skeleton und Web-Grundgerüst
 - [x] Phase 2 — Identität, Rechte und API-Grundlage
-- [ ] Phase 3 — Nextcloud-Integrationen: Contacts, Calendar, Files — **nächster Schritt**
-- [ ] Phase 4–14 — noch nicht begonnen
+- [x] Phase 3 — Nextcloud-Integrationen: Contacts, Calendar, Files
+- [ ] Phase 4 — Projektkern: Kunden, Projekte, Aufträge — **nächster Schritt**
+- [ ] Phase 5–14 — noch nicht begonnen
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 

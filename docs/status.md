@@ -73,6 +73,57 @@ Nextclouds Routen-Cache neue OCS-Routen ignorieren (Symptom: `statuscode 998
 **Phase 2 laut Roadmap-Prüfkriterien vollständig**, nächster Schritt: Phase 3
 (Contacts/Calendar/Files-Integration).
 
+## 2026-08-19 — Phase 3 (Contacts, Calendar, Files)
+
+**Erledigt:**
+
+- ADR-0009: Contacts über `OCP\Contacts\IManager::search()`, Calendar über die
+  seit Nextcloud 31 offizielle Schreib-API (`ICalendarEventBuilder`/
+  `ICreateFromString`), Files über `IRootFolder`/`Folder::newFolder()` — alle
+  drei gegen die tatsächlich installierte API verifiziert, nicht angenommen
+- Migration `erp_contact_links` (Kunde/Lieferant ↔ Contact-UID + ERP-Metadaten)
+  und `erp_calendar_links` (generisch: resourceType/resourceId ↔ Kalendertermin)
+- Contacts: Suche, Link-CRUD, **Rechte-Matrix aus Phase 2 greift bereits**
+  (Lesen ab `read` auf `Kunden`/`Lieferanten`, Schreiben ab `write`)
+- Calendar: Kalenderliste, echten Termin anlegen (kein ICS-Handbau), generische
+  Verknüpfung, ebenfalls rechte-gegated über den übergebenen `resourceType`
+- Files: idempotente ERP-Ordnerstruktur (`ERP/Projekte`, `.../Artikel`, …) im
+  User-Home
+- Web-UI: "Kunden"/"Lieferanten" sind echte Ansichten (Contact-Suche + Matrix
+  aus verknüpften Kontakten), "Einstellungen" hat einen echten
+  "Dateien & Ordner"-Abschnitt
+- 17 neue Tests (Services gegen echte DB/gemockte Nextcloud-APIs,
+  Controller-Rechte-Gate-Logik) — App-Gesamtstand: 40 Tests
+
+**Verifiziert (nicht nur behauptet):**
+
+- Contacts: Link anlegen/lesen/ändern/löschen per `curl`; Rechte-Gate
+  end-to-end mit eigens angelegtem Nicht-Admin-Testuser durchgespielt (403 ohne
+  Recht → 200 nach `read`-Vergabe → weiterhin 403 bei Schreibversuch ohne
+  `write`)
+- Calendar: echten Termin über die API angelegt und visuell in Nextclouds
+  eigener Calendar-App bestätigt (Termin erscheint am korrekten Datum)
+- Contacts: per Playwright bestätigt, dass die verlinkten Kontakte identisch
+  mit denen in Nextclouds eigener Contacts-App sind (kein Schatten-Datensatz)
+- Files: echte Ordnerstruktur mit Datei-IDs angelegt, per Playwright über die
+  Einstellungen-Seite ausgelöst und Ergebnis geprüft
+- Playwright-Klicktest: Kunden-Suche, Verknüpfen, Einstellungen-Ordnercheck —
+  keine Konsolenfehler
+
+**Ein Umgebungs-Gotcha gefunden (nicht unser Code):** `files_external` war in
+der frischen Docker-Instanz aktiviert, aber seine eigene Migration war nie
+gelaufen (`oc_external_mounts` fehlte) — hat einen Testlauf mit frisch
+angelegtem Testuser zum Absturz gebracht, weil das Anlegen eines neuen Users
+alle Mount-Provider durchprobiert. Fix: `occ app:disable files_external &&
+occ app:enable files_external` (löst die Migration erneut aus).
+
+**Ehrliche Einschränkung zum Prüfkriterium "Projekt kann verknüpft werden":**
+Es gibt in Phase 3 noch keine Projekt-Entität (kommt erst in Phase 4). Die
+Verknüpfungsmechanik (Contacts-Link-Tabelle, generische
+resourceType/resourceId-Kalenderverknüpfung) ist bewusst so gebaut, dass
+Phase 4 sie ohne Schemaänderung direkt für echte Projekte mitnutzen kann —
+end-to-end bewiesen wurde sie hier mit `kunden` als Platzhalter-Ressourcentyp.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Kein echtes fachliches ERP-Datenmodell (Projekte, Angebote, ...) — nur die
@@ -80,7 +131,8 @@ Nextclouds Routen-Cache neue OCS-Routen ignorieren (Symptom: `statuscode 998
 - Rechteprüfung existiert (Phase 2), aber nur für die Rechteverwaltung selbst
   durchgesetzt — fachliche Endpunkte (Projekte, Angebote, ...) prüfen die
   Matrix erst, wenn sie in späteren Phasen entstehen.
-- Keine Contacts-/Calendar-/Files-Integration (Phase 3).
+- Contacts-/Calendar-/Files-Integration steht (Phase 3), aber ohne echte
+  Projekt-Entität dahinter — Verknüpfung bisher nur gegen `kunden` bewiesen.
 - Frontend-Bundle ist noch nicht auf Komponentenebene tree-geshaked (Warnung beim
   Build) — für den Skeleton-Stand nicht kritisch, sollte vor Phase 12
   (Web-Reifegrad) angegangen werden.

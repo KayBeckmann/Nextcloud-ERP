@@ -111,6 +111,25 @@ vollständigen `nextcloud/server`-Checkout, unabhängig von dieser lokalen
 Sparse-Checkout-Krücke — die ist ausschließlich eine Erleichterung für
 schnelles lokales Testen gegen das sonst identische Docker-Setup.
 
+## Optional: zusätzliche Store-Apps installieren (z. B. contacts, calendar)
+
+Das offizielle Image markiert `/var/www/html/apps` standardmäßig als
+schreibgeschützt (`config/apps.config.php`, `writable => false`) — `occ
+app:install` scheitert dadurch mit "Cannot write into apps directory", obwohl
+die Dateisystemrechte selbst passen. Für lokale Tests, bei denen man z. B. die
+Contacts- oder Calendar-Web-App zusätzlich sehen will (unsere ERP-Integration
+läuft unabhängig davon direkt über `OCP\Contacts\IManager`/
+`OCP\Calendar\IManager`, siehe ADR-0009):
+
+```bash
+docker compose exec -u www-data nextcloud \
+  sed -i "s/'writable' => false,/'writable' => true,/" /var/www/html/config/apps.config.php
+docker compose exec -u www-data nextcloud php occ app:install contacts
+docker compose exec -u www-data nextcloud php occ app:install calendar
+```
+
+Nur für die lokale Testinstanz, keine Repo-relevante Änderung.
+
 ## Stoppen / zurücksetzen
 
 ```bash
