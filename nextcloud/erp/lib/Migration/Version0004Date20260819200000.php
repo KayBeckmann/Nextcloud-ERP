@@ -79,9 +79,9 @@ class Version0004Date20260819200000 extends SimpleMigrationStep {
 				'notnull' => true,
 				'length' => 255,
 			]);
-			$table->addColumn('done', Types::SMALLINT, [
+			$table->addColumn('done', Types::BOOLEAN, [
 				'notnull' => true,
-				'default' => 0,
+				'default' => false,
 			]);
 			$table->addColumn('position', Types::INTEGER, [
 				'notnull' => true,
