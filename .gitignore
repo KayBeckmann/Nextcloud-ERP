@@ -1,0 +1,21 @@
+# Node / frontend build
+node_modules/
+nextcloud/erp/js/
+
+# PHP / composer
+vendor/
+composer.lock
+
+# Docker env (secrets/local overrides — .env.example is committed instead)
+docker/.env
+
+# Sparse-Checkout des nextcloud/server-Testbootstraps für lokale PHPUnit-Läufe
+# (offizielle Docker-Images enthalten kein tests/-Verzeichnis) — siehe docker/README.md
+docker/.nc-server-tests/
+
+# OS/editor cruft
+.DS_Store
+*.swp
+
+# PHPUnit
+.phpunit.result.cache
