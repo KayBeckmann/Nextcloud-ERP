@@ -10,6 +10,7 @@
 | [0006](0006-monorepo-struktur.md) | Monorepo-Struktur | accepted |
 | [0007](0007-mit-lizenz.md) | MIT-Lizenz | accepted |
 | [0008](0008-rechte-modell.md) | ERP-Rechte-Modell | accepted |
+| [0009](0009-contacts-calendar-files-integration.md) | Contacts-/Calendar-/Files-Integration | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per
