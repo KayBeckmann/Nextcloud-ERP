@@ -3,11 +3,18 @@ import { generateUrl } from '@nextcloud/router'
 
 import DashboardView from '../views/DashboardView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
+import BerechtigungenView from '../views/BerechtigungenView.vue'
+
+// Module, die schon eine echte View statt des generischen Platzhalters haben.
+const dedicatedViews = {
+	'berechtigungen-saetze': BerechtigungenView,
+}
 
 // Hauptbereiche aus Roadmap Phase 1. Module sind bewusst Platzhalter — die
 // fachliche Umsetzung folgt in den späteren Roadmap-Phasen (siehe
-// docs/roadmap.md im Repo-Root).
-const modules = [
+// docs/roadmap.md im Repo-Root). Exportiert, damit andere Views (z. B. die
+// Rechte-Matrix) dieselben Titel/Slugs nutzen können, statt sie zu duplizieren.
+export const modules = [
 	{
 		path: 'projekte',
 		title: 'Projekte',
@@ -108,13 +115,18 @@ const modules = [
 
 const routes = [
 	{ path: '/', name: 'dashboard', component: DashboardView, meta: { title: 'Dashboard' } },
-	...modules.map((m) => ({
-		path: `/${m.path}`,
-		name: m.path,
-		component: PlaceholderView,
-		props: { title: m.title, description: m.description, phase: m.phase },
-		meta: { title: m.title },
-	})),
+	...modules.map((m) => {
+		const dedicated = dedicatedViews[m.path]
+		return {
+			path: `/${m.path}`,
+			name: m.path,
+			component: dedicated ?? PlaceholderView,
+			// props nur für den generischen Platzhalter relevant; die dedizierte
+			// View holt sich ihre Daten selbst über die API.
+			props: dedicated ? false : { title: m.title, description: m.description, phase: m.phase },
+			meta: { title: m.title },
+		}
+	}),
 ]
 
 export default createRouter({
