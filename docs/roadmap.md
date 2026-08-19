@@ -17,9 +17,11 @@ Wichtige Grundentscheidung vom 2026-08-18:
 
 ## Status (Stand 2026-08-19)
 
-- [x] Phase 0 — Projekt- und Architekturfundament: Repo-Struktur, MIT-Lizenz, Docker-Compose-Grundlage, ADRs — **in Arbeit/größtenteils erledigt**
-- [ ] Phase 1 — Nextcloud-App-Skeleton und Web-Grundgerüst — **in Arbeit**
-- [ ] Phase 2–14 — noch nicht begonnen
+- [x] Phase 0 — Projekt- und Architekturfundament
+- [x] Phase 1 — Nextcloud-App-Skeleton und Web-Grundgerüst
+- [x] Phase 2 — Identität, Rechte und API-Grundlage
+- [ ] Phase 3 — Nextcloud-Integrationen: Contacts, Calendar, Files — **nächster Schritt**
+- [ ] Phase 4–14 — noch nicht begonnen
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
