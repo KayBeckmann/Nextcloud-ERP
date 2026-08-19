@@ -1,0 +1,34 @@
+{
+	"name": "kaybeckmann/nextcloud-erp",
+	"description": "Branchenneutrales ERP-Add-on fuer Nextcloud",
+	"license": "MIT",
+	"type": "project",
+	"authors": [
+		{
+			"name": "Kay Beckmann"
+		}
+	],
+	"require": {
+		"php": "^8.1"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.6"
+	},
+	"autoload": {
+		"psr-4": {
+			"OCA\\ERP\\": "lib/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"OCA\\ERP\\Tests\\": "tests/"
+		}
+	},
+	"scripts": {
+		"test:unit": "phpunit --configuration tests/phpunit.xml"
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"sort-packages": true
+	}
+}
