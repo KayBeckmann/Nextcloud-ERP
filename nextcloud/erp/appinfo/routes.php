@@ -36,5 +36,17 @@ return [
 		['name' => 'calendar#links', 'url' => '/api/v1/calendar/links', 'verb' => 'GET'],
 		// Files-Integration (Roadmap Phase 3, ADR-0009).
 		['name' => 'files#erpFolder', 'url' => '/api/v1/files/erp-folder', 'verb' => 'GET'],
+		// Projektkern (Roadmap Phase 4, ADR-0010).
+		['name' => 'project#index', 'url' => '/api/v1/projects', 'verb' => 'GET'],
+		['name' => 'project#create', 'url' => '/api/v1/projects', 'verb' => 'POST'],
+		['name' => 'project#show', 'url' => '/api/v1/projects/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'project#update', 'url' => '/api/v1/projects/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'task#index', 'url' => '/api/v1/projects/{projectId}/tasks', 'verb' => 'GET', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'task#create', 'url' => '/api/v1/projects/{projectId}/tasks', 'verb' => 'POST', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'task#update', 'url' => '/api/v1/projects/{projectId}/tasks/{id}', 'verb' => 'PUT', 'requirements' => ['projectId' => '\d+', 'id' => '\d+']],
+		['name' => 'task#destroy', 'url' => '/api/v1/projects/{projectId}/tasks/{id}', 'verb' => 'DELETE', 'requirements' => ['projectId' => '\d+', 'id' => '\d+']],
+		['name' => 'order#index', 'url' => '/api/v1/projects/{projectId}/orders', 'verb' => 'GET', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'order#create', 'url' => '/api/v1/projects/{projectId}/orders', 'verb' => 'POST', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'order#update', 'url' => '/api/v1/projects/{projectId}/orders/{id}', 'verb' => 'PUT', 'requirements' => ['projectId' => '\d+', 'id' => '\d+']],
 	],
 ];

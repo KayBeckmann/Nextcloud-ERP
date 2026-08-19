@@ -58,6 +58,18 @@ class ErpFolderService {
 		return $result;
 	}
 
+	/**
+	 * Legt (falls nötig) den Projektordner ERP/Projekte/<projectNumber> an und
+	 * gibt dessen Node zurück (ADR-0010). Setzt voraus, dass ensureStructure()
+	 * vorher lief oder ruft die nötigen Elternordner selbst mit an.
+	 */
+	public function ensureProjectFolder(IUser $user, string $projectNumber): Folder {
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$erpFolder = $this->ensureFolder($userFolder, self::ROOT);
+		$projekteFolder = $this->ensureFolder($erpFolder, 'Projekte');
+		return $this->ensureFolder($projekteFolder, $projectNumber);
+	}
+
 	private function ensureFolder(Folder $parent, string $name): Folder {
 		if ($parent->nodeExists($name)) {
 			/** @var Folder $node */
