@@ -23,5 +23,12 @@ return [
 		['name' => 'permissions#matrix', 'url' => '/api/v1/permissions/matrix', 'verb' => 'GET'],
 		['name' => 'permissions#setMatrixEntry', 'url' => '/api/v1/permissions/matrix', 'verb' => 'PUT'],
 		['name' => 'permissions#me', 'url' => '/api/v1/permissions/me', 'verb' => 'GET'],
+		// Contacts-Integration (Roadmap Phase 3, ADR-0009) — Rechte-Gate über
+		// ResourceType::Kunden/::Lieferanten statt eigenem Admin-Check.
+		['name' => 'contacts#search', 'url' => '/api/v1/contacts/search', 'verb' => 'GET'],
+		['name' => 'contacts#links', 'url' => '/api/v1/contacts/links/{role}', 'verb' => 'GET'],
+		['name' => 'contacts#createLink', 'url' => '/api/v1/contacts/links', 'verb' => 'POST'],
+		['name' => 'contacts#updateLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'contacts#deleteLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 	],
 ];
