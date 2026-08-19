@@ -17,5 +17,11 @@ return [
 	// beweist früh, dass Web-UI und API dieselbe App-Struktur teilen.
 	'ocs' => [
 		['name' => 'api#status', 'url' => '/api/v1/status', 'verb' => 'GET'],
+		// Rechte-Matrix (Roadmap Phase 2, ADR-0008) — principals/matrix ohne
+		// #[NoAdminRequired] (Nextcloud-Admin-only per Default), 'me' bewusst offen.
+		['name' => 'permissions#principals', 'url' => '/api/v1/permissions/principals', 'verb' => 'GET'],
+		['name' => 'permissions#matrix', 'url' => '/api/v1/permissions/matrix', 'verb' => 'GET'],
+		['name' => 'permissions#setMatrixEntry', 'url' => '/api/v1/permissions/matrix', 'verb' => 'PUT'],
+		['name' => 'permissions#me', 'url' => '/api/v1/permissions/me', 'verb' => 'GET'],
 	],
 ];
