@@ -1,0 +1,32 @@
+{
+  "name": "erp",
+  "description": "Branchenneutrales ERP-Add-on fuer Nextcloud",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "webpack --node-env production --config webpack.config.js",
+    "dev": "webpack --node-env development --config webpack.config.js",
+    "watch": "webpack --node-env development --progress --watch --config webpack.config.js"
+  },
+  "browserslist": [
+    "extends @nextcloud/browserslist-config"
+  ],
+  "engines": {
+    "node": "^20.0.0",
+    "npm": "^9.0.0 || ^10.0.0"
+  },
+  "dependencies": {
+    "@nextcloud/axios": "^2.5.1",
+    "@nextcloud/router": "^3.0.1",
+    "@nextcloud/vue": "^9.9.0",
+    "vue": "^3.5.18",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@nextcloud/browserslist-config": "^3.0.1",
+    "@nextcloud/webpack-vue-config": "^7.0.4",
+    "webpack": "^5.94.0",
+    "webpack-cli": "^6.0.1"
+  }
+}
