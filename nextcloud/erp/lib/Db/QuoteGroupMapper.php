@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\ERP\Db;
+
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\QBMapper;
+use OCP\IDBConnection;
+
+/**
+ * @extends QBMapper<QuoteGroup>
+ */
+class QuoteGroupMapper extends QBMapper {
+	public function __construct(IDBConnection $db) {
+		parent::__construct($db, 'erp_quote_groups', QuoteGroup::class);
+	}
+
+	/** @return QuoteGroup[] */
+	public function findByQuote(int $quoteId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('quote_id', $qb->createNamedParameter($quoteId, \PDO::PARAM_INT)))
+			->orderBy('position', 'ASC');
+		return $this->findEntities($qb);
+	}
+
+	public function findOne(int $quoteId, int $id): ?QuoteGroup {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \PDO::PARAM_INT)))
+			->andWhere($qb->expr()->eq('quote_id', $qb->createNamedParameter($quoteId, \PDO::PARAM_INT)));
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+}

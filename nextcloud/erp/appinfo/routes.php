@@ -70,5 +70,12 @@ return [
 		['name' => 'product#removeComponent', 'url' => '/api/v1/products/{productId}/components/{id}', 'verb' => 'DELETE', 'requirements' => ['productId' => '\d+', 'id' => '\d+']],
 		['name' => 'product#addLabor', 'url' => '/api/v1/products/{productId}/labor', 'verb' => 'POST', 'requirements' => ['productId' => '\d+']],
 		['name' => 'product#removeLabor', 'url' => '/api/v1/products/{productId}/labor/{id}', 'verb' => 'DELETE', 'requirements' => ['productId' => '\d+', 'id' => '\d+']],
+		['name' => 'quote#index', 'url' => '/api/v1/quotes', 'verb' => 'GET'],
+		['name' => 'quote#create', 'url' => '/api/v1/quotes', 'verb' => 'POST'],
+		['name' => 'quote#show', 'url' => '/api/v1/quotes/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'quote#update', 'url' => '/api/v1/quotes/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'quote#addGroup', 'url' => '/api/v1/quotes/{quoteId}/groups', 'verb' => 'POST', 'requirements' => ['quoteId' => '\d+']],
+		['name' => 'quote#addPosition', 'url' => '/api/v1/quotes/{quoteId}/positions', 'verb' => 'POST', 'requirements' => ['quoteId' => '\d+']],
+		['name' => 'quote#removePosition', 'url' => '/api/v1/quotes/{quoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['quoteId' => '\d+', 'id' => '\d+']],
 	],
 ];
