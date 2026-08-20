@@ -12,6 +12,7 @@ import ArtikelView from '../views/ArtikelView.vue'
 import ProdukteView from '../views/ProdukteView.vue'
 import AngeboteView from '../views/AngeboteView.vue'
 import AngebotDetailView from '../views/AngebotDetailView.vue'
+import StundenZeitkontoView from '../views/StundenZeitkontoView.vue'
 
 // Module, die schon eine echte View statt des generischen Platzhalters haben.
 // `props` überschreibt die generischen Platzhalter-Props (title/description/phase).
@@ -24,6 +25,7 @@ const dedicatedViews = {
 	artikel: { component: ArtikelView },
 	produkte: { component: ProdukteView },
 	angebote: { component: AngeboteView },
+	'stunden-zeitkonto': { component: StundenZeitkontoView },
 }
 
 // Hauptbereiche aus Roadmap Phase 1. Module sind bewusst Platzhalter — die
