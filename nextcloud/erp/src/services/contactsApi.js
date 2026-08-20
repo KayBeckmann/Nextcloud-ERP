@@ -6,6 +6,11 @@ export async function searchContacts(q) {
 	return data.ocs.data
 }
 
+export async function resolveContactName(uid) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/contacts/resolve'), { params: { uid } })
+	return data.ocs.data
+}
+
 export async function fetchContactLinks(role) {
 	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/contacts/links/{role}', { role }))
 	return data.ocs.data

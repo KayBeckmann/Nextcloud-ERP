@@ -68,6 +68,16 @@ class ContactsController extends OCSController {
 	}
 
 	/**
+	 * Anzeigename für eine bekannte Contact-UID nachschlagen — z. B. für
+	 * Projekte, deren Kunde nicht zwingend als erp_contact_links-Eintrag
+	 * existiert (ADR-0010).
+	 */
+	#[NoAdminRequired]
+	public function resolve(string $uid): DataResponse {
+		return new DataResponse(['uid' => $uid, 'displayName' => $this->contactsService->displayNameFor($uid)]);
+	}
+
+	/**
 	 * @throws OCSBadRequestException|OCSForbiddenException
 	 */
 	#[NoAdminRequired]

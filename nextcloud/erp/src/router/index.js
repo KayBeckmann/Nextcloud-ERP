@@ -6,6 +6,8 @@ import PlaceholderView from '../views/PlaceholderView.vue'
 import BerechtigungenView from '../views/BerechtigungenView.vue'
 import ContactLinksView from '../views/ContactLinksView.vue'
 import EinstellungenView from '../views/EinstellungenView.vue'
+import ProjekteView from '../views/ProjekteView.vue'
+import ProjektDetailView from '../views/ProjektDetailView.vue'
 
 // Module, die schon eine echte View statt des generischen Platzhalters haben.
 // `props` überschreibt die generischen Platzhalter-Props (title/description/phase).
@@ -14,6 +16,7 @@ const dedicatedViews = {
 	kunden: { component: ContactLinksView, props: { role: 'customer', title: 'Kunden' } },
 	lieferanten: { component: ContactLinksView, props: { role: 'supplier', title: 'Lieferanten' } },
 	einstellungen: { component: EinstellungenView },
+	projekte: { component: ProjekteView },
 }
 
 // Hauptbereiche aus Roadmap Phase 1. Module sind bewusst Platzhalter — die
@@ -131,6 +134,14 @@ const routes = [
 			meta: { title: m.title },
 		}
 	}),
+	// Nicht Teil der Hauptnavigation, deshalb außerhalb der modules-Liste.
+	{
+		path: '/projekte/:id',
+		name: 'projekt-detail',
+		component: ProjektDetailView,
+		props: true,
+		meta: { title: 'Projekt', hideFromNav: true },
+	},
 ]
 
 export default createRouter({

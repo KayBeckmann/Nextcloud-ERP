@@ -26,6 +26,7 @@ return [
 		// Contacts-Integration (Roadmap Phase 3, ADR-0009) — Rechte-Gate über
 		// ResourceType::Kunden/::Lieferanten statt eigenem Admin-Check.
 		['name' => 'contacts#search', 'url' => '/api/v1/contacts/search', 'verb' => 'GET'],
+		['name' => 'contacts#resolve', 'url' => '/api/v1/contacts/resolve', 'verb' => 'GET'],
 		['name' => 'contacts#links', 'url' => '/api/v1/contacts/links/{role}', 'verb' => 'GET'],
 		['name' => 'contacts#createLink', 'url' => '/api/v1/contacts/links', 'verb' => 'POST'],
 		['name' => 'contacts#updateLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],

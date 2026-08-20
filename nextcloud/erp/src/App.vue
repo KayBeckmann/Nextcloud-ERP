@@ -32,10 +32,12 @@ export default {
 		return {
 			// Navigation wird aus den Router-Routen abgeleitet, statt die
 			// Modulliste ein zweites Mal zu pflegen.
-			navItems: router.getRoutes().map((route) => ({
-				to: route.path,
-				name: route.meta?.title ?? route.path,
-			})),
+			navItems: router.getRoutes()
+				.filter((route) => !route.meta?.hideFromNav)
+				.map((route) => ({
+					to: route.path,
+					name: route.meta?.title ?? route.path,
+				})),
 		}
 	},
 }
