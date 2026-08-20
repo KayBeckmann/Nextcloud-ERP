@@ -96,5 +96,19 @@ return [
 		['name' => 'time_account#index', 'url' => '/api/v1/time-account', 'verb' => 'GET'],
 		['name' => 'time_account#schedule', 'url' => '/api/v1/work-schedule', 'verb' => 'GET'],
 		['name' => 'time_account#setSchedule', 'url' => '/api/v1/work-schedule', 'verb' => 'PUT'],
+		// Abwesenheiten (Roadmap Phase 6, ADR-0012).
+		['name' => 'absence#types', 'url' => '/api/v1/absence-types', 'verb' => 'GET'],
+		['name' => 'absence#createType', 'url' => '/api/v1/absence-types', 'verb' => 'POST'],
+		['name' => 'absence#index', 'url' => '/api/v1/absence-requests', 'verb' => 'GET'],
+		['name' => 'absence#create', 'url' => '/api/v1/absence-requests', 'verb' => 'POST'],
+		['name' => 'absence#approve', 'url' => '/api/v1/absence-requests/{id}/approve', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'absence#reject', 'url' => '/api/v1/absence-requests/{id}/reject', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'absence#calendarLinks', 'url' => '/api/v1/absence-requests/{id}/calendar-links', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		// Überstunden (Roadmap Phase 6, ADR-0012).
+		['name' => 'overtime_action#index', 'url' => '/api/v1/overtime-actions', 'verb' => 'GET'],
+		['name' => 'overtime_action#create', 'url' => '/api/v1/overtime-actions', 'verb' => 'POST'],
+		['name' => 'overtime_action#approve', 'url' => '/api/v1/overtime-actions/{id}/approve', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'overtime_action#complete', 'url' => '/api/v1/overtime-actions/{id}/complete', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'overtime_action#reject', 'url' => '/api/v1/overtime-actions/{id}/reject', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 	],
 ];
