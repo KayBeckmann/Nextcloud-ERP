@@ -202,6 +202,67 @@ Gesamt manuell nachgerechnet und bestätigt (404,00 € netto → 477,76 €
 brutto). Playwright-Klicktest durch Artikel/Produkte/Angebots-Editor, keine
 Konsolenfehler.
 
+## 2026-08-20 — Phase 6 (Zeitwirtschaft und Verrechnungssätze)
+
+**Erledigt (8 neue Tabellen, 6 neue Controller):**
+
+- ADR-0012: technisch getrenntes Satzmodell (Standard-/Kundenvertragssatz),
+  6-stufige Priorisierung, Satz-Snapshot auf der Zeitbuchung, Zeitkonto als
+  reiner Lesevorgang ohne gespeicherten Saldo, Abwesenheiten über die
+  bestehende `erp_calendar_links`-Tabelle statt einer eigenen Verknüpfung
+- `RateResolutionService` (pure Logik, DB-frei): löst je User+Arbeitsart den
+  effektiven Satz auf — Kundenvertrag (User) → Kundenvertrag (Gruppe) →
+  Standard (User) → Standard (Gruppe) → globaler Standard → Arbeitsart-
+  Default → harter Fallback 0,0. 9 Unit-Tests ohne DB.
+- `RateService`/`CustomerContractService`: Standard-Sätze- und
+  Kundenvertrags-CRUD, `resolveRate()` als DB-Orchestrierung um die reine
+  Logik herum (Gate `BerechtigungenSaetze`)
+- `TimeEntryService`: Zeiterfassung mit Satz-Snapshot bei Anlage —
+  spätere Satzänderungen wirken sich nicht rückwirkend auf bereits erfasste
+  Zeiten aus (Gate `StundenZeitkonto`)
+- `TimeAccountCalculator` (pure Logik): Soll aus Wochensoll/5 × Werktage im
+  Zeitraum (Mo–Fr, kein Feiertagskalender), Ist aus summierten Minuten,
+  Saldo = Ist − Soll. `TimeAccountService` als Live-Berechnung ohne
+  gespeicherten Zwischenstand. `WorkScheduleService` liefert bei fehlendem
+  Arbeitszeitmodell einen 40h-Default statt eines Fehlers.
+- `AbsenceRequestService`: Urlaubs-/Abwesenheitsanträge mit
+  Freigabe-Workflow (requested → approved/rejected). Genehmigung legt
+  optional einen Kalendertermin im ersten beschreibbaren Kalender des
+  Antragstellers an und verknüpft ihn über `erp_calendar_links`
+  (`resourceType='absence'`) — ein fehlender Kalender lässt die Genehmigung
+  nicht scheitern.
+- `OvertimeActionService`: Überstunden abbummeln/auszahlen mit
+  Freigabe-Workflow (requested → approved → done, bzw. reject)
+- Web-UI: Stunden & Zeitkonto mit 4 Tabs (Zeiterfassung, Zeitkonto, Urlaub &
+  Abwesenheit, Überstunden) — Freigabe-Abschnitte blenden sich bei
+  fehlendem Approve-Recht (403) selbst aus, statt die Seite abzubrechen
+- 33 neue Tests — App-Gesamtstand: **122 Tests**
+
+**Zwei Varianten des bekannten Entity-Dirty-Tracking-Fallstricks (ADR-0011/
+Phase 5) gezielt vermieden, nicht neu gefunden:**
+`TimeEntry::$billable` und `AbsenceRequest::$status`/`OvertimeAction::$status`
+haben DB-seitige Defaults (`true` bzw. `'requested'`). Die Entity-Defaults
+spiegeln diese bewusst — dadurch landet ein beim Insert "unverändert"
+wirkender Wert trotzdem korrekt über den DB-Default, während ein davon
+abweichender Wert (z. B. `billable=false`) explizit als geändert erkannt und
+mitgeschrieben wird. `StandardRate::$principalType`/`CustomerContractRate::
+$principalType` haben dagegen bewusst `null` statt eines String-Defaults,
+weil `'user'`/`'group'` echte Werte sind (identisches Muster wie
+`QuotePosition::$positionType` in Phase 5). Regressionstest
+`testBillableFalseIsPersistedCorrectly` prüft explizit über einen frischen
+Mapper-Read, dass `billable=false` wirklich in der DB steht.
+
+**Verifiziert:** Vollständiger End-to-End-Durchlauf via curl — alle 6
+Prioritätsstufen der Satz-Auflösung (inkl. Kundenvertrag über Projekt→Kunde),
+Zeitbuchung mit korrektem Satz-Snapshot, Zeitkonto-Berechnung (Wochensoll
+30h → Soll/Ist/Saldo über 5 Werktage), Abwesenheitsantrag → Genehmigung →
+echter Kalendertermin im Kalender des Antragstellers, Überstunden-Workflow
+(requested → approved → done, inkl. 412 bei Status-Verletzung), 403 für
+User ohne Rechte auf allen sechs neuen Controllern. Playwright-Klicktest
+durch alle vier Tabs von Stunden & Zeitkonto inkl. echtem Formular-Submit,
+keine Konsolenfehler. Voller Cold-Restart-Zyklus des Docker-Containers zur
+Bestätigung, dass Migrationen/Routen/Autoload robust neu aufgesetzt werden.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -227,3 +288,15 @@ Konsolenfehler.
   sind über ADRs entschieden, mit Ausnahme von Themen, die erst in späteren
   Phasen konkret werden (Standard-MwSt.-Sätze, initiale Rollen, Angebotsschema,
   Rechnungsumfang) — die bleiben bewusst bis zur jeweiligen Phase offen.
+- Kein Web-UI für Verrechnungssätze/Kundenverträge (Phase 6) — aktuell nur
+  über die API v1 bedienbar. Die Web-UI-Erweiterung von "Berechtigungen &
+  Sätze" um diesen Bereich ist zurückgestellt und nicht Teil dieser Phase.
+- Kein Feiertagskalender im Zeitkonto — Werktage sind einfach Mo–Fr
+  (ADR-0012, bewusster Non-Goal für diese Phase).
+- Keine automatische Herleitung von Überstunden aus dem Zeitkonto-Saldo —
+  Anzahl Stunden wird beim Beantragen manuell eingegeben (ADR-0012).
+- Kein Resturlaub-Zähler — `AbsenceType::affectsVacationBalance` ist
+  aktuell nur ein Flag ohne eigene Berechnung/Anzeige des verbleibenden
+  Kontingents.
+- Pausenregeln nach ArbZG (§4) sind nicht abgebildet — `breakMinutes` ist
+  reine Erfassung ohne automatische Prüfung (ADR-0012).

@@ -23,8 +23,8 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 3 — Nextcloud-Integrationen: Contacts, Calendar, Files
 - [x] Phase 4 — Projektkern: Kunden, Projekte, Aufträge
 - [x] Phase 5 — Artikel, Produkte, Angebote
-- [ ] Phase 6 — Zeitwirtschaft und Verrechnungssätze — **nächster Schritt**
-- [ ] Phase 7–14 — noch nicht begonnen
+- [x] Phase 6 — Zeitwirtschaft und Verrechnungssätze
+- [ ] Phase 7–14 — noch nicht begonnen — **Phase 7 nächster Schritt**
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
