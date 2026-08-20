@@ -156,12 +156,66 @@ Termin über die Projekt-UI anlegen und in der Liste bestätigt, Rechte-Gate
 für Projekte per Playwright/curl durchgespielt, kompletter Klickpfad
 (Projektliste → Detail → alle 5 Tabs) ohne Konsolenfehler.
 
+## 2026-08-20 — Phase 5 (Artikel, Produkte, Angebote)
+
+**Erledigt (bislang umfangreichste Phase — 10 neue Tabellen, 5 neue Controller):**
+
+- ADR-0011: Snapshot-Prinzip für Angebotspositionen (Preis/Satz wird beim
+  Hinzufügen einer Position direkt auf der Position gespeichert, keine
+  Live-Referenz), Netto-/MwSt.-Berechnung als reiner Lesevorgang
+  (`QuoteCalculationService`, DB-frei testbar analog `PermissionResolver`)
+- MwSt.-Sätze und Arbeitsarten als Stammdaten unter Einstellungen (nur ein
+  Satz kann gleichzeitig Standard sein — wird beim Setzen automatisch
+  durchgesetzt)
+- Artikelstamm mit mehreren Lieferantenpreisen pro Artikel
+- Produkte/Bundles aus Artikel- und Arbeitskomponenten
+- Angebote mit Positionsgruppen, vier Positionstypen (Artikel/Produkt/
+  Arbeitsstunden/Freitext), automatisch generierter Angebotsnummer
+  (`A-%05d`), Netto-Gruppensummen und MwSt.-Abschlussblock (MwSt. wird
+  ausschließlich am Ende, getrennt je vorkommendem Satz, berechnet — nie pro
+  Position/Gruppe)
+- Neue `AbstractResourceController`-Basisklasse für die Phase-5-Controller,
+  um das Rechte-Gate-Muster (5 Controller) nicht fünfmal zu duplizieren —
+  ältere Controller bleiben unverändert, um stabilen Code nicht anzufassen
+- Web-UI: Artikel (mit aufklappbaren Lieferantenpreisen), Produkte (mit
+  Komponenten/Arbeitsleistungen), Angebotsliste, vollständiger
+  Angebots-Editor (Gruppen, gemischte Positionen, Live-Abschlussblock),
+  Einstellungen um MwSt.-/Arbeitsarten-Verwaltung erweitert
+- 30 neue Tests — App-Gesamtstand: **89 Tests**
+
+**Ein echter Bug gefunden und gefixt (Nextcloud-Entity-Fallstrick):**
+`QuotePosition::$positionType` hatte den PHP-Klassendefault `'custom'`.
+Nextclouds Entity-Dirty-Tracking vergleicht beim Setter gegen den aktuellen
+(Default-)Wert — beim Anlegen einer echten `'custom'`-Position war der neue
+Wert identisch zum Default, die Spalte wurde als "unverändert" eingestuft
+und beim INSERT übersprungen. Da `position_type` absichtlich keinen
+DB-Default hat, führte das zu einer NOT-NULL-Verletzung. Gefunden durch
+systematisches Isolieren (funktionierte mit `article`/`labor`, brach nur bei
+`custom`) statt durch Vermuten. Fix: Entity-Default auf `''` geändert;
+Regressionstest ergänzt, der explizit über einen frischen Mapper-Read
+verifiziert, dass der Wert wirklich in der DB steht.
+
+**Verifiziert:** Vollständiges Angebot mit 4 gemischten Positionen (Artikel,
+Arbeitsstunden, zwei Freitext) und zwei MwSt.-Sätzen (19 %/7 %) end-to-end
+angelegt, Netto-Zwischensumme/Gruppensummen/MwSt.-Aufschlüsselung/Brutto-
+Gesamt manuell nachgerechnet und bestätigt (404,00 € netto → 477,76 €
+brutto). Playwright-Klicktest durch Artikel/Produkte/Angebots-Editor, keine
+Konsolenfehler.
+
 ## Bekannte Einschränkungen dieses Stands
 
-- Projekte, Aufgaben, Aufträge existieren (Phase 4) — Angebote/Artikel/
-  Produkte/Rechnungen/Lager/Fuhrpark/Zeitwirtschaft noch nicht (Phase 5+).
-- Aufträge sind noch nicht mit Angebotspositionen verknüpft (die gibt es erst
-  ab Phase 5) — bewusst einfache Erfassung, siehe ADR-0010.
+- Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
+  Fuhrpark/Zeitwirtschaft/Kosten noch nicht (Phase 6+).
+- Aufträge (Phase 4) sind weiterhin nicht mit Angebotspositionen verknüpft —
+  bewusst einfache Erfassung, siehe ADR-0010. Nachziehen "Angebot annehmen →
+  Auftrag mit Positionen" ist eine spätere Ausbaustufe.
+- Kein Angebots-PDF-Export (bewusst nicht Teil von Phase 5, siehe ADR-0011)
+  — "Angebot versenden" ist aktuell nur eine Status-/Zeitstempeländerung.
+- Kein Live-Preisabgleich beim Auswählen eines Artikels/Produkts/Arbeitstyps
+  in der Angebotsposition — der Web-UI-Nutzer trägt EP/MwSt. aktuell noch
+  manuell ein, statt dass sie automatisch aus dem gewählten Artikel/Produkt
+  vorbefüllt werden. Fachlich durch das Snapshot-Prinzip (ADR-0011) gedeckt,
+  aber noch kein Komfort-Feature im UI.
 - Projektordner leben weiterhin im Home-Verzeichnis des anlegenden Users
   (ADR-0009-Einschränkung gilt unverändert für Projektordner).
 - Verantwortlicher User (`responsibleUserId`) ist ein reines Freitextfeld
