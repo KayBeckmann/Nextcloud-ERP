@@ -77,5 +77,14 @@ return [
 		['name' => 'quote#addGroup', 'url' => '/api/v1/quotes/{quoteId}/groups', 'verb' => 'POST', 'requirements' => ['quoteId' => '\d+']],
 		['name' => 'quote#addPosition', 'url' => '/api/v1/quotes/{quoteId}/positions', 'verb' => 'POST', 'requirements' => ['quoteId' => '\d+']],
 		['name' => 'quote#removePosition', 'url' => '/api/v1/quotes/{quoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['quoteId' => '\d+', 'id' => '\d+']],
+		// Zeitwirtschaft: Verrechnungssätze + Kundenverträge (Roadmap Phase 6, ADR-0012).
+		['name' => 'rate#index', 'url' => '/api/v1/rates/standard', 'verb' => 'GET'],
+		['name' => 'rate#set', 'url' => '/api/v1/rates/standard', 'verb' => 'POST'],
+		['name' => 'rate#resolve', 'url' => '/api/v1/rates/resolve', 'verb' => 'GET'],
+		['name' => 'customer_contract#index', 'url' => '/api/v1/contracts', 'verb' => 'GET'],
+		['name' => 'customer_contract#create', 'url' => '/api/v1/contracts', 'verb' => 'POST'],
+		['name' => 'customer_contract#show', 'url' => '/api/v1/contracts/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'customer_contract#addRate', 'url' => '/api/v1/contracts/{contractId}/rates', 'verb' => 'POST', 'requirements' => ['contractId' => '\d+']],
+		['name' => 'customer_contract#removeRate', 'url' => '/api/v1/contracts/{contractId}/rates/{id}', 'verb' => 'DELETE', 'requirements' => ['contractId' => '\d+', 'id' => '\d+']],
 	],
 ];

@@ -39,7 +39,7 @@ class PermissionService {
 	}
 
 	/** @return list<string> */
-	private function groupIdsFor(IUser $user): array {
+	public function groupIdsFor(IUser $user): array {
 		return array_map(
 			static fn ($group) => $group->getGID(),
 			$this->groupManager->getUserGroups($user),
