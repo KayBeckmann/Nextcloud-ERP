@@ -49,5 +49,12 @@ return [
 		['name' => 'order#index', 'url' => '/api/v1/projects/{projectId}/orders', 'verb' => 'GET', 'requirements' => ['projectId' => '\d+']],
 		['name' => 'order#create', 'url' => '/api/v1/projects/{projectId}/orders', 'verb' => 'POST', 'requirements' => ['projectId' => '\d+']],
 		['name' => 'order#update', 'url' => '/api/v1/projects/{projectId}/orders/{id}', 'verb' => 'PUT', 'requirements' => ['projectId' => '\d+', 'id' => '\d+']],
+		// Artikel/Produkte/Angebote (Roadmap Phase 5, ADR-0011).
+		['name' => 'vat_rate#index', 'url' => '/api/v1/vat-rates', 'verb' => 'GET'],
+		['name' => 'vat_rate#create', 'url' => '/api/v1/vat-rates', 'verb' => 'POST'],
+		['name' => 'vat_rate#update', 'url' => '/api/v1/vat-rates/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'work_type#index', 'url' => '/api/v1/work-types', 'verb' => 'GET'],
+		['name' => 'work_type#create', 'url' => '/api/v1/work-types', 'verb' => 'POST'],
+		['name' => 'work_type#update', 'url' => '/api/v1/work-types/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 	],
 ];
