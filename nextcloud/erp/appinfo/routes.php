@@ -110,5 +110,21 @@ return [
 		['name' => 'overtime_action#approve', 'url' => '/api/v1/overtime-actions/{id}/approve', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'overtime_action#complete', 'url' => '/api/v1/overtime-actions/{id}/complete', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'overtime_action#reject', 'url' => '/api/v1/overtime-actions/{id}/reject', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		// Rechnungen (Roadmap Phase 7, ADR-0013).
+		['name' => 'invoice#index', 'url' => '/api/v1/invoices', 'verb' => 'GET'],
+		['name' => 'invoice#create', 'url' => '/api/v1/invoices', 'verb' => 'POST'],
+		['name' => 'invoice#createFromQuote', 'url' => '/api/v1/invoices/from-quote', 'verb' => 'POST'],
+		['name' => 'invoice#show', 'url' => '/api/v1/invoices/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'invoice#addPosition', 'url' => '/api/v1/invoices/{invoiceId}/positions', 'verb' => 'POST', 'requirements' => ['invoiceId' => '\d+']],
+		['name' => 'invoice#removePosition', 'url' => '/api/v1/invoices/{invoiceId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['invoiceId' => '\d+', 'id' => '\d+']],
+		['name' => 'invoice#issue', 'url' => '/api/v1/invoices/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'invoice#recordPayment', 'url' => '/api/v1/invoices/{id}/payments', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		// Gutschriften (Roadmap Phase 7, ADR-0013).
+		['name' => 'credit_note#index', 'url' => '/api/v1/credit-notes', 'verb' => 'GET'],
+		['name' => 'credit_note#show', 'url' => '/api/v1/credit-notes/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'credit_note#createFullCancellation', 'url' => '/api/v1/credit-notes/full-cancellation', 'verb' => 'POST'],
+		['name' => 'credit_note#createPartial', 'url' => '/api/v1/credit-notes/partial', 'verb' => 'POST'],
+		['name' => 'credit_note#addPosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions', 'verb' => 'POST', 'requirements' => ['creditNoteId' => '\d+']],
+		['name' => 'credit_note#issue', 'url' => '/api/v1/credit-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 	],
 ];
