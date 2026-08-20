@@ -5,6 +5,7 @@
 			<header>
 				<h2>{{ quote.quoteNumber }} — {{ quote.title }}</h2>
 				<span class="erp-status-badge" :class="`is-${quote.status}`">{{ statusLabel(quote.status) }}</span>
+				<button @click="createInvoice">Rechnung aus diesem Angebot erstellen</button>
 			</header>
 
 			<section class="erp-quote-detail__meta">
@@ -85,6 +86,7 @@
 <script>
 import { addGroup, addPosition, fetchQuote, removePosition, updateQuote } from '../services/quotesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
+import { createInvoiceFromQuote } from '../services/invoicesApi.js'
 
 const STATUS_LABELS = { draft: 'Entwurf', sent: 'Versendet', accepted: 'Angenommen', rejected: 'Abgelehnt', expired: 'Abgelaufen' }
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', labor: 'Arbeitsstunden', custom: 'Freitext' }
@@ -180,6 +182,14 @@ export default {
 		async removePos(id) {
 			await removePosition(this.id, id)
 			await this.load()
+		},
+		async createInvoice() {
+			try {
+				const invoice = await createInvoiceFromQuote({ quoteId: this.id, title: `Rechnung zu ${this.quote.quoteNumber}` })
+				this.$router.push({ name: 'rechnung-detail', params: { id: invoice.id } })
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
 		},
 	},
 }
