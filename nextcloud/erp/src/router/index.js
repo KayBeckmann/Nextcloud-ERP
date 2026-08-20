@@ -8,6 +8,10 @@ import ContactLinksView from '../views/ContactLinksView.vue'
 import EinstellungenView from '../views/EinstellungenView.vue'
 import ProjekteView from '../views/ProjekteView.vue'
 import ProjektDetailView from '../views/ProjektDetailView.vue'
+import ArtikelView from '../views/ArtikelView.vue'
+import ProdukteView from '../views/ProdukteView.vue'
+import AngeboteView from '../views/AngeboteView.vue'
+import AngebotDetailView from '../views/AngebotDetailView.vue'
 
 // Module, die schon eine echte View statt des generischen Platzhalters haben.
 // `props` überschreibt die generischen Platzhalter-Props (title/description/phase).
@@ -17,6 +21,9 @@ const dedicatedViews = {
 	lieferanten: { component: ContactLinksView, props: { role: 'supplier', title: 'Lieferanten' } },
 	einstellungen: { component: EinstellungenView },
 	projekte: { component: ProjekteView },
+	artikel: { component: ArtikelView },
+	produkte: { component: ProdukteView },
+	angebote: { component: AngeboteView },
 }
 
 // Hauptbereiche aus Roadmap Phase 1. Module sind bewusst Platzhalter — die
@@ -141,6 +148,13 @@ const routes = [
 		component: ProjektDetailView,
 		props: true,
 		meta: { title: 'Projekt', hideFromNav: true },
+	},
+	{
+		path: '/angebote/:id',
+		name: 'angebot-detail',
+		component: AngebotDetailView,
+		props: true,
+		meta: { title: 'Angebot', hideFromNav: true },
 	},
 ]
 
