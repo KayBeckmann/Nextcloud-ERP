@@ -56,5 +56,11 @@ return [
 		['name' => 'work_type#index', 'url' => '/api/v1/work-types', 'verb' => 'GET'],
 		['name' => 'work_type#create', 'url' => '/api/v1/work-types', 'verb' => 'POST'],
 		['name' => 'work_type#update', 'url' => '/api/v1/work-types/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'article#index', 'url' => '/api/v1/articles', 'verb' => 'GET'],
+		['name' => 'article#create', 'url' => '/api/v1/articles', 'verb' => 'POST'],
+		['name' => 'article#show', 'url' => '/api/v1/articles/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'article#update', 'url' => '/api/v1/articles/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'article#addSupplierPrice', 'url' => '/api/v1/articles/{articleId}/supplier-prices', 'verb' => 'POST', 'requirements' => ['articleId' => '\d+']],
+		['name' => 'article#removeSupplierPrice', 'url' => '/api/v1/articles/{articleId}/supplier-prices/{priceId}', 'verb' => 'DELETE', 'requirements' => ['articleId' => '\d+', 'priceId' => '\d+']],
 	],
 ];
