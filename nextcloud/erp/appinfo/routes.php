@@ -62,5 +62,13 @@ return [
 		['name' => 'article#update', 'url' => '/api/v1/articles/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'article#addSupplierPrice', 'url' => '/api/v1/articles/{articleId}/supplier-prices', 'verb' => 'POST', 'requirements' => ['articleId' => '\d+']],
 		['name' => 'article#removeSupplierPrice', 'url' => '/api/v1/articles/{articleId}/supplier-prices/{priceId}', 'verb' => 'DELETE', 'requirements' => ['articleId' => '\d+', 'priceId' => '\d+']],
+		['name' => 'product#index', 'url' => '/api/v1/products', 'verb' => 'GET'],
+		['name' => 'product#create', 'url' => '/api/v1/products', 'verb' => 'POST'],
+		['name' => 'product#show', 'url' => '/api/v1/products/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'product#update', 'url' => '/api/v1/products/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'product#addComponent', 'url' => '/api/v1/products/{productId}/components', 'verb' => 'POST', 'requirements' => ['productId' => '\d+']],
+		['name' => 'product#removeComponent', 'url' => '/api/v1/products/{productId}/components/{id}', 'verb' => 'DELETE', 'requirements' => ['productId' => '\d+', 'id' => '\d+']],
+		['name' => 'product#addLabor', 'url' => '/api/v1/products/{productId}/labor', 'verb' => 'POST', 'requirements' => ['productId' => '\d+']],
+		['name' => 'product#removeLabor', 'url' => '/api/v1/products/{productId}/labor/{id}', 'verb' => 'DELETE', 'requirements' => ['productId' => '\d+', 'id' => '\d+']],
 	],
 ];
