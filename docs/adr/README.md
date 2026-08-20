@@ -14,6 +14,7 @@
 | [0010](0010-projektkern-datenmodell.md) | Projektkern-Datenmodell | accepted |
 | [0011](0011-artikel-produkte-angebote-datenmodell.md) | Datenmodell Artikel/Produkte/Angebote | accepted |
 | [0012](0012-zeitwirtschaft-verrechnungssaetze.md) | Zeitwirtschaft und Verrechnungssätze | accepted |
+| [0013](0013-rechnungen-gutschriften-zahlungsstatus.md) | Rechnungen, Gutschriften und Zahlungsstatus | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per
