@@ -86,5 +86,11 @@ return [
 		['name' => 'customer_contract#show', 'url' => '/api/v1/contracts/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'customer_contract#addRate', 'url' => '/api/v1/contracts/{contractId}/rates', 'verb' => 'POST', 'requirements' => ['contractId' => '\d+']],
 		['name' => 'customer_contract#removeRate', 'url' => '/api/v1/contracts/{contractId}/rates/{id}', 'verb' => 'DELETE', 'requirements' => ['contractId' => '\d+', 'id' => '\d+']],
+		// Zeiterfassung (Roadmap Phase 6, ADR-0012).
+		['name' => 'time_entry#index', 'url' => '/api/v1/time-entries', 'verb' => 'GET'],
+		['name' => 'time_entry#create', 'url' => '/api/v1/time-entries', 'verb' => 'POST'],
+		['name' => 'time_entry#show', 'url' => '/api/v1/time-entries/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'time_entry#update', 'url' => '/api/v1/time-entries/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'time_entry#destroy', 'url' => '/api/v1/time-entries/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 	],
 ];
