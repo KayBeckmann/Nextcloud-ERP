@@ -70,6 +70,15 @@ class ErpFolderService {
 		return $this->ensureFolder($projekteFolder, $projectNumber);
 	}
 
+	/**
+	 * Legt (falls nötig) ERP/Projekte/<projectNumber>/Rechnungen an, für die
+	 * beim Ausstellen einer Rechnung abgelegte Dokument-Datei (ADR-0013).
+	 */
+	public function ensureInvoiceFolder(IUser $user, string $projectNumber): Folder {
+		$projectFolder = $this->ensureProjectFolder($user, $projectNumber);
+		return $this->ensureFolder($projectFolder, 'Rechnungen');
+	}
+
 	private function ensureFolder(Folder $parent, string $name): Folder {
 		if ($parent->nodeExists($name)) {
 			/** @var Folder $node */
