@@ -304,6 +304,47 @@ Workflow (Angebot → Rechnung erstellen → Positionen sichtbar), keine
 Konsolenfehler. Voller Cold-Restart-Zyklus bestätigt, dass Migration,
 Routen und Autoload robust neu aufgesetzt werden.
 
+## 2026-08-20 — Phase 8 (Lager, Inventur, Bestellvorschläge)
+
+**Erledigt (5 neue Tabellen, 3 neue Controller):**
+
+- ADR-0014: Lagerorte als eine Tabelle mit Typ-Diskriminator (`central`/
+  `vehicle`/`site`), Soll-Menge (`quantityOnHand − quantityReserved`) als
+  Live-Berechnung ohne gespeicherte Spalte (identisches Prinzip wie
+  Zeitkonto/Angebotssummen), jede Bestandsänderung läuft über ein
+  Bewegungsprotokoll (`erp_stock_movements`) statt einer direkten
+  Spaltenänderung.
+- `StockCalculator`/`PurchaseSuggestionCalculator` (pure Logik):
+  Nachbestellbedarf besteht, wenn Ist- **oder** Soll-Menge unter den
+  Mindestbestand fällt; Bestellmenge = Mindestbestand − Ist-Menge. 10
+  Unit-Tests ohne DB.
+- `WarehouseService`/`StockService`: Lagerorte-CRUD (`site` erfordert
+  `projectId`), `recordMovement()` lehnt negative resultierende Bestände
+  ab, `transfer()` als atomares Bewegungspaar zwischen zwei Lagerorten,
+  `reserve()`/`release()` für reservierte Mengen.
+- `InventoryService`: vollständiger Inventurablauf — Zählung snapshotet
+  den erwarteten Bestand zum Zählzeitpunkt (nicht zum Inventurstart),
+  Abschluss bucht automatisch Korrekturbewegungen für jede Differenz ≠ 0.
+- `PurchaseSuggestionService`: bewusst **keine** eigene Tabelle — jede
+  Abfrage berechnet live, welche Artikel/Lagerort-Kombinationen unter
+  Mindestbestand liegen, inkl. sortierter Lieferantenoptionen aus
+  `erp_article_supplier_prices` (Phase 5).
+- Web-UI: Lager mit 4 Tabs (Lagerorte, Bestand, Inventur,
+  Bestellvorschläge).
+- 28 neue Tests — App-Gesamtstand: **174 Tests**
+
+**Verifiziert:** Wareneingang/Verbrauch mit vollständigem Audit-Trail,
+Verbrauch über Bestand hinaus korrekt abgelehnt (412), Umlagerung
+zwischen zwei Lagerorten, Bestellvorschlag korrekt berechnet sobald
+Bestand unter Mindestbestand fällt (inkl. günstigstem Lieferant zuerst),
+vollständiger Inventurzyklus (Start → Zählung mit Differenzanzeige →
+Abschluss → Korrekturbuchung wirkt sich sichtbar auf den Bestand aus).
+403 für User ohne Rechte auf `ResourceType::Lager`. Playwright-Klicktest
+durch alle vier Tabs mit echten Daten aus den curl-Tests, inkl. echtem
+Formular-Submit (Lagerort anlegen), keine Konsolenfehler. Voller
+Cold-Restart-Zyklus bestätigt, dass Migration, Routen und Autoload robust
+neu aufgesetzt werden.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -351,3 +392,12 @@ Routen und Autoload robust neu aufgesetzt werden.
 - Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.
 - Rechnung aus Auftrag ist nur über die generischen `orderId`-Felder
   vorbereitet, nicht über eine eigene UI-Aktion wie bei Angeboten.
+- Fahrzeuglager (`type = 'vehicle'`) sind nur ein Namensfeld ohne
+  Verknüpfung zu einem echten Fahrzeug-Datensatz — folgt erst mit dem
+  Fuhrpark in Phase 9 (ADR-0014).
+- Keine Offline-Synchronisierung von Materialverbrauch — bewusst eine
+  Aufgabe der späteren Flutter-Phasen, nicht des Web-MVP.
+- Keine automatische Reservierungslogik gegen Angebots-/Auftragspositionen
+  — `reserve()`/`release()` sind manuelle Aufrufe ohne Automatismus.
+- Keine eigene Bestellungs-/Einkaufs-Entität — Bestellvorschläge bleiben
+  ein reiner, nie gespeicherter Bericht (ADR-0014).

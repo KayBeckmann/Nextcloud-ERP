@@ -25,7 +25,8 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 5 — Artikel, Produkte, Angebote
 - [x] Phase 6 — Zeitwirtschaft und Verrechnungssätze
 - [x] Phase 7 — Rechnungen, Gutschriften und Zahlungsstatus
-- [ ] Phase 8–14 — noch nicht begonnen — **Phase 8 nächster Schritt**
+- [x] Phase 8 — Lager, Inventur und Bestellvorschläge
+- [ ] Phase 9–14 — noch nicht begonnen — **Phase 9 nächster Schritt**
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
