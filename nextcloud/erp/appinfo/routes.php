@@ -92,5 +92,9 @@ return [
 		['name' => 'time_entry#show', 'url' => '/api/v1/time-entries/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'time_entry#update', 'url' => '/api/v1/time-entries/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'time_entry#destroy', 'url' => '/api/v1/time-entries/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+		// Zeitkonto (Soll/Ist) + Arbeitszeitmodell (Roadmap Phase 6, ADR-0012).
+		['name' => 'time_account#index', 'url' => '/api/v1/time-account', 'verb' => 'GET'],
+		['name' => 'time_account#schedule', 'url' => '/api/v1/work-schedule', 'verb' => 'GET'],
+		['name' => 'time_account#setSchedule', 'url' => '/api/v1/work-schedule', 'verb' => 'PUT'],
 	],
 ];

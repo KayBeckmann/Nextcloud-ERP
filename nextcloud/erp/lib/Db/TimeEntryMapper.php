@@ -44,6 +44,20 @@ class TimeEntryMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** Summe von duration_minutes für einen User im Zeitraum (inklusive), für das Zeitkonto (ADR-0012). */
+	public function sumDurationMinutes(string $userId, string $fromDate, string $toDate): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->sum('duration_minutes', 'total'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->gte('entry_date', $qb->createNamedParameter($fromDate)))
+			->andWhere($qb->expr()->lte('entry_date', $qb->createNamedParameter($toDate)));
+		$result = $qb->executeQuery();
+		$total = $result->fetchOne();
+		$result->closeCursor();
+		return $total !== false ? (int)$total : 0;
+	}
+
 	/** @return TimeEntry[] */
 	public function findByProject(int $projectId): array {
 		$qb = $this->db->getQueryBuilder();
