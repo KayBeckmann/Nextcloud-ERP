@@ -263,6 +263,47 @@ durch alle vier Tabs von Stunden & Zeitkonto inkl. echtem Formular-Submit,
 keine Konsolenfehler. Voller Cold-Restart-Zyklus des Docker-Containers zur
 Bestätigung, dass Migrationen/Routen/Autoload robust neu aufgesetzt werden.
 
+## 2026-08-20 — Phase 7 (Rechnungen, Gutschriften, Zahlungsstatus)
+
+**Erledigt (5 neue Tabellen, 2 neue Controller):**
+
+- ADR-0013: Rechnungsnummer wird erst bei `issue()` vergeben (nicht beim
+  Anlegen des Entwurfs) — verhindert Nummernlücken durch verworfene
+  Entwürfe ("manipulationsarm", Roadmap-Prüfkriterium). Atomare
+  Sequenzvergabe je Jahr+Art über eine dedizierte Zählertabelle
+  (`erp_invoice_counters`) in einer DB-Transaktion.
+- `InvoiceNumberFormatter` (pure Logik): `{Präfix}-{Jahr}-{Sequenz:05d}`,
+  `R-` für Rechnungen, `G-` für Gutschriften. 4 Unit-Tests.
+- `InvoiceService`: Entwürfe direkt oder aus einem Angebot erzeugen
+  (`createFromQuote()` kopiert Positionen 1:1), Positionen nur im Entwurf
+  änderbar, `issue()` macht die Rechnung unveränderlich, `recordPayment()`
+  leitet den Status live aus dem Bruttobetrag ab (issued → partially_paid
+  → paid). Netto-/MwSt.-Berechnung nutzt `QuoteCalculationService` aus
+  Phase 5 wieder, statt eine Kopie zu pflegen.
+- `CreditNoteService`: einziger Korrekturweg für ausgestellte Rechnungen —
+  Vollstorno (kopiert alle Positionen, storniert die Rechnung automatisch
+  beim Ausstellen) oder Teilkorrektur (freie Positionsliste, ändert den
+  Rechnungsstatus nicht).
+- Rechnungsdokument: beim Ausstellen einer projektgebundenen Rechnung wird
+  eine druckfähige HTML-Repräsentation in `ERP/Projekte/<Nr>/Rechnungen`
+  abgelegt (`document_file_id`) — bewusst kein PDF-Binärexport, siehe
+  ADR-0013.
+- Web-UI: Rechnungsliste, Rechnungsdetail (Positionen, Ausstellen, Zahlung
+  erfassen, Gutschriften inkl. Vollstorno-/Teilkorrektur-Button), neuer
+  Button "Rechnung aus diesem Angebot erstellen" im Angebots-Editor.
+- 22 neue Tests — App-Gesamtstand: **145 Tests**
+
+**Verifiziert:** Entwurf → Position → Ausstellen (Rechnungsnummer
+`R-2026-…`) → Positionen danach unveränderlich (412), Teilzahlung →
+Vollzahlung, Rechnung aus Angebot mit identischen Werten wie in Phase 5
+verifiziert (404,00 € netto → 477,76 € brutto), inkl. echtem
+Rechnungsdokument im Projektordner. Vollstorno per Gutschrift
+(`G-2026-…`), Rechnung danach `cancelled`. 403 für User ohne Rechte auf
+`ResourceType::Rechnungen`. Playwright-Klicktest über den kompletten
+Workflow (Angebot → Rechnung erstellen → Positionen sichtbar), keine
+Konsolenfehler. Voller Cold-Restart-Zyklus bestätigt, dass Migration,
+Routen und Autoload robust neu aufgesetzt werden.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -300,3 +341,13 @@ Bestätigung, dass Migrationen/Routen/Autoload robust neu aufgesetzt werden.
   Kontingents.
 - Pausenregeln nach ArbZG (§4) sind nicht abgebildet — `breakMinutes` ist
   reine Erfassung ohne automatische Prüfung (ADR-0012).
+- Kein echter PDF-Export für Rechnungen (nur HTML im Projektordner), kein
+  XRechnung/ZUGFeRD, keine vollständige § 14 UStG-Pflichtangaben-Prüfung
+  (fehlende Firmenstammdaten-Entität) — siehe ADR-0013, "Nicht Teil dieser
+  Phase". **Vor produktivem Rechnungsversand an Kunden zwingend
+  nachzuziehen.**
+- Kein Zahlungsjournal mit Einzelbuchungen (Datum/Referenz je
+  Teilzahlung, Mahnwesen) — nur ein laufender `paid_amount`-Betrag.
+- Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.
+- Rechnung aus Auftrag ist nur über die generischen `orderId`-Felder
+  vorbereitet, nicht über eine eigene UI-Aktion wie bei Angeboten.
