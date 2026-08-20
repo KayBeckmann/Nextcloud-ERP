@@ -124,15 +124,48 @@ resourceType/resourceId-Kalenderverknüpfung) ist bewusst so gebaut, dass
 Phase 4 sie ohne Schemaänderung direkt für echte Projekte mitnutzen kann —
 end-to-end bewiesen wurde sie hier mit `kunden` als Platzhalter-Ressourcentyp.
 
+## 2026-08-20 — Phase 4 (Projektkern)
+
+**Erledigt:**
+
+- ADR-0010: Projekt-Datenmodell, Projektnummer-Generierung (`P-%05d` aus der
+  eigenen ID, race-condition-frei), Status-Workflow (6 Stufen aus dem Mockup)
+- Migration `erp_projects`, `erp_project_tasks`, `erp_orders` — Termine
+  brauchten **keine neue Tabelle**, nutzen `erp_calendar_links` aus Phase 3
+  direkt (`resourceType='projekte'`) — der Phase-3-Entwurf hat sich ausgezahlt
+- Projekt anlegen erstellt automatisch den Projektordner
+  `ERP/Projekte/<Nummer>` (wiederverwendet `ErpFolderService` aus Phase 3)
+- Projekte, Aufgaben (Checkliste), Aufträge: volles CRUD, rechte-gegated
+  (Projekte/Aufgaben über `ResourceType::Projekte`, Aufträge über eigenen
+  `ResourceType::Auftraege`)
+- Web-UI: Projektliste mit Status-Filterchips, Projektdetail mit 5 Tabs
+  (Übersicht, Aufgaben, Aufträge, Termine, Dokumente) — Termine-Tab legt
+  echte Kalendertermine an (Wiederverwendung der Phase-3-Calendar-API)
+- 19 neue Tests — App-Gesamtstand: 59 Tests
+
+**Ein echter Bug gefunden und gefixt:** Die `done`-Spalte in
+`erp_project_tasks` war als `SMALLINT` migriert, die Entity aber als
+`boolean` typisiert — PostgreSQL lehnte PDOs Boolean-Literal (`'t'`) für
+`smallint` ab (`SQLSTATE[22P02]`). Fix: Spaltentyp auf `Types::BOOLEAN`
+korrigiert (Migration war noch nicht veröffentlicht, direkt im Quelltext
+behoben statt neuer Migration).
+
+**Verifiziert:** Projekt anlegen → Ordner existiert real auf Platte
+(`occ`-Check), Aufgabe anlegen/abhaken/löschen, Auftrag anlegen/Status ändern,
+Termin über die Projekt-UI anlegen und in der Liste bestätigt, Rechte-Gate
+für Projekte per Playwright/curl durchgespielt, kompletter Klickpfad
+(Projektliste → Detail → alle 5 Tabs) ohne Konsolenfehler.
+
 ## Bekannte Einschränkungen dieses Stands
 
-- Kein echtes fachliches ERP-Datenmodell (Projekte, Angebote, ...) — nur die
-  Rechte-Matrix und die alte Platzhaltertabelle.
-- Rechteprüfung existiert (Phase 2), aber nur für die Rechteverwaltung selbst
-  durchgesetzt — fachliche Endpunkte (Projekte, Angebote, ...) prüfen die
-  Matrix erst, wenn sie in späteren Phasen entstehen.
-- Contacts-/Calendar-/Files-Integration steht (Phase 3), aber ohne echte
-  Projekt-Entität dahinter — Verknüpfung bisher nur gegen `kunden` bewiesen.
+- Projekte, Aufgaben, Aufträge existieren (Phase 4) — Angebote/Artikel/
+  Produkte/Rechnungen/Lager/Fuhrpark/Zeitwirtschaft noch nicht (Phase 5+).
+- Aufträge sind noch nicht mit Angebotspositionen verknüpft (die gibt es erst
+  ab Phase 5) — bewusst einfache Erfassung, siehe ADR-0010.
+- Projektordner leben weiterhin im Home-Verzeichnis des anlegenden Users
+  (ADR-0009-Einschränkung gilt unverändert für Projektordner).
+- Verantwortlicher User (`responsibleUserId`) ist ein reines Freitextfeld
+  ohne Validierung gegen echte Nextcloud-User — keine Auswahlliste im UI.
 - Frontend-Bundle ist noch nicht auf Komponentenebene tree-geshaked (Warnung beim
   Build) — für den Skeleton-Stand nicht kritisch, sollte vor Phase 12
   (Web-Reifegrad) angegangen werden.
