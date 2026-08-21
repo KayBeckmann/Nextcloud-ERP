@@ -383,13 +383,63 @@ Anzeigenamen); 403 für User ohne Rechte auf `lieferscheine`; offener
 Zugriff auf die User-Suche bestätigt (keine sensible Information). Voller
 Docker-Cold-Restart-Zyklus bestanden.
 
+## 2026-08-21 — Nutzeranpassung: Belegkette Angebot→Auftrag→Lieferschein/Rechnung, Teilrechnungen
+
+**Auslöser:** Weiteres direktes Nutzerfeedback: Kundenvorbelegung soll für
+alle projektgebundenen Anlage-Formulare gelten (nicht nur Angebote);
+Angebote sollen in Aufträge wandelbar sein; Aufträge sollen in
+Lieferscheine (nur Artikel/Produkte, keine Zeiten) und in Rechnungen
+wandelbar sein; Lieferscheine sollen ebenfalls in Rechnungen wandelbar
+sein; Teilrechnungen (Positionsauswahl oder Materialabschlag) sollen
+möglich sein; die Schlussrechnung muss frühere Teilrechnungen/
+Teilzahlungen am Ende auflisten.
+
+**Erledigt (ADR-0016, 1 neue Tabelle, 5 neue Spalten):**
+
+- Aufträge bekommen Positionen (`erp_order_positions`, gleiches Schema
+  wie Angebotspositionen, flach ohne Gruppen) sowie `customer_contact_uid`
+  und `quote_id`.
+- `OrderService::createFromQuote()` — Angebot → Auftrag, kopiert Titel,
+  Kunde und alle Positionen 1:1 (Snapshot-Prinzip).
+- `DeliveryNoteService::createFromOrder()` — Auftrag → Lieferschein, nur
+  `article`/`product` (keine Arbeitsstunden), mit Mengenauswahl und
+  Prüfung gegen die noch nicht gelieferte Restmenge.
+- `InvoiceService::createFromOrder()`/`createFromDeliveryNote()` — Auftrag
+  bzw. Lieferschein → Rechnung, mit Positionsauswahl (inkl. Teilmengen)
+  für Teilrechnungen durch Auswahl; Materialabschlag läuft über den
+  bestehenden `addPosition()`-Weg (Freitext-Posten ohne Auftragsbezug),
+  kein neues Datenmodell nötig.
+- `erp_invoice_positions`/`erp_delivery_note_positions` bekommen
+  `order_position_id` — ermöglicht die zur Laufzeit berechnete "bereits
+  berechnete/gelieferte Menge" je Auftragsposition (informativ, kein
+  Locking).
+- `getFullInvoice()` liefert `relatedInvoices` (Geschwister-Rechnungen
+  desselben Auftrags mit Nummer/Typ/Status/Bruttosumme/Bezahlt) — im
+  Frontend als "Teilrechnungen & Teilzahlungen dieses Auftrags"-Abschnitt
+  am Ende der Rechnungsansicht gerendert, rein informativ ohne
+  automatische Verrechnung.
+- Neue Web-UI: `AuftraegeView`/`AuftragDetailView` (Positionen,
+  Umwandlungs-Buttons "In Lieferschein wandeln"/"In Rechnung wandeln"/
+  "Materialabschlag anlegen"); `AngebotDetailView` bekommt "In Auftrag
+  wandeln"; `LieferscheineView`-Detail bekommt "In Rechnung wandeln".
+- Kundenvorbelegung generalisiert auf Aufträge und Rechnungen (analog zu
+  Angeboten) — Lieferscheine bewusst ausgenommen, da sie kein eigenes
+  Kundenfeld haben (ADR-0015).
+- 17 neue Tests — App-Gesamtstand: **206 Tests**
+
+**Verifiziert:** Vollständige Kette Angebot → Auftrag → Lieferschein +
+Rechnung, Teilrechnung per Positionsauswahl, Materialabschlag,
+Ablehnung von Arbeitsstunden-Positionen beim Lieferschein, Preis-
+übernahme von der verknüpften Auftragsposition beim Umwandeln eines
+Lieferscheins in eine Rechnung — jeweils per curl **und** per Playwright
+durch die echte UI bestätigt (keine Konsolenfehler). Schlussrechnung
+zeigt die verknüpften Teilrechnungen/Materialabschläge korrekt an.
+Voller Docker-Cold-Restart-Zyklus bestanden.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
   Fuhrpark/Zeitwirtschaft/Kosten noch nicht (Phase 6+).
-- Aufträge (Phase 4) sind weiterhin nicht mit Angebotspositionen verknüpft —
-  bewusst einfache Erfassung, siehe ADR-0010. Nachziehen "Angebot annehmen →
-  Auftrag mit Positionen" ist eine spätere Ausbaustufe.
 - Kein Angebots-PDF-Export (bewusst nicht Teil von Phase 5, siehe ADR-0011)
   — "Angebot versenden" ist aktuell nur eine Status-/Zeitstempeländerung.
 - Kein Live-Preisabgleich beim Auswählen eines Artikels/Produkts/Arbeitstyps
@@ -428,8 +478,6 @@ Docker-Cold-Restart-Zyklus bestanden.
 - Kein Zahlungsjournal mit Einzelbuchungen (Datum/Referenz je
   Teilzahlung, Mahnwesen) — nur ein laufender `paid_amount`-Betrag.
 - Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.
-- Rechnung aus Auftrag ist nur über die generischen `orderId`-Felder
-  vorbereitet, nicht über eine eigene UI-Aktion wie bei Angeboten.
 - Fahrzeuglager (`type = 'vehicle'`) sind nur ein Namensfeld ohne
   Verknüpfung zu einem echten Fahrzeug-Datensatz — folgt erst mit dem
   Fuhrpark in Phase 9 (ADR-0014).
@@ -442,8 +490,14 @@ Docker-Cold-Restart-Zyklus bestanden.
 - Kein Lieferschein-PDF/-Dokument im Projektordner (anders als bei
   Rechnungen) — kann bei Bedarf später nachgezogen werden (ADR-0015).
 - ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
-  verbaut (Projekt, Angebot, Rechnung) — Lieferanten-Auswahl bei
+  verbaut (Projekt, Angebot, Auftrag, Rechnung) — Lieferanten-Auswahl bei
   Artikelpreisen und Kundenverträge (Phase 6) nutzen weiterhin Freitext.
+- Keine automatische Verrechnung/Subtraktion von Teilrechnungsbeträgen in
+  der Schlussrechnung (`relatedInvoices` ist reine Auflistung) — echte
+  Abschlagsrechnungs-Arithmetik nach § 14 UStG bleibt offen (ADR-0016).
+- Kein Locking gegen doppeltes Verplanen von Auftragspositions-Mengen bei
+  gleichzeitiger Bearbeitung — "bereits berechnet/geliefert" ist
+  informativ (ADR-0016).
 - Rechnung aus Angebot ohne Projekt ist seit ADR-0015 unmöglich, da beide
   jetzt zwingend ein Projekt erfordern — kein produktiv genutzter
   Anwendungsfall betroffen (lokale Docker-Testdaten).
