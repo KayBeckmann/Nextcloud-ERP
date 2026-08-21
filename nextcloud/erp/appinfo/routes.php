@@ -167,6 +167,12 @@ return [
 		['name' => 'vehicle#addFuelLog', 'url' => '/api/v1/vehicles/{vehicleId}/fuel-logs', 'verb' => 'POST', 'requirements' => ['vehicleId' => '\d+']],
 		['name' => 'vehicle#removeFuelLog', 'url' => '/api/v1/vehicles/{vehicleId}/fuel-logs/{id}', 'verb' => 'DELETE', 'requirements' => ['vehicleId' => '\d+', 'id' => '\d+']],
 		['name' => 'vehicle#uploadReceipt', 'url' => '/api/v1/vehicles/{vehicleId}/fuel-logs/{fuelLogId}/receipt', 'verb' => 'POST', 'requirements' => ['vehicleId' => '\d+', 'fuelLogId' => '\d+']],
+		// Betriebliche Kosten und Kalkulation (Roadmap Phase 10, ADR-0018).
+		['name' => 'cost#overview', 'url' => '/api/v1/costs/overview', 'verb' => 'GET'],
+		['name' => 'cost#createEntry', 'url' => '/api/v1/costs/entries', 'verb' => 'POST'],
+		['name' => 'cost#updateEntry', 'url' => '/api/v1/costs/entries/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'cost#removeEntry', 'url' => '/api/v1/costs/entries/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+		['name' => 'cost#updateSettings', 'url' => '/api/v1/costs/settings', 'verb' => 'PUT'],
 		['name' => 'inventory#index', 'url' => '/api/v1/inventories', 'verb' => 'GET'],
 		['name' => 'inventory#start', 'url' => '/api/v1/inventories', 'verb' => 'POST'],
 		['name' => 'inventory#show', 'url' => '/api/v1/inventories/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
