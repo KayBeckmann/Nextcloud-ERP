@@ -21,27 +21,34 @@
 			</section>
 
 			<section class="erp-order-detail__positions">
-				<h3>Positionen</h3>
-				<table>
-					<thead>
-						<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Berechnet</th><th>Geliefert</th><th></th></tr>
-					</thead>
-					<tbody>
-						<tr v-for="p in order.positions" :key="p.id">
-							<td>{{ typeLabel(p.positionType) }}</td>
-							<td>{{ p.description }}</td>
-							<td>{{ p.quantity }}</td>
-							<td>{{ p.unit }}</td>
-							<td>{{ formatMoney(p.unitPriceNet) }}</td>
-							<td>{{ p.vatRatePercent }}%</td>
-							<td>{{ p.invoicedQuantity }} / {{ p.quantity }}</td>
-							<td>{{ p.deliveredQuantity }} / {{ p.quantity }}</td>
-							<td><button @click="removePos(p.id)">✕</button></td>
-						</tr>
-					</tbody>
-				</table>
+				<div v-for="g in groupedPositions" :key="g.key" class="erp-order-group">
+					<h3>{{ g.title }}</h3>
+					<table>
+						<thead>
+							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Berechnet</th><th>Geliefert</th><th></th></tr>
+						</thead>
+						<tbody>
+							<tr v-for="p in g.positions" :key="p.id">
+								<td>{{ typeLabel(p.positionType) }}</td>
+								<td>{{ p.description }}</td>
+								<td>{{ p.quantity }}</td>
+								<td>{{ p.unit }}</td>
+								<td>{{ formatMoney(p.unitPriceNet) }}</td>
+								<td>{{ p.vatRatePercent }}%</td>
+								<td>{{ p.invoicedQuantity }} / {{ p.quantity }}</td>
+								<td>{{ p.deliveredQuantity }} / {{ p.quantity }}</td>
+								<td><button @click="removePos(p.id)">✕</button></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 
+				<h3>+ Position hinzufügen</h3>
 				<form class="erp-order-detail__position-form" @submit.prevent="submitPosition">
+					<select v-model="newPosition.groupId">
+						<option :value="null">Ohne Gruppe</option>
+						<option v-for="grp in order.groups" :key="grp.id" :value="grp.id">{{ grp.title }}</option>
+					</select>
 					<select v-model="newPosition.positionType">
 						<option value="custom">Freitext</option>
 						<option value="article">Artikel</option>
@@ -56,6 +63,11 @@
 						<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
 					</select>
 					<button type="submit">Hinzufügen</button>
+				</form>
+
+				<form class="erp-order-detail__group-form" @submit.prevent="submitGroup">
+					<input v-model="newGroupTitle" placeholder="Neue Positionsgruppe" required>
+					<button type="submit">+ Gruppe</button>
 				</form>
 			</section>
 
@@ -116,7 +128,7 @@
 </template>
 
 <script>
-import { fetchOrder, updateOrder, addOrderPosition, removeOrderPosition } from '../services/ordersApi.js'
+import { fetchOrder, updateOrder, addOrderGroup, addOrderPosition, removeOrderPosition } from '../services/ordersApi.js'
 import { createDeliveryNoteFromOrder } from '../services/deliveryNotesApi.js'
 import { createInvoice, createInvoiceFromOrder, addInvoicePosition } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
@@ -141,7 +153,8 @@ export default {
 			convertSuccess: null,
 			edit: { title: '', status: 'draft', customerContactUid: null, description: '' },
 			statusOptions: Object.keys(STATUS_LABELS),
-			newPosition: { positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			newGroupTitle: '',
 			deliveryNoteMode: false,
 			dnSelection: {},
 			dnNotes: '',
@@ -155,6 +168,18 @@ export default {
 	computed: {
 		deliverablePositions() {
 			return (this.order?.positions ?? []).filter((p) => DELIVERABLE_TYPES.includes(p.positionType))
+		},
+		groupedPositions() {
+			const byGroup = {}
+			for (const p of this.order?.positions ?? []) {
+				const key = p.groupId ?? 'none'
+				if (!byGroup[key]) {
+					const group = (this.order.groups ?? []).find((g) => g.id === p.groupId)
+					byGroup[key] = { key, title: group ? group.title : 'Ohne Gruppe', positions: [] }
+				}
+				byGroup[key].positions.push(p)
+			}
+			return Object.values(byGroup)
 		},
 	},
 	async mounted() {
@@ -207,6 +232,15 @@ export default {
 			try {
 				await addOrderPosition(this.id, this.newPosition)
 				this.newPosition = { ...this.newPosition, description: '', quantity: 1, unitPriceNet: 0 }
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async submitGroup() {
+			try {
+				await addOrderGroup(this.id, this.newGroupTitle)
+				this.newGroupTitle = ''
 				await this.load()
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -328,7 +362,8 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-order-detail__meta input, .erp-order-detail__meta select, .erp-order-detail__meta textarea { width: 100%; max-width: 400px; }
 .erp-order-detail__positions table { width: 100%; border-collapse: collapse; }
 .erp-order-detail__positions th, .erp-order-detail__positions td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
-.erp-order-detail__position-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+.erp-order-group { margin-bottom: 16px; }
+.erp-order-detail__position-form, .erp-order-detail__group-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
 .erp-order-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-order-detail__gross { font-size: 16px; }
 .erp-order-detail__convert { margin-top: 24px; }

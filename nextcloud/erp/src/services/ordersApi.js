@@ -27,6 +27,11 @@ export async function createOrderFromQuote(payload) {
 	return data.ocs.data
 }
 
+export async function addOrderGroup(orderId, title) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/orders/{orderId}/groups', { orderId }), { title })
+	return data.ocs.data
+}
+
 export async function addOrderPosition(orderId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/orders/{orderId}/positions', { orderId }), payload)
 	return data.ocs.data

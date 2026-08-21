@@ -22,6 +22,11 @@ export async function createDeliveryNoteFromOrder(payload) {
 	return data.ocs.data
 }
 
+export async function addDeliveryNoteGroup(deliveryNoteId, title) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/delivery-notes/{deliveryNoteId}/groups', { deliveryNoteId }), { title })
+	return data.ocs.data
+}
+
 export async function addDeliveryNotePosition(deliveryNoteId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/delivery-notes/{deliveryNoteId}/positions', { deliveryNoteId }), payload)
 	return data.ocs.data

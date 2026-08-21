@@ -31,20 +31,27 @@
 			<button @click="selected = null">← Zurück zur Liste</button>
 			<h3>{{ selected.deliveryNoteNumber }} <span class="erp-status-badge" :class="`is-${selected.status}`">{{ selected.status === 'draft' ? 'Entwurf' : 'Ausgestellt' }}</span></h3>
 
-			<table class="erp-delivery-notes__table">
-				<thead><tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th></th></tr></thead>
-				<tbody>
-					<tr v-for="p in selected.positions" :key="p.id">
-						<td>{{ typeLabel(p.positionType) }}</td>
-						<td>{{ p.description }}</td>
-						<td>{{ p.quantity }}</td>
-						<td>{{ p.unit }}</td>
-						<td><button v-if="selected.status === 'draft'" @click="removePos(p.id)">✕</button></td>
-					</tr>
-				</tbody>
-			</table>
+			<div v-for="g in groupedPositions" :key="g.key" class="erp-delivery-note-group">
+				<h4>{{ g.title }}</h4>
+				<table class="erp-delivery-notes__table">
+					<thead><tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th></th></tr></thead>
+					<tbody>
+						<tr v-for="p in g.positions" :key="p.id">
+							<td>{{ typeLabel(p.positionType) }}</td>
+							<td>{{ p.description }}</td>
+							<td>{{ p.quantity }}</td>
+							<td>{{ p.unit }}</td>
+							<td><button v-if="selected.status === 'draft'" @click="removePos(p.id)">✕</button></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
 			<form v-if="selected.status === 'draft'" class="erp-delivery-notes__position-form" @submit.prevent="submitPosition">
+				<select v-model="newPosition.groupId">
+					<option :value="null">Ohne Gruppe</option>
+					<option v-for="grp in selected.groups" :key="grp.id" :value="grp.id">{{ grp.title }}</option>
+				</select>
 				<select v-model="newPosition.positionType">
 					<option value="custom">Freitext</option>
 					<option value="article">Artikel</option>
@@ -54,6 +61,11 @@
 				<input v-model.number="newPosition.quantity" type="number" step="0.01" placeholder="Menge" required>
 				<input v-model="newPosition.unit" placeholder="Einheit" style="max-width:70px">
 				<button type="submit">Hinzufügen</button>
+			</form>
+
+			<form v-if="selected.status === 'draft'" class="erp-delivery-notes__group-form" @submit.prevent="submitGroup">
+				<input v-model="newGroupTitle" placeholder="Neue Positionsgruppe" required>
+				<button type="submit">+ Gruppe</button>
 			</form>
 
 			<button v-if="selected.status === 'draft'" @click="doIssue">Lieferschein ausstellen</button>
@@ -91,7 +103,7 @@
 <script>
 import {
 	fetchDeliveryNotes, createDeliveryNote, fetchDeliveryNote,
-	addDeliveryNotePosition, removeDeliveryNotePosition, issueDeliveryNote,
+	addDeliveryNoteGroup, addDeliveryNotePosition, removeDeliveryNotePosition, issueDeliveryNote,
 } from '../services/deliveryNotesApi.js'
 import { createInvoiceFromDeliveryNote } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
@@ -110,13 +122,28 @@ export default {
 			loadError: null,
 			showCreate: false,
 			newNotes: '',
-			newPosition: { positionType: 'custom', description: '', quantity: 1, unit: 'Stk' },
+			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk' },
+			newGroupTitle: '',
 			vatRates: [],
 			invoiceMode: false,
 			invoiceSelection: {},
 			invoiceForm: { title: '', type: 'invoice' },
 			convertError: null,
 		}
+	},
+	computed: {
+		groupedPositions() {
+			const byGroup = {}
+			for (const p of this.selected?.positions ?? []) {
+				const key = p.groupId ?? 'none'
+				if (!byGroup[key]) {
+					const group = (this.selected.groups ?? []).find((g) => g.id === p.groupId)
+					byGroup[key] = { key, title: group ? group.title : 'Ohne Gruppe', positions: [] }
+				}
+				byGroup[key].positions.push(p)
+			}
+			return Object.values(byGroup)
+		},
 	},
 	async mounted() {
 		await this.load()
@@ -157,6 +184,15 @@ export default {
 			try {
 				await addDeliveryNotePosition(this.selected.id, this.newPosition)
 				this.newPosition = { ...this.newPosition, description: '', quantity: 1 }
+				this.selected = await fetchDeliveryNote(this.selected.id)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async submitGroup() {
+			try {
+				await addDeliveryNoteGroup(this.selected.id, this.newGroupTitle)
+				this.newGroupTitle = ''
 				this.selected = await fetchDeliveryNote(this.selected.id)
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -218,7 +254,8 @@ export default {
 <style scoped>
 .erp-delivery-notes { padding: 4px 0; }
 .erp-delivery-notes__header { display: flex; align-items: center; justify-content: space-between; max-width: 900px; }
-.erp-delivery-notes__create, .erp-delivery-notes__position-form { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
+.erp-delivery-notes__create, .erp-delivery-notes__position-form, .erp-delivery-notes__group-form { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
+.erp-delivery-note-group { margin-bottom: 12px; }
 .erp-delivery-notes__error { color: var(--color-error-text, #c00); }
 .erp-delivery-notes__table { border-collapse: collapse; width: 100%; max-width: 900px; margin-bottom: 10px; }
 .erp-delivery-notes__table th, .erp-delivery-notes__table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border); }

@@ -34,6 +34,11 @@ export async function createInvoiceFromDeliveryNote(payload) {
 	return data.ocs.data
 }
 
+export async function addInvoiceGroup(invoiceId, title) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/{invoiceId}/groups', { invoiceId }), { title })
+	return data.ocs.data
+}
+
 export async function addInvoicePosition(invoiceId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/{invoiceId}/positions', { invoiceId }), payload)
 	return data.ocs.data

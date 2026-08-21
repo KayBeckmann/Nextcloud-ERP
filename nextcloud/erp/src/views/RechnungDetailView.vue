@@ -18,26 +18,32 @@
 			</section>
 
 			<section class="erp-invoice-detail__positions">
-				<h3>Positionen</h3>
-				<table>
-					<thead>
-						<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th><th></th></tr>
-					</thead>
-					<tbody>
-						<tr v-for="p in invoice.positions" :key="p.id">
-							<td>{{ typeLabel(p.positionType) }}</td>
-							<td>{{ p.description }}</td>
-							<td>{{ p.quantity }}</td>
-							<td>{{ p.unit }}</td>
-							<td>{{ formatMoney(p.unitPriceNet) }}</td>
-							<td>{{ p.vatRatePercent }}%</td>
-							<td>{{ formatMoney(p.netTotal) }}</td>
-							<td><button v-if="invoice.status === 'draft'" @click="removePos(p.id)">✕</button></td>
-						</tr>
-					</tbody>
-				</table>
+				<div v-for="g in groupedPositions" :key="g.key" class="erp-invoice-group">
+					<h3>{{ g.title }}</h3>
+					<table>
+						<thead>
+							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th><th></th></tr>
+						</thead>
+						<tbody>
+							<tr v-for="p in g.positions" :key="p.id">
+								<td>{{ typeLabel(p.positionType) }}</td>
+								<td>{{ p.description }}</td>
+								<td>{{ p.quantity }}</td>
+								<td>{{ p.unit }}</td>
+								<td>{{ formatMoney(p.unitPriceNet) }}</td>
+								<td>{{ p.vatRatePercent }}%</td>
+								<td>{{ formatMoney(p.netTotal) }}</td>
+								<td><button v-if="invoice.status === 'draft'" @click="removePos(p.id)">✕</button></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 
 				<form v-if="invoice.status === 'draft'" class="erp-invoice-detail__position-form" @submit.prevent="submitPosition">
+					<select v-model="newPosition.groupId">
+						<option :value="null">Ohne Gruppe</option>
+						<option v-for="grp in invoice.groups" :key="grp.id" :value="grp.id">{{ grp.title }}</option>
+					</select>
 					<select v-model="newPosition.positionType">
 						<option value="custom">Freitext</option>
 						<option value="article">Artikel</option>
@@ -52,6 +58,11 @@
 						<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
 					</select>
 					<button type="submit">Hinzufügen</button>
+				</form>
+
+				<form v-if="invoice.status === 'draft'" class="erp-invoice-detail__group-form" @submit.prevent="submitGroup">
+					<input v-model="newGroupTitle" placeholder="Neue Positionsgruppe" required>
+					<button type="submit">+ Gruppe</button>
 				</form>
 
 				<button v-if="invoice.status === 'draft'" class="erp-invoice-detail__issue" @click="doIssue">Rechnung ausstellen</button>
@@ -126,7 +137,7 @@
 <script>
 import { generateUrl } from '@nextcloud/router'
 import {
-	fetchInvoice, addInvoicePosition, removeInvoicePosition, issueInvoice, recordInvoicePayment,
+	fetchInvoice, addInvoiceGroup, addInvoicePosition, removeInvoicePosition, issueInvoice, recordInvoicePayment,
 	fetchCreditNotes, createFullCancellation, createPartialCreditNote, addCreditNotePosition, issueCreditNote,
 } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
@@ -145,10 +156,25 @@ export default {
 			creditNotes: [],
 			vatRates: [],
 			loadError: null,
-			newPosition: { positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			newGroupTitle: '',
 			paymentAmount: null,
 			partialCreditNote: { reason: '', description: '', quantity: 1, unitPriceNet: 0 },
 		}
+	},
+	computed: {
+		groupedPositions() {
+			const byGroup = {}
+			for (const p of this.invoice?.positions ?? []) {
+				const key = p.groupId ?? 'none'
+				if (!byGroup[key]) {
+					const group = (this.invoice.groups ?? []).find((g) => g.id === p.groupId)
+					byGroup[key] = { key, title: group ? group.title : 'Ohne Gruppe', positions: [] }
+				}
+				byGroup[key].positions.push(p)
+			}
+			return Object.values(byGroup)
+		},
 	},
 	async mounted() {
 		await this.load()
@@ -194,6 +220,15 @@ export default {
 			try {
 				await addInvoicePosition(this.id, this.newPosition)
 				this.newPosition = { ...this.newPosition, description: '', quantity: 1, unitPriceNet: 0 }
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async submitGroup() {
+			try {
+				await addInvoiceGroup(this.id, this.newGroupTitle)
+				this.newGroupTitle = ''
 				await this.load()
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -265,7 +300,8 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__positions table, .erp-invoice-detail__credit-notes table { width: 100%; border-collapse: collapse; }
 .erp-invoice-detail__positions th, .erp-invoice-detail__positions td,
 .erp-invoice-detail__credit-notes th, .erp-invoice-detail__credit-notes td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
-.erp-invoice-detail__position-form, .erp-invoice-detail__payment-form, .erp-invoice-detail__credit-note-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+.erp-invoice-group { margin-bottom: 16px; }
+.erp-invoice-detail__position-form, .erp-invoice-detail__group-form, .erp-invoice-detail__payment-form, .erp-invoice-detail__credit-note-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
 .erp-invoice-detail__issue { margin-top: 8px; }
 .erp-invoice-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-invoice-detail__gross { font-size: 16px; }
