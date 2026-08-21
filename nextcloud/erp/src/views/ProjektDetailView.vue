@@ -60,7 +60,7 @@
 			</section>
 
 			<section v-else-if="tab === 'Angebote'" class="erp-project-detail__section">
-				<AngeboteView :project-id="id" />
+				<AngeboteView :project-id="id" :customer-contact-uid="project.customerContactUid" />
 			</section>
 
 			<section v-else-if="tab === 'Rechnungen'" class="erp-project-detail__section">

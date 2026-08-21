@@ -2,7 +2,7 @@
 	<div class="erp-quotes">
 		<div class="erp-quotes__header">
 			<h3>Angebote</h3>
-			<button @click="showCreate = !showCreate">+ Angebot</button>
+			<button @click="toggleCreate">+ Angebot</button>
 		</div>
 
 		<form v-if="showCreate" class="erp-quotes__create" @submit.prevent="submitCreate">
@@ -41,6 +41,10 @@ export default {
 	components: { ContactPicker },
 	props: {
 		projectId: { type: [String, Number], required: true },
+		// Kunde des Projekts — wird beim Öffnen des Anlegen-Formulars als
+		// Vorbelegung für den Angebotskunden übernommen (Nutzerwunsch
+		// 2026-08-21), bleibt aber im Picker änderbar.
+		customerContactUid: { type: String, default: null },
 	},
 	data() {
 		return {
@@ -56,6 +60,12 @@ export default {
 	methods: {
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
+		},
+		toggleCreate() {
+			this.showCreate = !this.showCreate
+			if (this.showCreate) {
+				this.newQuote.customerContactUid = this.customerContactUid ?? null
+			}
 		},
 		async load() {
 			try {
