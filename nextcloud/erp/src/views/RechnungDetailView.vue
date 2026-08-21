@@ -257,7 +257,7 @@ export default {
 </script>
 
 <style scoped>
-.erp-invoice-detail { padding: 20px; max-width: 960px; }
+.erp-invoice-detail { padding: 20px 20px 80px; max-width: 960px; }
 .erp-invoice-detail__error { color: var(--color-error-text, #c00); }
 header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__meta { margin: 16px 0; padding: 12px; background: var(--color-background-dark); }

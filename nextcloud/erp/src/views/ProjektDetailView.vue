@@ -234,7 +234,7 @@ export default {
 
 <style scoped>
 .erp-project-detail {
-	padding: 20px;
+	padding: 20px 20px 80px;
 	max-width: 960px;
 }
 .erp-project-detail__error {

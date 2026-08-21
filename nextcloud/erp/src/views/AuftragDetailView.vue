@@ -318,7 +318,7 @@ export default {
 </script>
 
 <style scoped>
-.erp-order-detail { padding: 20px; max-width: 960px; }
+.erp-order-detail { padding: 20px 20px 80px; max-width: 960px; }
 .erp-order-detail__error { color: var(--color-error-text, #c00); }
 .erp-order-detail__success { color: var(--color-success-text, #2a2); }
 header { display: flex; align-items: center; gap: 12px; }
