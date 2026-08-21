@@ -99,6 +99,26 @@
 					<button type="submit">Teilkorrektur ausstellen</button>
 				</form>
 			</section>
+
+			<section v-if="invoice.relatedInvoices && invoice.relatedInvoices.length" class="erp-invoice-detail__related">
+				<h3>Teilrechnungen &amp; Teilzahlungen dieses Auftrags</h3>
+				<p class="erp-invoice-detail__related-note">
+					Rein informative Auflistung — keine automatische Verrechnung mit dieser Rechnung (ADR-0016).
+				</p>
+				<table>
+					<thead><tr><th>Nr.</th><th>Titel</th><th>Typ</th><th>Status</th><th>Betrag brutto</th><th>Bezahlt</th></tr></thead>
+					<tbody>
+						<tr v-for="ri in invoice.relatedInvoices" :key="ri.id" class="erp-invoice-detail__related-row" @click="openRelated(ri.id)">
+							<td>{{ ri.invoiceNumber || '(Entwurf)' }}</td>
+							<td>{{ ri.title }}</td>
+							<td>{{ typeLabel(ri.type) }}</td>
+							<td><span class="erp-status-badge" :class="`is-${ri.status}`">{{ statusLabel(ri.status) }}</span></td>
+							<td>{{ formatMoney(ri.grossTotal) }}</td>
+							<td>{{ formatMoney(ri.paidAmount) }}</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
 		</template>
 	</div>
 </template>
@@ -136,6 +156,15 @@ export default {
 		if (this.vatRates.length) {
 			this.newPosition.vatRatePercent = this.vatRates.find((v) => v.isDefault)?.percentage ?? this.vatRates[0].percentage
 		}
+	},
+	watch: {
+		// Klick auf eine Teilrechnung/Schlussrechnung in der
+		// relatedInvoices-Liste navigiert innerhalb derselben Route
+		// (rechnung-detail) auf eine andere id — Vue Router mountet die
+		// Komponente dabei nicht neu, deshalb hier explizit neu laden.
+		async id() {
+			await this.load()
+		},
 	},
 	methods: {
 		statusLabel(status) {
@@ -204,6 +233,9 @@ export default {
 				this.loadError = this.errorMessage(e)
 			}
 		},
+		openRelated(id) {
+			this.$router.push({ name: 'rechnung-detail', params: { id } })
+		},
 		async submitPartialCreditNote() {
 			try {
 				const creditNote = await createPartialCreditNote(this.id, this.partialCreditNote.reason)
@@ -237,7 +269,12 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__issue { margin-top: 8px; }
 .erp-invoice-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-invoice-detail__gross { font-size: 16px; }
-.erp-invoice-detail__payment, .erp-invoice-detail__credit-notes { margin-top: 20px; }
+.erp-invoice-detail__payment, .erp-invoice-detail__credit-notes, .erp-invoice-detail__related { margin-top: 20px; }
+.erp-invoice-detail__related table { width: 100%; border-collapse: collapse; }
+.erp-invoice-detail__related th, .erp-invoice-detail__related td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.erp-invoice-detail__related-row { cursor: pointer; }
+.erp-invoice-detail__related-row:hover { background: var(--color-background-hover); }
+.erp-invoice-detail__related-note { color: var(--color-text-maxcontrast); font-size: 12px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 .erp-status-badge.is-overdue { background: var(--color-error, #c00); color: #fff; }
 </style>

@@ -42,21 +42,7 @@
 			</section>
 
 			<section v-else-if="tab === 'Aufträge'" class="erp-project-detail__section">
-				<ul class="erp-project-detail__orders">
-					<li v-for="o in orders" :key="o.id">
-						<strong>{{ o.title }}</strong>
-						<select :value="o.status" @change="updateOrderStatus(o, $event.target.value)">
-							<option value="draft">Entwurf</option>
-							<option value="confirmed">Bestätigt</option>
-							<option value="done">Abgeschlossen</option>
-						</select>
-						<p v-if="o.description">{{ o.description }}</p>
-					</li>
-				</ul>
-				<form class="erp-project-detail__inline-form" @submit.prevent="addOrder">
-					<input v-model="newOrderTitle" placeholder="Neuer Auftrag" required>
-					<button type="submit">+</button>
-				</form>
+				<AuftraegeView :project-id="id" :customer-contact-uid="project.customerContactUid" />
 			</section>
 
 			<section v-else-if="tab === 'Angebote'" class="erp-project-detail__section">
@@ -64,7 +50,7 @@
 			</section>
 
 			<section v-else-if="tab === 'Rechnungen'" class="erp-project-detail__section">
-				<RechnungenView :project-id="id" />
+				<RechnungenView :project-id="id" :customer-contact-uid="project.customerContactUid" />
 			</section>
 
 			<section v-else-if="tab === 'Lieferscheine'" class="erp-project-detail__section">
@@ -115,13 +101,13 @@ import { generateUrl } from '@nextcloud/router'
 import {
 	fetchProject, updateProject,
 	fetchTasks, createTask, updateTask, deleteTask,
-	fetchOrders, createOrder, updateOrder,
 } from '../services/projectsApi.js'
 import { fetchCalendarLinks, createCalendarEvent } from '../services/calendarApi.js'
 import { fetchCreditNotes } from '../services/invoicesApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
 import UserPicker from '../components/UserPicker.vue'
 import AngeboteView from './AngeboteView.vue'
+import AuftraegeView from './AuftraegeView.vue'
 import RechnungenView from './RechnungenView.vue'
 import LieferscheineView from './LieferscheineView.vue'
 
@@ -136,7 +122,7 @@ const STATUS_LABELS = {
 
 export default {
 	name: 'ProjektDetailView',
-	components: { ContactPicker, UserPicker, AngeboteView, RechnungenView, LieferscheineView },
+	components: { ContactPicker, UserPicker, AngeboteView, AuftraegeView, RechnungenView, LieferscheineView },
 	props: {
 		id: { type: [String, Number], required: true },
 	},
@@ -145,7 +131,6 @@ export default {
 			project: null,
 			edit: { title: '', status: 'draft', customerContactUid: null, responsibleUserId: null, notes: '' },
 			tasks: [],
-			orders: [],
 			calendarLinks: [],
 			creditNotes: [],
 			loadError: null,
@@ -153,7 +138,6 @@ export default {
 			tabs: ['Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Termine', 'Dokumente'],
 			statusOptions: Object.keys(STATUS_LABELS),
 			newTaskTitle: '',
-			newOrderTitle: '',
 			newEventSummary: '',
 			newEventStart: '',
 			newEventEnd: '',
@@ -189,13 +173,11 @@ export default {
 					responsibleUserId: this.project.responsibleUserId ?? null,
 					notes: this.project.notes ?? '',
 				}
-				const [tasks, orders, links] = await Promise.all([
+				const [tasks, links] = await Promise.all([
 					fetchTasks(this.id),
-					fetchOrders(this.id),
 					fetchCalendarLinks('projekte', String(this.id)),
 				])
 				this.tasks = tasks
-				this.orders = orders
 				this.calendarLinks = links
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
@@ -233,15 +215,6 @@ export default {
 		async removeTask(task) {
 			await deleteTask(this.id, task.id)
 			this.tasks = this.tasks.filter((t) => t.id !== task.id)
-		},
-		async addOrder() {
-			await createOrder(this.id, { title: this.newOrderTitle })
-			this.newOrderTitle = ''
-			this.orders = await fetchOrders(this.id)
-		},
-		async updateOrderStatus(order, status) {
-			await updateOrder(this.id, order.id, { title: order.title, status, description: order.description })
-			this.orders = await fetchOrders(this.id)
 		},
 		async addEvent() {
 			await createCalendarEvent({
@@ -302,7 +275,6 @@ header {
 	max-width: 400px;
 }
 .erp-project-detail__tasks,
-.erp-project-detail__orders,
 .erp-project-detail__events {
 	list-style: none;
 	padding: 0;

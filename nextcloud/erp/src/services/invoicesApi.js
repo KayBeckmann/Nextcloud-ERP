@@ -21,6 +21,19 @@ export async function createInvoiceFromQuote(payload) {
 	return data.ocs.data
 }
 
+// Rechnung aus ausgewählten Auftragspositionen (ADR-0016) — mit type:'partial'
+// und einer Teilauswahl entsteht eine Teilrechnung.
+export async function createInvoiceFromOrder(payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/from-order'), payload)
+	return data.ocs.data
+}
+
+// Rechnung aus ausgewählten Lieferscheinpositionen (ADR-0016).
+export async function createInvoiceFromDeliveryNote(payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/from-delivery-note'), payload)
+	return data.ocs.data
+}
+
 export async function addInvoicePosition(invoiceId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/{invoiceId}/positions', { invoiceId }), payload)
 	return data.ocs.data

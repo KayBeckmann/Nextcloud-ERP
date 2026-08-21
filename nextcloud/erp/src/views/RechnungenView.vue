@@ -2,7 +2,7 @@
 	<div class="erp-invoices">
 		<div class="erp-invoices__header">
 			<h3>Rechnungen</h3>
-			<button @click="showCreate = !showCreate">+ Rechnung</button>
+			<button @click="toggleCreate">+ Rechnung</button>
 		</div>
 
 		<form v-if="showCreate" class="erp-invoices__create" @submit.prevent="submitCreate">
@@ -48,6 +48,10 @@ export default {
 	components: { ContactPicker },
 	props: {
 		projectId: { type: [String, Number], required: true },
+		// Kunde des Projekts — wird beim Öffnen des Anlegen-Formulars als
+		// Vorbelegung für den Rechnungskunden übernommen (Nutzerwunsch
+		// 2026-08-21, generalisiert aus AngeboteView), bleibt änderbar.
+		customerContactUid: { type: String, default: null },
 	},
 	data() {
 		return {
@@ -63,6 +67,12 @@ export default {
 	methods: {
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
+		},
+		toggleCreate() {
+			this.showCreate = !this.showCreate
+			if (this.showCreate) {
+				this.newInvoice.customerContactUid = this.customerContactUid ?? null
+			}
 		},
 		async load() {
 			try {

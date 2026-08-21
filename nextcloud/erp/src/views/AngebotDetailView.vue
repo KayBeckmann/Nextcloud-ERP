@@ -5,6 +5,7 @@
 			<header>
 				<h2>{{ quote.quoteNumber }} — {{ quote.title }}</h2>
 				<span class="erp-status-badge" :class="`is-${quote.status}`">{{ statusLabel(quote.status) }}</span>
+				<button @click="createOrder">In Auftrag wandeln</button>
 				<button @click="createInvoice">Rechnung aus diesem Angebot erstellen</button>
 			</header>
 
@@ -87,6 +88,7 @@
 import { addGroup, addPosition, fetchQuote, removePosition, updateQuote } from '../services/quotesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
 import { createInvoiceFromQuote } from '../services/invoicesApi.js'
+import { createOrderFromQuote } from '../services/ordersApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
 
 const STATUS_LABELS = { draft: 'Entwurf', sent: 'Versendet', accepted: 'Angenommen', rejected: 'Abgelehnt', expired: 'Abgelaufen' }
@@ -185,6 +187,14 @@ export default {
 		async removePos(id) {
 			await removePosition(this.id, id)
 			await this.load()
+		},
+		async createOrder() {
+			try {
+				const order = await createOrderFromQuote({ quoteId: this.id })
+				this.$router.push({ name: 'auftrag-detail', params: { id: order.id } })
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
 		},
 		async createInvoice() {
 			try {

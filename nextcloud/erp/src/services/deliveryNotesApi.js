@@ -16,6 +16,12 @@ export async function createDeliveryNote(payload) {
 	return data.ocs.data
 }
 
+// Lieferschein aus ausgewählten Auftragspositionen (ADR-0016) — nur Artikel/Produkt.
+export async function createDeliveryNoteFromOrder(payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/delivery-notes/from-order'), payload)
+	return data.ocs.data
+}
+
 export async function addDeliveryNotePosition(deliveryNoteId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/delivery-notes/{deliveryNoteId}/positions', { deliveryNoteId }), payload)
 	return data.ocs.data

@@ -11,6 +11,7 @@ import ProjektDetailView from '../views/ProjektDetailView.vue'
 import ArtikelView from '../views/ArtikelView.vue'
 import ProdukteView from '../views/ProdukteView.vue'
 import AngebotDetailView from '../views/AngebotDetailView.vue'
+import AuftragDetailView from '../views/AuftragDetailView.vue'
 import StundenZeitkontoView from '../views/StundenZeitkontoView.vue'
 import RechnungDetailView from '../views/RechnungDetailView.vue'
 import LagerView from '../views/LagerView.vue'
@@ -152,6 +153,13 @@ const routes = [
 		component: RechnungDetailView,
 		props: true,
 		meta: { title: 'Rechnung', hideFromNav: true },
+	},
+	{
+		path: '/auftraege/:id',
+		name: 'auftrag-detail',
+		component: AuftragDetailView,
+		props: true,
+		meta: { title: 'Auftrag', hideFromNav: true },
 	},
 ]
 

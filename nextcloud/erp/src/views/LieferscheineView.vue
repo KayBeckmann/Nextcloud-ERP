@@ -57,6 +57,33 @@
 			</form>
 
 			<button v-if="selected.status === 'draft'" @click="doIssue">Lieferschein ausstellen</button>
+
+			<section class="erp-delivery-notes__convert">
+				<h3>Umwandeln</h3>
+				<button @click="toggleInvoiceMode">In Rechnung wandeln</button>
+				<p v-if="convertError" class="erp-delivery-notes__error">{{ convertError }}</p>
+
+				<form v-if="invoiceMode" class="erp-delivery-notes__convert-form" @submit.prevent="submitInvoice">
+					<label v-for="p in selected.positions" :key="p.id" class="erp-delivery-notes__convert-row">
+						<input type="checkbox" v-model="invoiceSelection[p.id].selected">
+						{{ typeLabel(p.positionType) }} — {{ p.description }} ({{ p.quantity }} {{ p.unit }})
+						<template v-if="!p.orderPositionId">
+							<input type="number" step="0.01" placeholder="EP netto" v-model.number="invoiceSelection[p.id].unitPriceNet" style="max-width:90px">
+							<select v-model.number="invoiceSelection[p.id].vatRatePercent">
+								<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
+							</select>
+						</template>
+						<span v-else class="erp-delivery-notes__convert-note">(Preis aus Auftrag)</span>
+					</label>
+					<input v-model="invoiceForm.title" placeholder="Rechnungstitel" required>
+					<select v-model="invoiceForm.type">
+						<option value="invoice">Rechnung</option>
+						<option value="partial">Teilrechnung</option>
+						<option value="final">Schlussrechnung</option>
+					</select>
+					<button type="submit">Rechnung erstellen</button>
+				</form>
+			</section>
 		</template>
 	</div>
 </template>
@@ -66,6 +93,8 @@ import {
 	fetchDeliveryNotes, createDeliveryNote, fetchDeliveryNote,
 	addDeliveryNotePosition, removeDeliveryNotePosition, issueDeliveryNote,
 } from '../services/deliveryNotesApi.js'
+import { createInvoiceFromDeliveryNote } from '../services/invoicesApi.js'
+import { fetchVatRates } from '../services/settingsApi.js'
 
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', custom: 'Freitext' }
 
@@ -82,10 +111,16 @@ export default {
 			showCreate: false,
 			newNotes: '',
 			newPosition: { positionType: 'custom', description: '', quantity: 1, unit: 'Stk' },
+			vatRates: [],
+			invoiceMode: false,
+			invoiceSelection: {},
+			invoiceForm: { title: '', type: 'invoice' },
+			convertError: null,
 		}
 	},
 	async mounted() {
 		await this.load()
+		this.vatRates = await fetchVatRates()
 	},
 	methods: {
 		typeLabel(type) {
@@ -140,6 +175,42 @@ export default {
 				this.loadError = this.errorMessage(e)
 			}
 		},
+		toggleInvoiceMode() {
+			this.invoiceMode = !this.invoiceMode
+			this.convertError = null
+			if (this.invoiceMode) {
+				this.invoiceSelection = {}
+				for (const p of this.selected.positions) {
+					this.invoiceSelection[p.id] = { selected: true, unitPriceNet: null, vatRatePercent: this.vatRates.find((v) => v.isDefault)?.percentage ?? 19 }
+				}
+				this.invoiceForm = { title: `Rechnung zu ${this.selected.deliveryNoteNumber}`, type: 'invoice' }
+			}
+		},
+		async submitInvoice() {
+			this.convertError = null
+			const positions = Object.entries(this.invoiceSelection)
+				.filter(([, sel]) => sel.selected)
+				.map(([deliveryNotePositionId, sel]) => ({
+					deliveryNotePositionId: Number(deliveryNotePositionId),
+					unitPriceNet: sel.unitPriceNet ?? undefined,
+					vatRatePercent: sel.unitPriceNet != null ? sel.vatRatePercent : undefined,
+				}))
+			if (positions.length === 0) {
+				this.convertError = 'Bitte mindestens eine Position auswählen.'
+				return
+			}
+			try {
+				const invoice = await createInvoiceFromDeliveryNote({
+					deliveryNoteId: this.selected.id,
+					title: this.invoiceForm.title,
+					type: this.invoiceForm.type,
+					positions,
+				})
+				this.$router.push({ name: 'rechnung-detail', params: { id: invoice.id } })
+			} catch (e) {
+				this.convertError = this.errorMessage(e)
+			}
+		},
 	},
 }
 </script>
@@ -154,4 +225,8 @@ export default {
 .erp-delivery-notes__row { cursor: pointer; }
 .erp-delivery-notes__row:hover { background: var(--color-background-hover); }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
+.erp-delivery-notes__convert { margin-top: 20px; }
+.erp-delivery-notes__convert-form { margin-top: 10px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 600px; display: flex; flex-direction: column; gap: 8px; }
+.erp-delivery-notes__convert-row { display: flex; align-items: center; gap: 8px; }
+.erp-delivery-notes__convert-note { color: var(--color-text-maxcontrast); font-size: 12px; }
 </style>

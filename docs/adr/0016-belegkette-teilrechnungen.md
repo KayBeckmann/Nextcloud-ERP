@@ -131,11 +131,17 @@ wie die zurückgestellte Pflichtangaben-Prüfung in ADR-0013).
 
 ### Kundenvorbelegung für alle projektgebundenen Anlage-Formulare
 
-`AuftraegeView`/`RechnungenView`/`LieferscheineView` bekommen wie
-`AngeboteView` (2026-08-21) ein `customerContactUid`-Prop, das
-`ProjektDetailView` aus `project.customerContactUid` durchreicht und das
-beim Öffnen des jeweiligen Anlage-Formulars als Vorbelegung übernommen
-wird (änderbar, kein Zwang).
+`AuftraegeView`/`RechnungenView` bekommen wie `AngeboteView` (2026-08-21)
+ein `customerContactUid`-Prop, das `ProjektDetailView` aus
+`project.customerContactUid` durchreicht und das beim Öffnen des
+jeweiligen Anlage-Formulars als Vorbelegung übernommen wird (änderbar,
+kein Zwang).
+
+> **Korrektur beim Umsetzen:** `LieferscheineView` bekommt **kein**
+> `customerContactUid`-Prop — Lieferscheine haben bewusst kein eigenes
+> Kundenfeld (ADR-0015: "dokumentieren nur die gelieferte Menge, keinen
+> Wert"), das Anlage-Formular fragt nur eine Notiz ab. Es gibt dort nichts
+> vorzubelegen; den Kunden trägt das Projekt bzw. der verknüpfte Auftrag.
 
 ### Aufträge bekommen eine eigene Detailseite
 
