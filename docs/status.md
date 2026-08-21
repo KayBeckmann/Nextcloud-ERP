@@ -471,6 +471,40 @@ UND Lieferschein → Rechnung erhalten (curl und Playwright durch die
 echte UI, keine Konsolenfehler). Layout-Fix per Playwright bestätigt
 (Scroll-Position am Seitenende zeigt jetzt sichtbaren Abstand).
 
+## 2026-08-21 — Phase 9 (Fuhrpark)
+
+**Erledigt (ADR-0017, 2 neue Tabellen, 1 neue Spalte):**
+
+- Fahrzeugstamm (`erp_vehicles`: Kennzeichen — unique, Marke/Modell,
+  Typ, Status, Fahrer als Nextcloud-UID, Kilometerstand,
+  TÜV-Fälligkeitsdatum).
+- Tankbelege (`erp_vehicle_fuel_logs`: Liter, Betrag, Kilometerstand,
+  optionales Beleg-Foto) — ein Kilometerstand über dem bisherigen
+  schreibt `current_mileage_km` automatisch fort.
+- Erster echter Datei-Upload im Projekt: Beleg-Foto wird clientseitig
+  per `FileReader` als Base64 gelesen und im JSON-Body hochgeladen
+  (`VehicleService::uploadReceipt()`, abgelegt unter
+  `ERP/Fuhrpark/<Kennzeichen>/Tankbelege/`) — bleibt konsistent mit dem
+  sonst durchgehend JSON-basierten API-Stil.
+- TÜV-/Werkstatttermine laufen über die bestehende generische
+  Calendar-Verknüpfung aus ADR-0009 (`resourceType='fuhrpark'`) — kein
+  neues Termin-Datenmodell.
+- `erp_warehouses.vehicle_id` (nullable) löst die in ADR-0014
+  dokumentierte Einschränkung — Fahrzeuglager können jetzt einen
+  echten Fahrzeug-Datensatz referenzieren, Bestand wird über den
+  bestehenden `stock#index?warehouseId=`-Endpunkt angezeigt.
+- Neue Web-UI: `FuhrparkView` (ersetzt den Phase-9-Platzhalter),
+  `VehicleDetailView` (Stammdaten, Tankbelege, Termin-Schnellaktion,
+  verknüpftes Fahrzeuglager) — TÜV-Fälligkeit wird clientseitig
+  farblich markiert (überfällig/fällig in 30 Tagen).
+- 12 neue Tests — App-Gesamtstand: **227 Tests**
+
+**Verifiziert:** Fahrzeug anlegen, doppeltes Kennzeichen abgelehnt,
+Tankbeleg mit automatischer Kilometerstand-Fortschreibung, echter
+Foto-Upload über den Browser, Fahrzeuglager-Verknüpfung — jeweils per
+curl und Playwright durch die echte UI bestätigt (keine Konsolenfehler
+durch die ERP-App selbst).
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -513,9 +547,6 @@ echte UI, keine Konsolenfehler). Layout-Fix per Playwright bestätigt
 - Kein Zahlungsjournal mit Einzelbuchungen (Datum/Referenz je
   Teilzahlung, Mahnwesen) — nur ein laufender `paid_amount`-Betrag.
 - Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.
-- Fahrzeuglager (`type = 'vehicle'`) sind nur ein Namensfeld ohne
-  Verknüpfung zu einem echten Fahrzeug-Datensatz — folgt erst mit dem
-  Fuhrpark in Phase 9 (ADR-0014).
 - Keine Offline-Synchronisierung von Materialverbrauch — bewusst eine
   Aufgabe der späteren Flutter-Phasen, nicht des Web-MVP.
 - Keine automatische Reservierungslogik gegen Angebots-/Auftragspositionen
@@ -536,3 +567,7 @@ echte UI, keine Konsolenfehler). Layout-Fix per Playwright bestätigt
 - Rechnung aus Angebot ohne Projekt ist seit ADR-0015 unmöglich, da beide
   jetzt zwingend ein Projekt erfordern — kein produktiv genutzter
   Anwendungsfall betroffen (lokale Docker-Testdaten).
+- Kein Fahrtenbuch, keine automatische TÜV-Erinnerungs-Benachrichtigung
+  (nur farbliche Markierung im UI), keine Fahrer-Zuweisungs-Historie,
+  keine Kraftstoffverbrauchsstatistik — bewusst zurückgestellt (ADR-0017,
+  "Nicht Teil dieser Phase").
