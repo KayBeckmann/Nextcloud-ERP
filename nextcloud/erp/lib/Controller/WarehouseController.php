@@ -50,13 +50,13 @@ class WarehouseController extends AbstractResourceController {
 
 	/** @throws OCSBadRequestException */
 	#[NoAdminRequired]
-	public function create(string $name, string $type = 'central', ?int $projectId = null, ?string $notes = null): DataResponse {
+	public function create(string $name, string $type = 'central', ?int $projectId = null, ?string $notes = null, ?int $vehicleId = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($name) === '') {
 			throw new OCSBadRequestException('name must not be empty');
 		}
 		try {
-			return new DataResponse($this->warehouseService->create($name, $type, $projectId, $notes));
+			return new DataResponse($this->warehouseService->create($name, $type, $projectId, $notes, $vehicleId));
 		} catch (\InvalidArgumentException $e) {
 			throw new OCSBadRequestException($e->getMessage());
 		}

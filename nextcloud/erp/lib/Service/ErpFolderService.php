@@ -79,6 +79,18 @@ class ErpFolderService {
 		return $this->ensureFolder($projectFolder, 'Rechnungen');
 	}
 
+	/**
+	 * Legt (falls nötig) ERP/Fuhrpark/<Kennzeichen>/Tankbelege an, für
+	 * hochgeladene Tankbeleg-Fotos (ADR-0017).
+	 */
+	public function ensureVehicleReceiptFolder(IUser $user, string $licensePlate): Folder {
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$erpFolder = $this->ensureFolder($userFolder, self::ROOT);
+		$fuhrparkFolder = $this->ensureFolder($erpFolder, 'Fuhrpark');
+		$vehicleFolder = $this->ensureFolder($fuhrparkFolder, $licensePlate);
+		return $this->ensureFolder($vehicleFolder, 'Tankbelege');
+	}
+
 	private function ensureFolder(Folder $parent, string $name): Folder {
 		if ($parent->nodeExists($name)) {
 			/** @var Folder $node */

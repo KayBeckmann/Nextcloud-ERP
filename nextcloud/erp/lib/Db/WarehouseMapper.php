@@ -23,6 +23,14 @@ class WarehouseMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return Warehouse[] */
+	public function findByVehicle(int $vehicleId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('vehicle_id', $qb->createNamedParameter($vehicleId, \PDO::PARAM_INT)));
+		return $this->findEntities($qb);
+	}
+
 	public function findById(int $id): ?Warehouse {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())

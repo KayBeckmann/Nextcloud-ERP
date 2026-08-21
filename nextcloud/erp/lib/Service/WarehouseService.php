@@ -31,7 +31,7 @@ class WarehouseService {
 	}
 
 	/** @throws \InvalidArgumentException */
-	public function create(string $name, string $type, ?int $projectId, ?string $notes): Warehouse {
+	public function create(string $name, string $type, ?int $projectId, ?string $notes, ?int $vehicleId = null): Warehouse {
 		if (!in_array($type, self::VALID_TYPES, true)) {
 			throw new \InvalidArgumentException('type must be one of: ' . implode(', ', self::VALID_TYPES));
 		}
@@ -44,6 +44,10 @@ class WarehouseService {
 		$warehouse->setName($name);
 		$warehouse->setType($type);
 		$warehouse->setProjectId($type === 'site' ? $projectId : null);
+		// vehicle_id ist nur bei type='vehicle' sinnvoll (ADR-0017) — bei
+		// anderen Typen wird ein mitgeschickter Wert bewusst ignoriert,
+		// analog zu project_id bei type != 'site'.
+		$warehouse->setVehicleId($type === 'vehicle' ? $vehicleId : null);
 		$warehouse->setActive(true);
 		$warehouse->setNotes($notes);
 		$warehouse->setCreatedAt($now);
