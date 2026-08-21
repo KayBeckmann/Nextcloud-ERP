@@ -29,6 +29,23 @@ class InvoiceMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/**
+	 * Andere Rechnungen desselben Auftrags (ADR-0016) — für die
+	 * "Teilrechnungen/Teilzahlungen"-Übersicht in `getFullInvoice()`.
+	 *
+	 * @return Invoice[]
+	 */
+	public function findByOrder(int $orderId, ?int $excludeId = null): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('order_id', $qb->createNamedParameter($orderId, \PDO::PARAM_INT)))
+			->orderBy('created_at', 'ASC');
+		if ($excludeId !== null) {
+			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($excludeId, \PDO::PARAM_INT)));
+		}
+		return $this->findEntities($qb);
+	}
+
 	public function findById(int $id): ?Invoice {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())

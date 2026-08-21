@@ -60,6 +60,27 @@ class DeliveryNoteController extends AbstractResourceController {
 		}
 	}
 
+	/**
+	 * Lieferschein aus ausgewählten Auftragspositionen (ADR-0016) — nur
+	 * Artikel/Produkt, keine Arbeitsstunden.
+	 *
+	 * @param array<int, array{orderPositionId: int, quantity: float}> $positions
+	 * @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException
+	 */
+	#[NoAdminRequired]
+	public function createFromOrder(int $orderId, array $positions, ?string $notes = null): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		try {
+			return new DataResponse($this->deliveryNoteService->createFromOrder($orderId, $positions, $notes));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
+	}
+
 	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function addPosition(int $deliveryNoteId, string $positionType, string $description, float $quantity, ?int $referenceId = null, string $unit = 'Stk'): DataResponse {

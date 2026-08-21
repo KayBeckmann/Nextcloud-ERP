@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\DeliveryNoteMapper;
+use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderMapper;
+use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
@@ -32,6 +36,10 @@ final class InvoiceServiceTest extends TestCase {
 	private QuoteService $quoteService;
 	private ProjectMapper $projectMapper;
 	private ErpFolderService $folderService;
+	private OrderMapper $orderMapper;
+	private OrderPositionMapper $orderPositionMapper;
+	private DeliveryNoteMapper $deliveryNoteMapper;
+	private DeliveryNotePositionMapper $deliveryNotePositionMapper;
 	private IUser $user;
 	private int $projectId;
 	private string $projectNumber;
@@ -48,7 +56,24 @@ final class InvoiceServiceTest extends TestCase {
 		$this->projectMapper = new ProjectMapper($db);
 		$projectService = new ProjectService($this->projectMapper, $this->folderService);
 
-		$this->service = new InvoiceService($this->mapper, $this->positionMapper, $quoteMapper, $quotePositionMapper, $db, $this->folderService, $projectService);
+		$this->orderMapper = new OrderMapper($db);
+		$this->orderPositionMapper = new OrderPositionMapper($db);
+		$this->deliveryNoteMapper = new DeliveryNoteMapper($db);
+		$this->deliveryNotePositionMapper = new DeliveryNotePositionMapper($db);
+
+		$this->service = new InvoiceService(
+			$this->mapper,
+			$this->positionMapper,
+			$quoteMapper,
+			$quotePositionMapper,
+			$this->orderMapper,
+			$this->orderPositionMapper,
+			$this->deliveryNoteMapper,
+			$this->deliveryNotePositionMapper,
+			$db,
+			$this->folderService,
+			$projectService,
+		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
 		if ($userManager->userExists(self::TEST_UID)) {
@@ -71,6 +96,18 @@ final class InvoiceServiceTest extends TestCase {
 				$this->mapper->delete($invoice);
 			}
 		}
+		foreach ($this->deliveryNoteMapper->findByProject($this->projectId) as $dn) {
+			foreach ($this->deliveryNotePositionMapper->findByDeliveryNote($dn->getId()) as $p) {
+				$this->deliveryNotePositionMapper->delete($p);
+			}
+			$this->deliveryNoteMapper->delete($dn);
+		}
+		foreach ($this->orderMapper->findByProject($this->projectId) as $order) {
+			foreach ($this->orderPositionMapper->findByOrder($order->getId()) as $p) {
+				$this->orderPositionMapper->delete($p);
+			}
+			$this->orderMapper->delete($order);
+		}
 		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
 		self::logout();
 		$this->user->delete();
@@ -81,6 +118,29 @@ final class InvoiceServiceTest extends TestCase {
 		$invoice = $this->service->createDraft('phpunit-invoice-1', 'invoice', $this->projectId, null, 'cust-1', null, null);
 		$this->service->addPosition($invoice->getId(), 'custom', null, 'Testposition', 1.0, 'Stk', $unitPriceNet, $vat);
 		return $invoice;
+	}
+
+	private function createOrderWithPosition(string $positionType = 'article', float $quantity = 5.0, float $unitPriceNet = 10.0): array {
+		$order = new \OCA\ERP\Db\Order();
+		$order->setProjectId($this->projectId);
+		$order->setTitle('phpunit-order-for-invoice');
+		$order->setStatus('draft');
+		$order->setCustomerContactUid('cust-order');
+		$order->setCreatedAt(time());
+		$order->setUpdatedAt(time());
+		$order = $this->orderMapper->insert($order);
+
+		$position = new \OCA\ERP\Db\OrderPosition();
+		$position->setOrderId($order->getId());
+		$position->setPositionType($positionType);
+		$position->setDescription('Testposition');
+		$position->setQuantity($quantity);
+		$position->setUnit('Stk');
+		$position->setUnitPriceNet($unitPriceNet);
+		$position->setVatRatePercent(19.0);
+		$position = $this->orderPositionMapper->insert($position);
+
+		return [$order, $position];
 	}
 
 	public function testCreateDraftHasNoInvoiceNumberYet(): void {
@@ -190,5 +250,116 @@ final class InvoiceServiceTest extends TestCase {
 
 		$invoiceFolder = $this->folderService->ensureInvoiceFolder($this->user, $this->projectNumber);
 		$this->assertTrue($invoiceFolder->nodeExists($issued->getInvoiceNumber() . '.html'));
+	}
+
+	public function testCreateFromOrderCopiesSelectedPositionWithPartialQuantity(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 10.0, 12.5);
+
+		$invoice = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-partial', 'partial', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 4.0],
+		]);
+
+		$this->assertSame($order->getId(), $invoice->getOrderId());
+		$this->assertSame('cust-order', $invoice->getCustomerContactUid());
+		$this->assertSame('partial', $invoice->getType());
+
+		$full = $this->service->getFullInvoice($invoice->getId());
+		$this->assertCount(1, $full['positions']);
+		$this->assertSame(4.0, $full['positions'][0]->getQuantity());
+		$this->assertSame(12.5, $full['positions'][0]->getUnitPriceNet());
+		$this->assertSame($position->getId(), $full['positions'][0]->getOrderPositionId());
+	}
+
+	public function testCreateFromOrderWithEmptyPositionsThrows(): void {
+		[$order] = $this->createOrderWithPosition();
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->createFromOrder($order->getId(), 'phpunit-invoice-empty', 'invoice', null, null, []);
+	}
+
+	public function testCreateFromUnknownOrderThrows(): void {
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->createFromOrder(999999999, 'phpunit-invoice-no-order', 'invoice', null, null, [
+			['orderPositionId' => 1, 'quantity' => 1.0],
+		]);
+	}
+
+	public function testCreateFromDeliveryNoteInheritsPriceFromLinkedOrderPosition(): void {
+		[$order, $orderPosition] = $this->createOrderWithPosition('product', 5.0, 30.0);
+		$deliveryNote = $this->deliveryNoteMapper->insert((function () use ($order) {
+			$dn = new \OCA\ERP\Db\DeliveryNote();
+			$dn->setProjectId($this->projectId);
+			$dn->setOrderId($order->getId());
+			$dn->setStatus('draft');
+			$dn->setCreatedAt(time());
+			$dn->setUpdatedAt(time());
+			return $dn;
+		})());
+		$dnPosition = new \OCA\ERP\Db\DeliveryNotePosition();
+		$dnPosition->setDeliveryNoteId($deliveryNote->getId());
+		$dnPosition->setPositionType('product');
+		$dnPosition->setDescription('Testposition');
+		$dnPosition->setQuantity(2.0);
+		$dnPosition->setUnit('Stk');
+		$dnPosition->setOrderPositionId($orderPosition->getId());
+		$dnPosition = $this->deliveryNotePositionMapper->insert($dnPosition);
+
+		$invoice = $this->service->createFromDeliveryNote($deliveryNote->getId(), 'phpunit-invoice-from-dn', 'invoice', null, null, [
+			['deliveryNotePositionId' => $dnPosition->getId()],
+		]);
+
+		$this->assertSame($deliveryNote->getId(), $invoice->getDeliveryNoteId());
+		$full = $this->service->getFullInvoice($invoice->getId());
+		$this->assertCount(1, $full['positions']);
+		$this->assertSame(30.0, $full['positions'][0]->getUnitPriceNet());
+		$this->assertSame(2.0, $full['positions'][0]->getQuantity());
+	}
+
+	public function testCreateFromDeliveryNoteWithoutLinkedOrderPositionRequiresExplicitPrice(): void {
+		$deliveryNote = $this->deliveryNoteMapper->insert((function () {
+			$dn = new \OCA\ERP\Db\DeliveryNote();
+			$dn->setProjectId($this->projectId);
+			$dn->setStatus('draft');
+			$dn->setCreatedAt(time());
+			$dn->setUpdatedAt(time());
+			return $dn;
+		})());
+		$dnPosition = new \OCA\ERP\Db\DeliveryNotePosition();
+		$dnPosition->setDeliveryNoteId($deliveryNote->getId());
+		$dnPosition->setPositionType('custom');
+		$dnPosition->setDescription('Ohne Auftragsbezug');
+		$dnPosition->setQuantity(1.0);
+		$dnPosition->setUnit('Stk');
+		$dnPosition = $this->deliveryNotePositionMapper->insert($dnPosition);
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->createFromDeliveryNote($deliveryNote->getId(), 'phpunit-invoice-no-price', 'invoice', null, null, [
+			['deliveryNotePositionId' => $dnPosition->getId()],
+		]);
+	}
+
+	public function testGetFullInvoiceListsRelatedInvoicesOfSameOrder(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 10.0, 20.0);
+
+		$partial = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-teil-1', 'partial', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 4.0],
+		]);
+		$final = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-schluss', 'final', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 10.0],
+		]);
+
+		$fullFinal = $this->service->getFullInvoice($final->getId());
+		$this->assertCount(1, $fullFinal['relatedInvoices']);
+		$this->assertSame($partial->getId(), $fullFinal['relatedInvoices'][0]['id']);
+		$this->assertSame(95.2, $fullFinal['relatedInvoices'][0]['grossTotal']);
+
+		$fullPartial = $this->service->getFullInvoice($partial->getId());
+		$this->assertCount(1, $fullPartial['relatedInvoices']);
+		$this->assertSame($final->getId(), $fullPartial['relatedInvoices'][0]['id']);
+	}
+
+	public function testGetFullInvoiceWithoutOrderHasEmptyRelatedInvoices(): void {
+		$invoice = $this->draftWithOnePosition();
+		$full = $this->service->getFullInvoice($invoice->getId());
+		$this->assertSame([], $full['relatedInvoices']);
 	}
 }

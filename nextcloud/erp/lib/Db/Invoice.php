@@ -19,6 +19,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setOrderId(?int $orderId)
  * @method int|null getQuoteId()
  * @method void setQuoteId(?int $quoteId)
+ * @method int|null getDeliveryNoteId()
+ * @method void setDeliveryNoteId(?int $deliveryNoteId)
  * @method string|null getCustomerContactUid()
  * @method void setCustomerContactUid(?string $customerContactUid)
  * @method string getTitle()
@@ -51,6 +53,7 @@ class Invoice extends Entity implements \JsonSerializable {
 	protected int $projectId = 0;
 	protected ?int $orderId = null;
 	protected ?int $quoteId = null;
+	protected ?int $deliveryNoteId = null;
 	protected ?string $customerContactUid = null;
 	protected string $title = '';
 	protected ?int $issuedAt = null;
@@ -66,6 +69,7 @@ class Invoice extends Entity implements \JsonSerializable {
 		$this->addType('projectId', 'integer');
 		$this->addType('orderId', 'integer');
 		$this->addType('quoteId', 'integer');
+		$this->addType('deliveryNoteId', 'integer');
 		$this->addType('issuedAt', 'integer');
 		$this->addType('paidAmount', 'float');
 		$this->addType('documentFileId', 'integer');
@@ -82,6 +86,7 @@ class Invoice extends Entity implements \JsonSerializable {
 			'projectId' => $this->getProjectId(),
 			'orderId' => $this->getOrderId(),
 			'quoteId' => $this->getQuoteId(),
+			'deliveryNoteId' => $this->getDeliveryNoteId(),
 			'customerContactUid' => $this->getCustomerContactUid(),
 			'title' => $this->getTitle(),
 			'issuedAt' => $this->getIssuedAt(),

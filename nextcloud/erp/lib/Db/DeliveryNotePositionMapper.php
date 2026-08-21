@@ -36,4 +36,28 @@ class DeliveryNotePositionMapper extends QBMapper {
 			return null;
 		}
 	}
+
+	public function findById(int $id): ?DeliveryNotePosition {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \PDO::PARAM_INT)));
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+
+	/**
+	 * Bereits gelieferte Menge einer Auftragsposition (ADR-0016) — zur
+	 * Laufzeit summiert, informativ, kein hartes Limit.
+	 */
+	public function sumQuantityForOrderPosition(int $orderPositionId): float {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->createFunction('SUM(quantity)'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('order_position_id', $qb->createNamedParameter($orderPositionId, \PDO::PARAM_INT)));
+		$sum = $qb->executeQuery()->fetchOne();
+		return $sum === false ? 0.0 : (float)$sum;
+	}
 }

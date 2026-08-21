@@ -25,6 +25,17 @@ class OrderMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	public function findById(int $id): ?Order {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \PDO::PARAM_INT)));
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+
 	public function findOne(int $projectId, int $id): ?Order {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())

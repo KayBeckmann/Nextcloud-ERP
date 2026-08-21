@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Service;
 
+use OCA\ERP\Db\DeliveryNoteMapper;
+use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\Invoice;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePosition;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderMapper;
+use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Invoices\InvoiceNumberFormatter;
@@ -27,6 +31,10 @@ class InvoiceService {
 		private InvoicePositionMapper $positionMapper,
 		private QuoteMapper $quoteMapper,
 		private QuotePositionMapper $quotePositionMapper,
+		private OrderMapper $orderMapper,
+		private OrderPositionMapper $orderPositionMapper,
+		private DeliveryNoteMapper $deliveryNoteMapper,
+		private DeliveryNotePositionMapper $deliveryNotePositionMapper,
 		private IDBConnection $db,
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
@@ -47,17 +55,36 @@ class InvoiceService {
 		return $invoice;
 	}
 
-	/** Rechnung inkl. Positionen und berechneter Netto-/MwSt.-Summen. */
+	/**
+	 * Rechnung inkl. Positionen, berechneter Netto-/MwSt.-Summen und —
+	 * sofern die Rechnung an einem Auftrag hängt — den Geschwister-
+	 * Rechnungen desselben Auftrags (`relatedInvoices`, ADR-0016). Damit
+	 * lässt sich in der Schlussrechnung am Ende auflisten, welche
+	 * Teilrechnungen/Teilzahlungen bereits erfolgt sind — ohne
+	 * automatische Verrechnung (siehe ADR-0016, "Nicht Teil dieser Phase").
+	 */
 	public function getFullInvoice(int $id): array {
 		$invoice = $this->getInvoice($id);
 		$positions = $this->positionMapper->findByInvoice($id);
 		$calculation = $this->calculate($positions);
+
+		$relatedInvoices = [];
+		if ($invoice->getOrderId() !== null) {
+			foreach ($this->mapper->findByOrder($invoice->getOrderId(), $id) as $related) {
+				$relatedPositions = $this->positionMapper->findByInvoice($related->getId());
+				$relatedInvoices[] = [
+					...$related->jsonSerialize(),
+					'grossTotal' => $this->calculate($relatedPositions)['grossTotal'],
+				];
+			}
+		}
 
 		return [
 			...$invoice->jsonSerialize(),
 			'positions' => $positions,
 			'calculation' => $calculation,
 			'isOverdue' => $this->isOverdue($invoice),
+			'relatedInvoices' => $relatedInvoices,
 		];
 	}
 
@@ -136,6 +163,110 @@ class InvoiceService {
 			$position->setUnitPriceNet($qp->getUnitPriceNet());
 			$position->setVatRatePercent($qp->getVatRatePercent());
 			$position->setPositionOrder($qp->getPositionOrder());
+			$this->positionMapper->insert($position);
+		}
+
+		return $invoice;
+	}
+
+	/**
+	 * Legt eine Rechnung aus ausgewählten Auftragspositionen an (ADR-0016)
+	 * — mit `type='partial'` und einer Teilmenge/Teilmengen ergibt das eine
+	 * Teilrechnung durch Positionsauswahl. Jede erzeugte Position bekommt
+	 * `order_position_id` gesetzt.
+	 *
+	 * @param array<int, array{orderPositionId: int, quantity?: float}> $positions
+	 * @throws \OutOfBoundsException wenn Auftrag oder Auftragsposition nicht existiert
+	 * @throws \InvalidArgumentException wenn positions leer ist
+	 */
+	public function createFromOrder(int $orderId, string $title, string $type, ?string $dueDate, ?string $notes, array $positions): Invoice {
+		$order = $this->orderMapper->findById($orderId);
+		if ($order === null) {
+			throw new \OutOfBoundsException("Order $orderId not found");
+		}
+		if ($positions === []) {
+			throw new \InvalidArgumentException('positions must not be empty');
+		}
+
+		$invoice = $this->createDraft($title, $type, $order->getProjectId(), $orderId, $order->getCustomerContactUid(), $dueDate, $notes);
+
+		foreach ($positions as $selection) {
+			$orderPositionId = (int)($selection['orderPositionId'] ?? 0);
+			$op = $this->orderPositionMapper->findOne($orderId, $orderPositionId);
+			if ($op === null) {
+				throw new \OutOfBoundsException("Order position $orderPositionId not found in order $orderId");
+			}
+			$quantity = isset($selection['quantity']) ? (float)$selection['quantity'] : $op->getQuantity();
+
+			$position = new InvoicePosition();
+			$position->setInvoiceId($invoice->getId());
+			$position->setPositionType($op->getPositionType());
+			$position->setReferenceId($op->getReferenceId());
+			$position->setDescription($op->getDescription());
+			$position->setQuantity($quantity);
+			$position->setUnit($op->getUnit());
+			$position->setUnitPriceNet($op->getUnitPriceNet());
+			$position->setVatRatePercent($op->getVatRatePercent());
+			$position->setPositionOrder(count($this->positionMapper->findByInvoice($invoice->getId())));
+			$position->setOrderPositionId($orderPositionId);
+			$this->positionMapper->insert($position);
+		}
+
+		return $invoice;
+	}
+
+	/**
+	 * Legt eine Rechnung aus ausgewählten Lieferscheinpositionen an
+	 * (ADR-0016). Lieferscheinpositionen führen bewusst keine Preise
+	 * (ADR-0015) — ist die Lieferscheinposition mit einer Auftragsposition
+	 * verknüpft, wird deren Preis/MwSt.-Satz übernommen; ohne Verknüpfung
+	 * müssen `unitPriceNet`/`vatRatePercent` mitgeschickt werden.
+	 *
+	 * @param array<int, array{deliveryNotePositionId: int, unitPriceNet?: float, vatRatePercent?: float}> $positions
+	 * @throws \OutOfBoundsException wenn Lieferschein/-position nicht existiert
+	 * @throws \InvalidArgumentException wenn positions leer ist oder bei einer unverknüpften Position Preis/MwSt. fehlt
+	 */
+	public function createFromDeliveryNote(int $deliveryNoteId, string $title, string $type, ?string $dueDate, ?string $notes, array $positions): Invoice {
+		$deliveryNote = $this->deliveryNoteMapper->findById($deliveryNoteId);
+		if ($deliveryNote === null) {
+			throw new \OutOfBoundsException("Delivery note $deliveryNoteId not found");
+		}
+		if ($positions === []) {
+			throw new \InvalidArgumentException('positions must not be empty');
+		}
+
+		$invoice = $this->createDraft($title, $type, $deliveryNote->getProjectId(), $deliveryNote->getOrderId(), null, $dueDate, $notes);
+		$invoice->setDeliveryNoteId($deliveryNoteId);
+		$invoice = $this->mapper->update($invoice);
+
+		foreach ($positions as $selection) {
+			$dnPositionId = (int)($selection['deliveryNotePositionId'] ?? 0);
+			$dnPosition = $this->deliveryNotePositionMapper->findOne($deliveryNoteId, $dnPositionId);
+			if ($dnPosition === null) {
+				throw new \OutOfBoundsException("Delivery note position $dnPositionId not found in delivery note $deliveryNoteId");
+			}
+
+			$orderPosition = $dnPosition->getOrderPositionId() !== null
+				? $this->orderPositionMapper->findById($dnPosition->getOrderPositionId())
+				: null;
+
+			$unitPriceNet = $selection['unitPriceNet'] ?? $orderPosition?->getUnitPriceNet();
+			$vatRatePercent = $selection['vatRatePercent'] ?? $orderPosition?->getVatRatePercent();
+			if ($unitPriceNet === null || $vatRatePercent === null) {
+				throw new \InvalidArgumentException("Delivery note position $dnPositionId has no linked order position — unitPriceNet/vatRatePercent must be provided");
+			}
+
+			$position = new InvoicePosition();
+			$position->setInvoiceId($invoice->getId());
+			$position->setPositionType($dnPosition->getPositionType());
+			$position->setReferenceId($dnPosition->getReferenceId());
+			$position->setDescription($dnPosition->getDescription());
+			$position->setQuantity($dnPosition->getQuantity());
+			$position->setUnit($dnPosition->getUnit());
+			$position->setUnitPriceNet((float)$unitPriceNet);
+			$position->setVatRatePercent((float)$vatRatePercent);
+			$position->setPositionOrder(count($this->positionMapper->findByInvoice($invoice->getId())));
+			$position->setOrderPositionId($dnPosition->getOrderPositionId());
 			$this->positionMapper->insert($position);
 		}
 

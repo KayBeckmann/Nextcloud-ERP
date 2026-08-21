@@ -36,4 +36,21 @@ class InvoicePositionMapper extends QBMapper {
 			return null;
 		}
 	}
+
+	/**
+	 * Bereits berechnete Menge einer Auftragsposition (ADR-0016) — zur
+	 * Laufzeit über alle Rechnungspositionen mit diesem `order_position_id`
+	 * summiert, stornierte Rechnungen zählen nicht mit. Informativ, kein
+	 * hartes Limit (siehe ADR-0016, "Nicht Teil dieser Phase").
+	 */
+	public function sumQuantityForOrderPosition(int $orderPositionId): float {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->createFunction('SUM(' . $qb->getColumnName('ip.quantity') . ')'))
+			->from($this->getTableName(), 'ip')
+			->innerJoin('ip', 'erp_invoices', 'i', $qb->expr()->eq('ip.invoice_id', 'i.id'))
+			->where($qb->expr()->eq('ip.order_position_id', $qb->createNamedParameter($orderPositionId, \PDO::PARAM_INT)))
+			->andWhere($qb->expr()->neq('i.status', $qb->createNamedParameter('cancelled')));
+		$sum = $qb->executeQuery()->fetchOne();
+		return $sum === false ? 0.0 : (float)$sum;
+	}
 }

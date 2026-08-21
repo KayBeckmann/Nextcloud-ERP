@@ -94,6 +94,55 @@ class InvoiceController extends AbstractResourceController {
 		}
 	}
 
+	/**
+	 * Rechnung aus ausgewählten Auftragspositionen (ADR-0016) — mit
+	 * `type='partial'` und einer Teilauswahl entsteht eine Teilrechnung.
+	 *
+	 * @param array<int, array{orderPositionId: int, quantity?: float}> $positions
+	 * @throws OCSBadRequestException|OCSNotFoundException
+	 */
+	#[NoAdminRequired]
+	public function createFromOrder(int $orderId, string $title, string $type = 'invoice', ?string $dueDate = null, ?string $notes = null, array $positions = []): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($title) === '') {
+			throw new OCSBadRequestException('title must not be empty');
+		}
+		if (!in_array($type, self::VALID_TYPES, true)) {
+			throw new OCSBadRequestException('Unknown type: ' . $type);
+		}
+		try {
+			return new DataResponse($this->invoiceService->createFromOrder($orderId, $title, $type, $dueDate, $notes, $positions));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+	}
+
+	/**
+	 * Rechnung aus ausgewählten Lieferscheinpositionen (ADR-0016).
+	 *
+	 * @param array<int, array{deliveryNotePositionId: int, unitPriceNet?: float, vatRatePercent?: float}> $positions
+	 * @throws OCSBadRequestException|OCSNotFoundException
+	 */
+	#[NoAdminRequired]
+	public function createFromDeliveryNote(int $deliveryNoteId, string $title, string $type = 'invoice', ?string $dueDate = null, ?string $notes = null, array $positions = []): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($title) === '') {
+			throw new OCSBadRequestException('title must not be empty');
+		}
+		if (!in_array($type, self::VALID_TYPES, true)) {
+			throw new OCSBadRequestException('Unknown type: ' . $type);
+		}
+		try {
+			return new DataResponse($this->invoiceService->createFromDeliveryNote($deliveryNoteId, $title, $type, $dueDate, $notes, $positions));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+	}
+
 	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function addPosition(

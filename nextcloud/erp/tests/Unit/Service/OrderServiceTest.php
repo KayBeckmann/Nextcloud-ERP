@@ -4,31 +4,92 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\DeliveryNotePositionMapper;
+use OCA\ERP\Db\InvoicePositionMapper;
 use OCA\ERP\Db\OrderMapper;
+use OCA\ERP\Db\OrderPositionMapper;
+use OCA\ERP\Db\ProjectMapper;
+use OCA\ERP\Db\QuoteGroupMapper;
+use OCA\ERP\Db\QuoteMapper;
+use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Projects\OrderStatus;
+use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\OrderService;
+use OCA\ERP\Service\ProjectService;
+use OCA\ERP\Service\QuoteService;
+use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
+use OCP\IUser;
+use OCP\IUserManager;
 use Test\TestCase;
 
 /**
  * @group DB
  */
 final class OrderServiceTest extends TestCase {
+	private const TEST_UID = 'phpunit-order-user';
 	private const PROJECT_ID = 999999002;
 
 	private OrderService $service;
 	private OrderMapper $mapper;
+	private OrderPositionMapper $positionMapper;
+	private QuoteService $quoteService;
+	private QuoteMapper $quoteMapper;
+	private QuotePositionMapper $quotePositionMapper;
+	private IUser $user;
+	private int $realProjectId;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$db = \OC::$server->get(IDBConnection::class);
 		$this->mapper = new OrderMapper($db);
-		$this->service = new OrderService($this->mapper);
+		$this->positionMapper = new OrderPositionMapper($db);
+		$this->quoteMapper = new QuoteMapper($db);
+		$this->quotePositionMapper = new QuotePositionMapper($db);
+		$this->quoteService = new QuoteService($this->quoteMapper, new QuoteGroupMapper($db), $this->quotePositionMapper);
+		$this->service = new OrderService(
+			$this->mapper,
+			$this->positionMapper,
+			$this->quoteMapper,
+			$this->quotePositionMapper,
+			new InvoicePositionMapper($db),
+			new DeliveryNotePositionMapper($db),
+		);
+
+		$userManager = \OC::$server->get(IUserManager::class);
+		if ($userManager->userExists(self::TEST_UID)) {
+			$userManager->get(self::TEST_UID)->delete();
+		}
+		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
+		self::loginAsUser(self::TEST_UID);
+
+		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
+		$projectService = new ProjectService(new ProjectMapper($db), $folderService);
+		$project = $projectService->createProject($this->user, 'phpunit-order-project', null, null, null);
+		$this->realProjectId = $project->getId();
 	}
 
 	protected function tearDown(): void {
 		foreach ($this->mapper->findByProject(self::PROJECT_ID) as $order) {
+			foreach ($this->positionMapper->findByOrder($order->getId()) as $p) {
+				$this->positionMapper->delete($p);
+			}
 			$this->mapper->delete($order);
+		}
+		foreach ($this->mapper->findByProject($this->realProjectId) as $order) {
+			foreach ($this->positionMapper->findByOrder($order->getId()) as $p) {
+				$this->positionMapper->delete($p);
+			}
+			$this->mapper->delete($order);
+		}
+		foreach ($this->quoteMapper->findAll(null, $this->realProjectId) as $quote) {
+			foreach ($this->quotePositionMapper->findByQuote($quote->getId()) as $p) {
+				$this->quotePositionMapper->delete($p);
+			}
+			$this->quoteMapper->delete($quote);
+		}
+		if (isset($this->user)) {
+			$this->user->delete();
 		}
 		parent::tearDown();
 	}
@@ -54,5 +115,48 @@ final class OrderServiceTest extends TestCase {
 		$this->service->createOrder(self::PROJECT_ID, 'Eigenes Projekt', null);
 		$this->assertCount(1, $this->service->listOrders(self::PROJECT_ID));
 		$this->assertCount(0, $this->service->listOrders(self::PROJECT_ID + 1));
+	}
+
+	public function testCreateOrderStoresCustomerContactUid(): void {
+		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Kunde', null, 'kay');
+		$this->assertSame('kay', $order->getCustomerContactUid());
+	}
+
+	public function testAddAndRemovePosition(): void {
+		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Positionen', null);
+		$position = $this->service->addPosition($order->getId(), 'article', null, 'Kabel', 10, 'Stk', 2.5, 19);
+		$full = $this->service->getFullOrder($order->getId());
+		$this->assertCount(1, $full['positions']);
+		$this->assertSame(0.0, $full['positions'][0]['invoicedQuantity']);
+		$this->assertSame(0.0, $full['positions'][0]['deliveredQuantity']);
+
+		$this->service->removePosition($order->getId(), $position->getId());
+		$full = $this->service->getFullOrder($order->getId());
+		$this->assertCount(0, $full['positions']);
+	}
+
+	public function testAddPositionRejectsUnknownType(): void {
+		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Positionen', null);
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->addPosition($order->getId(), 'unknown', null, 'x', 1, 'Stk', 1, 0);
+	}
+
+	public function testCreateFromQuoteCopiesPositionsAndCustomer(): void {
+		$quote = $this->quoteService->createQuote('phpunit-quote-for-order', $this->realProjectId, 'kay', null);
+		$this->quoteService->addPosition($quote->getId(), null, 'article', null, 'Sicherung', 5, 'Stk', 3.0, 19.0);
+		$this->quoteService->addPosition($quote->getId(), null, 'labor', null, 'Montage', 2, 'Std', 60.0, 19.0);
+
+		$order = $this->service->createFromQuote($quote->getId());
+		$this->assertSame($this->realProjectId, $order->getProjectId());
+		$this->assertSame('kay', $order->getCustomerContactUid());
+		$this->assertSame($quote->getId(), $order->getQuoteId());
+
+		$full = $this->service->getFullOrder($order->getId());
+		$this->assertCount(2, $full['positions']);
+	}
+
+	public function testCreateFromUnknownQuoteThrows(): void {
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->createFromQuote(999999999);
 	}
 }

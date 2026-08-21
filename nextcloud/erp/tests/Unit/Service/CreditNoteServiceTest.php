@@ -6,8 +6,12 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\CreditNoteMapper;
 use OCA\ERP\Db\CreditNotePositionMapper;
+use OCA\ERP\Db\DeliveryNoteMapper;
+use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderMapper;
+use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\Project;
 use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
@@ -55,6 +59,10 @@ final class CreditNoteServiceTest extends TestCase {
 			$this->invoicePositionMapper,
 			new QuoteMapper($db),
 			new QuotePositionMapper($db),
+			new OrderMapper($db),
+			new OrderPositionMapper($db),
+			new DeliveryNoteMapper($db),
+			new DeliveryNotePositionMapper($db),
 			$db,
 			$folderService,
 			$projectService,

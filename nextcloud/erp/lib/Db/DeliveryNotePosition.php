@@ -21,6 +21,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setUnit(string $unit)
  * @method int getPositionOrder()
  * @method void setPositionOrder(int $positionOrder)
+ * @method int|null getOrderPositionId()
+ * @method void setOrderPositionId(?int $orderPositionId)
  */
 class DeliveryNotePosition extends Entity implements \JsonSerializable {
 	protected int $deliveryNoteId = 0;
@@ -32,6 +34,12 @@ class DeliveryNotePosition extends Entity implements \JsonSerializable {
 	protected float $quantity = 1.0;
 	protected string $unit = 'Stk';
 	protected int $positionOrder = 0;
+	// Verweis auf die Auftragsposition, aus der diese Lieferscheinposition
+	// bei einer Umwandlung entstanden ist (ADR-0016) — null bei manuell
+	// hinzugefügten Positionen. Liefert bei einer späteren Umwandlung in
+	// eine Rechnung den Preis/MwSt.-Satz, da Lieferscheine selbst keine
+	// Preise führen (ADR-0015).
+	protected ?int $orderPositionId = null;
 
 	public function __construct() {
 		$this->addType('id', 'integer');
@@ -39,6 +47,7 @@ class DeliveryNotePosition extends Entity implements \JsonSerializable {
 		$this->addType('referenceId', 'integer');
 		$this->addType('quantity', 'float');
 		$this->addType('positionOrder', 'integer');
+		$this->addType('orderPositionId', 'integer');
 	}
 
 	public function jsonSerialize(): array {
@@ -51,6 +60,7 @@ class DeliveryNotePosition extends Entity implements \JsonSerializable {
 			'quantity' => $this->getQuantity(),
 			'unit' => $this->getUnit(),
 			'positionOrder' => $this->getPositionOrder(),
+			'orderPositionId' => $this->getOrderPositionId(),
 		];
 	}
 }
