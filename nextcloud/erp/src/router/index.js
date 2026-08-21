@@ -15,6 +15,8 @@ import AuftragDetailView from '../views/AuftragDetailView.vue'
 import StundenZeitkontoView from '../views/StundenZeitkontoView.vue'
 import RechnungDetailView from '../views/RechnungDetailView.vue'
 import LagerView from '../views/LagerView.vue'
+import FuhrparkView from '../views/FuhrparkView.vue'
+import VehicleDetailView from '../views/VehicleDetailView.vue'
 
 // Module, die schon eine echte View statt des generischen Platzhalters haben.
 // `props` überschreibt die generischen Platzhalter-Props (title/description/phase).
@@ -33,6 +35,7 @@ const dedicatedViews = {
 	produkte: { component: ProdukteView },
 	'stunden-zeitkonto': { component: StundenZeitkontoView },
 	lager: { component: LagerView },
+	fuhrpark: { component: FuhrparkView },
 }
 
 // Hauptbereiche aus Roadmap Phase 1. Module sind bewusst Platzhalter — die
@@ -160,6 +163,13 @@ const routes = [
 		component: AuftragDetailView,
 		props: true,
 		meta: { title: 'Auftrag', hideFromNav: true },
+	},
+	{
+		path: '/fuhrpark/fahrzeuge/:id',
+		name: 'vehicle-detail',
+		component: VehicleDetailView,
+		props: true,
+		meta: { title: 'Fahrzeug', hideFromNav: true },
 	},
 ]
 
