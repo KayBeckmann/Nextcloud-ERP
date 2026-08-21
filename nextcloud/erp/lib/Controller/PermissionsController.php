@@ -37,6 +37,17 @@ class PermissionsController extends OCSController {
 		return new DataResponse($this->permissionService->listPrincipals());
 	}
 
+	/**
+	 * Nextcloud-User suchen, für Auswahl-Dropdowns wie "Verantwortlicher" im
+	 * Projekt (ADR-0015) — bewusst mit #[NoAdminRequired], jeder eingeloggte
+	 * User darf andere User zum Zuweisen suchen (analog zu
+	 * ContactsController::search()).
+	 */
+	#[NoAdminRequired]
+	public function users(string $q = ''): DataResponse {
+		return new DataResponse($this->permissionService->searchUsers($q));
+	}
+
 	public function matrix(): DataResponse {
 		return new DataResponse([
 			'resourceTypes' => ResourceType::values(),

@@ -89,6 +89,22 @@ class PermissionService {
 	}
 
 	/**
+	 * Nextcloud-User suchen — für Auswahl-Dropdowns wie "Verantwortlicher"
+	 * im Projekt (ADR-0015). Bewusst ohne Rechte-Gate: welche Nextcloud-User
+	 * es gibt, ist keine sensible Information (dieselbe Einschätzung wie
+	 * bei ContactsService::search()).
+	 *
+	 * @return list<array{uid: string, displayName: string}>
+	 */
+	public function searchUsers(string $q, int $limit = 20): array {
+		$results = [];
+		foreach ($this->userManager->searchDisplayName($q, $limit) as $user) {
+			$results[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+		}
+		return $results;
+	}
+
+	/**
 	 * Setzt/entfernt einen Rechte-Eintrag. `PermissionLevel::None` löscht den
 	 * Eintrag (kein Eintrag = "none" per Default, siehe ADR-0008) statt ihn
 	 * mit dem Wert 'none' zu persistieren.
