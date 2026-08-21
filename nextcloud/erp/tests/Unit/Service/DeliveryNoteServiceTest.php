@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\Project;
@@ -22,8 +24,10 @@ final class DeliveryNoteServiceTest extends TestCase {
 	private DeliveryNoteService $service;
 	private DeliveryNoteMapper $mapper;
 	private DeliveryNotePositionMapper $positionMapper;
+	private DeliveryNoteGroupMapper $groupMapper;
 	private OrderMapper $orderMapper;
 	private OrderPositionMapper $orderPositionMapper;
+	private OrderGroupMapper $orderGroupMapper;
 	private ProjectMapper $projectMapper;
 	private int $projectId;
 
@@ -32,10 +36,19 @@ final class DeliveryNoteServiceTest extends TestCase {
 		$db = \OC::$server->get(IDBConnection::class);
 		$this->mapper = new DeliveryNoteMapper($db);
 		$this->positionMapper = new DeliveryNotePositionMapper($db);
+		$this->groupMapper = new DeliveryNoteGroupMapper($db);
 		$this->orderMapper = new OrderMapper($db);
 		$this->orderPositionMapper = new OrderPositionMapper($db);
+		$this->orderGroupMapper = new OrderGroupMapper($db);
 		$this->projectMapper = new ProjectMapper($db);
-		$this->service = new DeliveryNoteService($this->mapper, $this->positionMapper, $this->orderMapper, $this->orderPositionMapper);
+		$this->service = new DeliveryNoteService(
+			$this->mapper,
+			$this->positionMapper,
+			$this->groupMapper,
+			$this->orderMapper,
+			$this->orderPositionMapper,
+			$this->orderGroupMapper,
+		);
 
 		$project = new Project();
 		$project->setTitle('phpunit-dn-project');
@@ -56,13 +69,16 @@ final class DeliveryNoteServiceTest extends TestCase {
 			foreach ($this->orderPositionMapper->findByOrder($order->getId()) as $p) {
 				$this->orderPositionMapper->delete($p);
 			}
+			foreach ($this->orderGroupMapper->findByOrder($order->getId()) as $g) {
+				$this->orderGroupMapper->delete($g);
+			}
 			$this->orderMapper->delete($order);
 		}
 		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
 		parent::tearDown();
 	}
 
-	private function createOrderWithPosition(string $positionType, float $quantity = 5.0): array {
+	private function createOrderWithPosition(string $positionType, float $quantity = 5.0, ?int $groupId = null): array {
 		$order = new \OCA\ERP\Db\Order();
 		$order->setProjectId($this->projectId);
 		$order->setTitle('phpunit-order-for-dn');
@@ -73,6 +89,7 @@ final class DeliveryNoteServiceTest extends TestCase {
 
 		$position = new \OCA\ERP\Db\OrderPosition();
 		$position->setOrderId($order->getId());
+		$position->setGroupId($groupId);
 		$position->setPositionType($positionType);
 		$position->setDescription('Testposition');
 		$position->setQuantity($quantity);
@@ -98,7 +115,7 @@ final class DeliveryNoteServiceTest extends TestCase {
 	public function testAddPositionWithUnknownTypeThrows(): void {
 		$deliveryNote = $this->service->createDraft($this->projectId, null, null);
 		$this->expectException(\InvalidArgumentException::class);
-		$this->service->addPosition($deliveryNote->getId(), 'not-a-type', null, 'x', 1.0, 'Stk');
+		$this->service->addPosition($deliveryNote->getId(), null, 'not-a-type', null, 'x', 1.0, 'Stk');
 	}
 
 	/**
@@ -108,7 +125,7 @@ final class DeliveryNoteServiceTest extends TestCase {
 	 */
 	public function testCustomPositionTypeIsPersistedCorrectly(): void {
 		$deliveryNote = $this->service->createDraft($this->projectId, null, null);
-		$position = $this->service->addPosition($deliveryNote->getId(), 'custom', null, 'Sonderteil', 2.0, 'Stk');
+		$position = $this->service->addPosition($deliveryNote->getId(), null, 'custom', null, 'Sonderteil', 2.0, 'Stk');
 
 		$this->assertSame('custom', $position->getPositionType());
 		$reloaded = (new DeliveryNotePositionMapper(\OC::$server->get(IDBConnection::class)))
@@ -125,19 +142,19 @@ final class DeliveryNoteServiceTest extends TestCase {
 
 	public function testIssueSetsDeliveredAtAndMakesPositionsImmutable(): void {
 		$deliveryNote = $this->service->createDraft($this->projectId, null, null);
-		$this->service->addPosition($deliveryNote->getId(), 'custom', null, 'x', 1.0, 'Stk');
+		$this->service->addPosition($deliveryNote->getId(), null, 'custom', null, 'x', 1.0, 'Stk');
 
 		$issued = $this->service->issue($deliveryNote->getId());
 		$this->assertSame('issued', $issued->getStatus());
 		$this->assertNotNull($issued->getDeliveredAt());
 
 		$this->expectException(\DomainException::class);
-		$this->service->addPosition($deliveryNote->getId(), 'custom', null, 'y', 1.0, 'Stk');
+		$this->service->addPosition($deliveryNote->getId(), null, 'custom', null, 'y', 1.0, 'Stk');
 	}
 
 	public function testRemovePosition(): void {
 		$deliveryNote = $this->service->createDraft($this->projectId, null, null);
-		$position = $this->service->addPosition($deliveryNote->getId(), 'custom', null, 'x', 1.0, 'Stk');
+		$position = $this->service->addPosition($deliveryNote->getId(), null, 'custom', null, 'x', 1.0, 'Stk');
 
 		$this->service->removePosition($deliveryNote->getId(), $position->getId());
 
@@ -165,6 +182,41 @@ final class DeliveryNoteServiceTest extends TestCase {
 		$this->assertCount(1, $full['positions']);
 		$this->assertSame(3.0, $full['positions'][0]->getQuantity());
 		$this->assertSame($position->getId(), $full['positions'][0]->getOrderPositionId());
+	}
+
+	public function testCreateFromOrderPreservesGroup(): void {
+		$order = new \OCA\ERP\Db\Order();
+		$order->setProjectId($this->projectId);
+		$order->setTitle('phpunit-order-with-group');
+		$order->setStatus('draft');
+		$order->setCreatedAt(time());
+		$order->setUpdatedAt(time());
+		$order = $this->orderMapper->insert($order);
+
+		$group = new \OCA\ERP\Db\OrderGroup();
+		$group->setOrderId($order->getId());
+		$group->setTitle('Elektrik');
+		$group = $this->orderGroupMapper->insert($group);
+
+		$position = new \OCA\ERP\Db\OrderPosition();
+		$position->setOrderId($order->getId());
+		$position->setGroupId($group->getId());
+		$position->setPositionType('article');
+		$position->setDescription('Kabel');
+		$position->setQuantity(5.0);
+		$position->setUnit('Stk');
+		$position->setUnitPriceNet(10.0);
+		$position->setVatRatePercent(19.0);
+		$position = $this->orderPositionMapper->insert($position);
+
+		$deliveryNote = $this->service->createFromOrder($order->getId(), [
+			['orderPositionId' => $position->getId(), 'quantity' => 2.0],
+		], null);
+
+		$full = $this->service->getFull($deliveryNote->getId());
+		$this->assertCount(1, $full['groups']);
+		$this->assertSame('Elektrik', $full['groups'][0]->getTitle());
+		$this->assertSame($full['groups'][0]->getId(), $full['positions'][0]->getGroupId());
 	}
 
 	public function testCreateFromOrderRejectsLaborPositions(): void {

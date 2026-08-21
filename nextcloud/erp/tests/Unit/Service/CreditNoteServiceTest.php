@@ -6,10 +6,13 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\CreditNoteMapper;
 use OCA\ERP\Db\CreditNotePositionMapper;
+use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
+use OCA\ERP\Db\InvoiceGroupMapper;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\Project;
@@ -57,12 +60,16 @@ final class CreditNoteServiceTest extends TestCase {
 		$this->invoiceService = new InvoiceService(
 			$this->invoiceMapper,
 			$this->invoicePositionMapper,
+			new InvoiceGroupMapper($db),
 			new QuoteMapper($db),
 			new QuotePositionMapper($db),
+			new QuoteGroupMapper($db),
 			new OrderMapper($db),
 			new OrderPositionMapper($db),
+			new OrderGroupMapper($db),
 			new DeliveryNoteMapper($db),
 			new DeliveryNotePositionMapper($db),
+			new DeliveryNoteGroupMapper($db),
 			$db,
 			$folderService,
 			$projectService,
@@ -107,7 +114,7 @@ final class CreditNoteServiceTest extends TestCase {
 
 	private function issuedInvoice(float $unitPriceNet = 100.0): \OCA\ERP\Db\Invoice {
 		$invoice = $this->invoiceService->createDraft('phpunit-cn-invoice', 'invoice', $this->projectId, null, null, null, null);
-		$this->invoiceService->addPosition($invoice->getId(), 'custom', null, 'x', 1.0, 'Stk', $unitPriceNet, 19.0);
+		$this->invoiceService->addPosition($invoice->getId(), null, 'custom', null, 'x', 1.0, 'Stk', $unitPriceNet, 19.0);
 		return $this->invoiceService->issue($invoice->getId(), $this->user);
 	}
 

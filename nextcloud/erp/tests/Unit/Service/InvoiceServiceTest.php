@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
+use OCA\ERP\Db\InvoiceGroupMapper;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\ProjectMapper;
@@ -33,13 +36,16 @@ final class InvoiceServiceTest extends TestCase {
 	private InvoiceService $service;
 	private InvoiceMapper $mapper;
 	private InvoicePositionMapper $positionMapper;
+	private InvoiceGroupMapper $groupMapper;
 	private QuoteService $quoteService;
 	private ProjectMapper $projectMapper;
 	private ErpFolderService $folderService;
 	private OrderMapper $orderMapper;
 	private OrderPositionMapper $orderPositionMapper;
+	private OrderGroupMapper $orderGroupMapper;
 	private DeliveryNoteMapper $deliveryNoteMapper;
 	private DeliveryNotePositionMapper $deliveryNotePositionMapper;
+	private DeliveryNoteGroupMapper $deliveryNoteGroupMapper;
 	private IUser $user;
 	private int $projectId;
 	private string $projectNumber;
@@ -49,27 +55,35 @@ final class InvoiceServiceTest extends TestCase {
 		$db = \OC::$server->get(IDBConnection::class);
 		$this->mapper = new InvoiceMapper($db);
 		$this->positionMapper = new InvoicePositionMapper($db);
+		$this->groupMapper = new InvoiceGroupMapper($db);
 		$quoteMapper = new QuoteMapper($db);
 		$quotePositionMapper = new QuotePositionMapper($db);
-		$this->quoteService = new QuoteService($quoteMapper, new QuoteGroupMapper($db), $quotePositionMapper);
+		$quoteGroupMapper = new QuoteGroupMapper($db);
+		$this->quoteService = new QuoteService($quoteMapper, $quoteGroupMapper, $quotePositionMapper);
 		$this->folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
 		$this->projectMapper = new ProjectMapper($db);
 		$projectService = new ProjectService($this->projectMapper, $this->folderService);
 
 		$this->orderMapper = new OrderMapper($db);
 		$this->orderPositionMapper = new OrderPositionMapper($db);
+		$this->orderGroupMapper = new OrderGroupMapper($db);
 		$this->deliveryNoteMapper = new DeliveryNoteMapper($db);
 		$this->deliveryNotePositionMapper = new DeliveryNotePositionMapper($db);
+		$this->deliveryNoteGroupMapper = new DeliveryNoteGroupMapper($db);
 
 		$this->service = new InvoiceService(
 			$this->mapper,
 			$this->positionMapper,
+			$this->groupMapper,
 			$quoteMapper,
 			$quotePositionMapper,
+			$quoteGroupMapper,
 			$this->orderMapper,
 			$this->orderPositionMapper,
+			$this->orderGroupMapper,
 			$this->deliveryNoteMapper,
 			$this->deliveryNotePositionMapper,
+			$this->deliveryNoteGroupMapper,
 			$db,
 			$this->folderService,
 			$projectService,
@@ -93,6 +107,9 @@ final class InvoiceServiceTest extends TestCase {
 				foreach ($this->positionMapper->findByInvoice($invoice->getId()) as $p) {
 					$this->positionMapper->delete($p);
 				}
+				foreach ($this->groupMapper->findByInvoice($invoice->getId()) as $g) {
+					$this->groupMapper->delete($g);
+				}
 				$this->mapper->delete($invoice);
 			}
 		}
@@ -100,11 +117,17 @@ final class InvoiceServiceTest extends TestCase {
 			foreach ($this->deliveryNotePositionMapper->findByDeliveryNote($dn->getId()) as $p) {
 				$this->deliveryNotePositionMapper->delete($p);
 			}
+			foreach ($this->deliveryNoteGroupMapper->findByDeliveryNote($dn->getId()) as $g) {
+				$this->deliveryNoteGroupMapper->delete($g);
+			}
 			$this->deliveryNoteMapper->delete($dn);
 		}
 		foreach ($this->orderMapper->findByProject($this->projectId) as $order) {
 			foreach ($this->orderPositionMapper->findByOrder($order->getId()) as $p) {
 				$this->orderPositionMapper->delete($p);
+			}
+			foreach ($this->orderGroupMapper->findByOrder($order->getId()) as $g) {
+				$this->orderGroupMapper->delete($g);
 			}
 			$this->orderMapper->delete($order);
 		}
@@ -116,11 +139,11 @@ final class InvoiceServiceTest extends TestCase {
 
 	private function draftWithOnePosition(float $unitPriceNet = 100.0, float $vat = 19.0): \OCA\ERP\Db\Invoice {
 		$invoice = $this->service->createDraft('phpunit-invoice-1', 'invoice', $this->projectId, null, 'cust-1', null, null);
-		$this->service->addPosition($invoice->getId(), 'custom', null, 'Testposition', 1.0, 'Stk', $unitPriceNet, $vat);
+		$this->service->addPosition($invoice->getId(), null, 'custom', null, 'Testposition', 1.0, 'Stk', $unitPriceNet, $vat);
 		return $invoice;
 	}
 
-	private function createOrderWithPosition(string $positionType = 'article', float $quantity = 5.0, float $unitPriceNet = 10.0): array {
+	private function createOrderWithPosition(string $positionType = 'article', float $quantity = 5.0, float $unitPriceNet = 10.0, ?int $groupId = null): array {
 		$order = new \OCA\ERP\Db\Order();
 		$order->setProjectId($this->projectId);
 		$order->setTitle('phpunit-order-for-invoice');
@@ -132,6 +155,7 @@ final class InvoiceServiceTest extends TestCase {
 
 		$position = new \OCA\ERP\Db\OrderPosition();
 		$position->setOrderId($order->getId());
+		$position->setGroupId($groupId);
 		$position->setPositionType($positionType);
 		$position->setDescription('Testposition');
 		$position->setQuantity($quantity);
@@ -184,7 +208,7 @@ final class InvoiceServiceTest extends TestCase {
 		$this->service->issue($invoice->getId(), $this->user);
 
 		$this->expectException(\DomainException::class);
-		$this->service->addPosition($invoice->getId(), 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
+		$this->service->addPosition($invoice->getId(), null, 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
 	}
 
 	/**
@@ -193,7 +217,7 @@ final class InvoiceServiceTest extends TestCase {
 	 */
 	public function testCustomPositionTypeIsPersistedCorrectly(): void {
 		$invoice = $this->service->createDraft('phpunit-invoice-4', 'invoice', $this->projectId, null, null, null, null);
-		$position = $this->service->addPosition($invoice->getId(), 'custom', null, 'Anfahrt', 1.0, 'psch.', 25.0, 19.0);
+		$position = $this->service->addPosition($invoice->getId(), null, 'custom', null, 'Anfahrt', 1.0, 'psch.', 25.0, 19.0);
 
 		$this->assertSame('custom', $position->getPositionType());
 		$reloaded = (new InvoicePositionMapper(\OC::$server->get(IDBConnection::class)))
@@ -361,5 +385,71 @@ final class InvoiceServiceTest extends TestCase {
 		$invoice = $this->draftWithOnePosition();
 		$full = $this->service->getFullInvoice($invoice->getId());
 		$this->assertSame([], $full['relatedInvoices']);
+	}
+
+	public function testAddGroupAndAssignPositionToIt(): void {
+		$invoice = $this->service->createDraft('phpunit-invoice-group', 'invoice', $this->projectId, null, null, null, null);
+		$group = $this->service->addGroup($invoice->getId(), 'Elektrik');
+		$this->service->addPosition($invoice->getId(), $group->getId(), 'custom', null, 'Kabel', 1.0, 'Stk', 10.0, 19.0);
+
+		$full = $this->service->getFullInvoice($invoice->getId());
+		$this->assertCount(1, $full['groups']);
+		$this->assertSame('Elektrik', $full['groups'][0]->getTitle());
+		$this->assertSame($group->getId(), $full['positions'][0]->getGroupId());
+	}
+
+	public function testCreateFromOrderPreservesGroup(): void {
+		$orderGroup = new \OCA\ERP\Db\OrderGroup();
+		$orderGroup->setTitle('Elektrik');
+		[$order, $position] = $this->createOrderWithPosition('article', 5.0, 10.0);
+		$orderGroup->setOrderId($order->getId());
+		$orderGroup = $this->orderGroupMapper->insert($orderGroup);
+		$position->setGroupId($orderGroup->getId());
+		$this->orderPositionMapper->update($position);
+
+		$invoice = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-with-group', 'invoice', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 2.0],
+		]);
+
+		$full = $this->service->getFullInvoice($invoice->getId());
+		$this->assertCount(1, $full['groups']);
+		$this->assertSame('Elektrik', $full['groups'][0]->getTitle());
+		$this->assertSame($full['groups'][0]->getId(), $full['positions'][0]->getGroupId());
+	}
+
+	public function testCreateFromDeliveryNotePreservesGroup(): void {
+		[$order, $orderPosition] = $this->createOrderWithPosition('product', 5.0, 30.0);
+		$deliveryNote = $this->deliveryNoteMapper->insert((function () use ($order) {
+			$dn = new \OCA\ERP\Db\DeliveryNote();
+			$dn->setProjectId($this->projectId);
+			$dn->setOrderId($order->getId());
+			$dn->setStatus('draft');
+			$dn->setCreatedAt(time());
+			$dn->setUpdatedAt(time());
+			return $dn;
+		})());
+		$dnGroup = new \OCA\ERP\Db\DeliveryNoteGroup();
+		$dnGroup->setDeliveryNoteId($deliveryNote->getId());
+		$dnGroup->setTitle('Elektrik');
+		$dnGroup = $this->deliveryNoteGroupMapper->insert($dnGroup);
+
+		$dnPosition = new \OCA\ERP\Db\DeliveryNotePosition();
+		$dnPosition->setDeliveryNoteId($deliveryNote->getId());
+		$dnPosition->setGroupId($dnGroup->getId());
+		$dnPosition->setPositionType('product');
+		$dnPosition->setDescription('Testposition');
+		$dnPosition->setQuantity(2.0);
+		$dnPosition->setUnit('Stk');
+		$dnPosition->setOrderPositionId($orderPosition->getId());
+		$dnPosition = $this->deliveryNotePositionMapper->insert($dnPosition);
+
+		$invoice = $this->service->createFromDeliveryNote($deliveryNote->getId(), 'phpunit-invoice-dn-group', 'invoice', null, null, [
+			['deliveryNotePositionId' => $dnPosition->getId()],
+		]);
+
+		$full = $this->service->getFullInvoice($invoice->getId());
+		$this->assertCount(1, $full['groups']);
+		$this->assertSame('Elektrik', $full['groups'][0]->getTitle());
+		$this->assertSame($full['groups'][0]->getId(), $full['positions'][0]->getGroupId());
 	}
 }

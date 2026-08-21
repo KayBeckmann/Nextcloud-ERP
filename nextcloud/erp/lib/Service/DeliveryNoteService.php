@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace OCA\ERP\Service;
 
 use OCA\ERP\Db\DeliveryNote;
+use OCA\ERP\Db\DeliveryNoteGroup;
+use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePosition;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
 
@@ -27,8 +30,10 @@ class DeliveryNoteService {
 	public function __construct(
 		private DeliveryNoteMapper $mapper,
 		private DeliveryNotePositionMapper $positionMapper,
+		private DeliveryNoteGroupMapper $groupMapper,
 		private OrderMapper $orderMapper,
 		private OrderPositionMapper $orderPositionMapper,
+		private OrderGroupMapper $orderGroupMapper,
 	) {
 	}
 
@@ -50,8 +55,19 @@ class DeliveryNoteService {
 		$deliveryNote = $this->get($id);
 		return [
 			...$deliveryNote->jsonSerialize(),
+			'groups' => $this->groupMapper->findByDeliveryNote($id),
 			'positions' => $this->positionMapper->findByDeliveryNote($id),
 		];
+	}
+
+	/** @throws \OutOfBoundsException wenn der Lieferschein nicht existiert */
+	public function addGroup(int $deliveryNoteId, string $title): DeliveryNoteGroup {
+		$this->get($deliveryNoteId);
+		$group = new DeliveryNoteGroup();
+		$group->setDeliveryNoteId($deliveryNoteId);
+		$group->setTitle($title);
+		$group->setPosition(count($this->groupMapper->findByDeliveryNote($deliveryNoteId)));
+		return $this->groupMapper->insert($group);
 	}
 
 	/** @throws \InvalidArgumentException wenn projectId nicht gesetzt ist */
@@ -94,36 +110,62 @@ class DeliveryNoteService {
 			throw new \InvalidArgumentException('positions must not be empty');
 		}
 
-		$deliveryNote = $this->createDraft($order->getProjectId(), $orderId, $notes);
-
+		$orderPositions = [];
 		foreach ($positions as $selection) {
 			$orderPositionId = (int)($selection['orderPositionId'] ?? 0);
-			$quantity = (float)($selection['quantity'] ?? 0);
-
 			$orderPosition = $this->orderPositionMapper->findOne($orderId, $orderPositionId);
 			if ($orderPosition === null) {
 				throw new \OutOfBoundsException("Order position $orderPositionId not found in order $orderId");
 			}
+			$orderPositions[] = $orderPosition;
+		}
+
+		$deliveryNote = $this->createDraft($order->getProjectId(), $orderId, $notes);
+
+		// Nur die tatsächlich referenzierten Gruppen kopieren (Nutzerwunsch
+		// 2026-08-21) — keine leeren Gruppen im Ziel.
+		$groupIdMap = [];
+		foreach ($orderPositions as $op) {
+			$sourceGroupId = $op->getGroupId();
+			if ($sourceGroupId === null || isset($groupIdMap[$sourceGroupId])) {
+				continue;
+			}
+			$sourceGroup = $this->orderGroupMapper->findOne($orderId, $sourceGroupId);
+			if ($sourceGroup === null) {
+				continue;
+			}
+			$group = new DeliveryNoteGroup();
+			$group->setDeliveryNoteId($deliveryNote->getId());
+			$group->setTitle($sourceGroup->getTitle());
+			$group->setPosition($sourceGroup->getPosition());
+			$groupIdMap[$sourceGroupId] = $this->groupMapper->insert($group)->getId();
+		}
+
+		foreach ($positions as $index => $selection) {
+			$quantity = (float)($selection['quantity'] ?? 0);
+			$orderPosition = $orderPositions[$index];
+
 			if (!in_array($orderPosition->getPositionType(), self::ORDER_CONVERTIBLE_TYPES, true)) {
-				throw new \DomainException("Order position $orderPositionId has type '{$orderPosition->getPositionType()}' — only article/product can become a delivery note position");
+				throw new \DomainException("Order position {$orderPosition->getId()} has type '{$orderPosition->getPositionType()}' — only article/product can become a delivery note position");
 			}
 			if ($quantity <= 0) {
 				throw new \InvalidArgumentException('quantity must be greater than 0');
 			}
-			$alreadyDelivered = $this->positionMapper->sumQuantityForOrderPosition($orderPositionId);
+			$alreadyDelivered = $this->positionMapper->sumQuantityForOrderPosition($orderPosition->getId());
 			if ($alreadyDelivered + $quantity > $orderPosition->getQuantity() + 0.0001) {
-				throw new \DomainException("Order position $orderPositionId: requested quantity exceeds remaining deliverable quantity");
+				throw new \DomainException("Order position {$orderPosition->getId()}: requested quantity exceeds remaining deliverable quantity");
 			}
 
 			$position = new DeliveryNotePosition();
 			$position->setDeliveryNoteId($deliveryNote->getId());
+			$position->setGroupId($orderPosition->getGroupId() !== null ? ($groupIdMap[$orderPosition->getGroupId()] ?? null) : null);
 			$position->setPositionType($orderPosition->getPositionType());
 			$position->setReferenceId($orderPosition->getReferenceId());
 			$position->setDescription($orderPosition->getDescription());
 			$position->setQuantity($quantity);
 			$position->setUnit($orderPosition->getUnit());
 			$position->setPositionOrder(count($this->positionMapper->findByDeliveryNote($deliveryNote->getId())));
-			$position->setOrderPositionId($orderPositionId);
+			$position->setOrderPositionId($orderPosition->getId());
 			$this->positionMapper->insert($position);
 		}
 
@@ -131,11 +173,11 @@ class DeliveryNoteService {
 	}
 
 	/**
-	 * @throws \OutOfBoundsException
+	 * @throws \OutOfBoundsException wenn der Lieferschein oder die Gruppe nicht existiert
 	 * @throws \DomainException wenn nicht mehr im Entwurf
 	 * @throws \InvalidArgumentException wenn positionType unbekannt ist
 	 */
-	public function addPosition(int $deliveryNoteId, string $positionType, ?int $referenceId, string $description, float $quantity, string $unit): DeliveryNotePosition {
+	public function addPosition(int $deliveryNoteId, ?int $groupId, string $positionType, ?int $referenceId, string $description, float $quantity, string $unit): DeliveryNotePosition {
 		if (!in_array($positionType, self::VALID_POSITION_TYPES, true)) {
 			throw new \InvalidArgumentException('positionType must be one of: ' . implode(', ', self::VALID_POSITION_TYPES));
 		}
@@ -143,9 +185,13 @@ class DeliveryNoteService {
 		if ($deliveryNote->getStatus() !== 'draft') {
 			throw new \DomainException("Delivery note $deliveryNoteId is not in status 'draft'");
 		}
+		if ($groupId !== null && $this->groupMapper->findOne($deliveryNoteId, $groupId) === null) {
+			throw new \OutOfBoundsException("Group $groupId not found in delivery note $deliveryNoteId");
+		}
 
 		$position = new DeliveryNotePosition();
 		$position->setDeliveryNoteId($deliveryNoteId);
+		$position->setGroupId($groupId);
 		$position->setPositionType($positionType);
 		$position->setReferenceId($referenceId);
 		$position->setDescription($description);

@@ -6,6 +6,7 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\ProjectMapper;
@@ -33,9 +34,11 @@ final class OrderServiceTest extends TestCase {
 	private OrderService $service;
 	private OrderMapper $mapper;
 	private OrderPositionMapper $positionMapper;
+	private OrderGroupMapper $groupMapper;
 	private QuoteService $quoteService;
 	private QuoteMapper $quoteMapper;
 	private QuotePositionMapper $quotePositionMapper;
+	private QuoteGroupMapper $quoteGroupMapper;
 	private IUser $user;
 	private int $realProjectId;
 
@@ -46,12 +49,16 @@ final class OrderServiceTest extends TestCase {
 		$this->positionMapper = new OrderPositionMapper($db);
 		$this->quoteMapper = new QuoteMapper($db);
 		$this->quotePositionMapper = new QuotePositionMapper($db);
-		$this->quoteService = new QuoteService($this->quoteMapper, new QuoteGroupMapper($db), $this->quotePositionMapper);
+		$this->quoteGroupMapper = new QuoteGroupMapper($db);
+		$this->quoteService = new QuoteService($this->quoteMapper, $this->quoteGroupMapper, $this->quotePositionMapper);
+		$this->groupMapper = new OrderGroupMapper($db);
 		$this->service = new OrderService(
 			$this->mapper,
 			$this->positionMapper,
+			$this->groupMapper,
 			$this->quoteMapper,
 			$this->quotePositionMapper,
+			$this->quoteGroupMapper,
 			new InvoicePositionMapper($db),
 			new DeliveryNotePositionMapper($db),
 		);
@@ -74,17 +81,26 @@ final class OrderServiceTest extends TestCase {
 			foreach ($this->positionMapper->findByOrder($order->getId()) as $p) {
 				$this->positionMapper->delete($p);
 			}
+			foreach ($this->groupMapper->findByOrder($order->getId()) as $g) {
+				$this->groupMapper->delete($g);
+			}
 			$this->mapper->delete($order);
 		}
 		foreach ($this->mapper->findByProject($this->realProjectId) as $order) {
 			foreach ($this->positionMapper->findByOrder($order->getId()) as $p) {
 				$this->positionMapper->delete($p);
 			}
+			foreach ($this->groupMapper->findByOrder($order->getId()) as $g) {
+				$this->groupMapper->delete($g);
+			}
 			$this->mapper->delete($order);
 		}
 		foreach ($this->quoteMapper->findAll(null, $this->realProjectId) as $quote) {
 			foreach ($this->quotePositionMapper->findByQuote($quote->getId()) as $p) {
 				$this->quotePositionMapper->delete($p);
+			}
+			foreach ($this->quoteGroupMapper->findByQuote($quote->getId()) as $g) {
+				$this->quoteGroupMapper->delete($g);
 			}
 			$this->quoteMapper->delete($quote);
 		}
@@ -124,7 +140,7 @@ final class OrderServiceTest extends TestCase {
 
 	public function testAddAndRemovePosition(): void {
 		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Positionen', null);
-		$position = $this->service->addPosition($order->getId(), 'article', null, 'Kabel', 10, 'Stk', 2.5, 19);
+		$position = $this->service->addPosition($order->getId(), null, 'article', null, 'Kabel', 10, 'Stk', 2.5, 19);
 		$full = $this->service->getFullOrder($order->getId());
 		$this->assertCount(1, $full['positions']);
 		$this->assertSame(0.0, $full['positions'][0]['invoicedQuantity']);
@@ -138,7 +154,24 @@ final class OrderServiceTest extends TestCase {
 	public function testAddPositionRejectsUnknownType(): void {
 		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Positionen', null);
 		$this->expectException(\InvalidArgumentException::class);
-		$this->service->addPosition($order->getId(), 'unknown', null, 'x', 1, 'Stk', 1, 0);
+		$this->service->addPosition($order->getId(), null, 'unknown', null, 'x', 1, 'Stk', 1, 0);
+	}
+
+	public function testAddGroupAndAssignPositionToIt(): void {
+		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Gruppen', null);
+		$group = $this->service->addGroup($order->getId(), 'Elektrik');
+		$this->service->addPosition($order->getId(), $group->getId(), 'article', null, 'Kabel', 10, 'Stk', 2.5, 19);
+
+		$full = $this->service->getFullOrder($order->getId());
+		$this->assertCount(1, $full['groups']);
+		$this->assertSame('Elektrik', $full['groups'][0]->getTitle());
+		$this->assertSame($group->getId(), $full['positions'][0]['groupId']);
+	}
+
+	public function testAddPositionRejectsUnknownGroup(): void {
+		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Positionen', null);
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->addPosition($order->getId(), 999999999, 'article', null, 'x', 1, 'Stk', 1, 0);
 	}
 
 	public function testCreateFromQuoteCopiesPositionsAndCustomer(): void {
@@ -153,6 +186,24 @@ final class OrderServiceTest extends TestCase {
 
 		$full = $this->service->getFullOrder($order->getId());
 		$this->assertCount(2, $full['positions']);
+	}
+
+	public function testCreateFromQuotePreservesGroups(): void {
+		$quote = $this->quoteService->createQuote('phpunit-quote-with-group', $this->realProjectId, 'kay', null);
+		$group = $this->quoteService->addGroup($quote->getId(), 'Elektrik');
+		$this->quoteService->addPosition($quote->getId(), $group->getId(), 'article', null, 'Sicherung', 5, 'Stk', 3.0, 19.0);
+		$this->quoteService->addPosition($quote->getId(), null, 'labor', null, 'Montage', 2, 'Std', 60.0, 19.0);
+
+		$order = $this->service->createFromQuote($quote->getId());
+		$full = $this->service->getFullOrder($order->getId());
+
+		$this->assertCount(1, $full['groups']);
+		$this->assertSame('Elektrik', $full['groups'][0]->getTitle());
+
+		$grouped = array_values(array_filter($full['positions'], static fn ($p) => $p['description'] === 'Sicherung'));
+		$ungrouped = array_values(array_filter($full['positions'], static fn ($p) => $p['description'] === 'Montage'));
+		$this->assertSame($full['groups'][0]->getId(), $grouped[0]['groupId']);
+		$this->assertNull($ungrouped[0]['groupId']);
 	}
 
 	public function testCreateFromUnknownQuoteThrows(): void {

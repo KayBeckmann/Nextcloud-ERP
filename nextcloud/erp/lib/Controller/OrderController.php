@@ -110,6 +110,20 @@ class OrderController extends OCSController {
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
 	#[NoAdminRequired]
+	public function addGroup(int $orderId, string $title): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($title) === '') {
+			throw new OCSBadRequestException('title must not be empty');
+		}
+		try {
+			return new DataResponse($this->orderService->addGroup($orderId, $title));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Order $orderId not found");
+		}
+	}
+
+	/** @throws OCSBadRequestException|OCSNotFoundException */
+	#[NoAdminRequired]
 	public function addPosition(
 		int $orderId,
 		string $positionType,
@@ -117,6 +131,7 @@ class OrderController extends OCSController {
 		float $quantity,
 		float $unitPriceNet,
 		float $vatRatePercent,
+		?int $groupId = null,
 		?int $referenceId = null,
 		string $unit = 'Stk',
 	): DataResponse {
@@ -125,7 +140,7 @@ class OrderController extends OCSController {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->orderService->addPosition($orderId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent));
+			return new DataResponse($this->orderService->addPosition($orderId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Order $orderId not found");
 		} catch (\InvalidArgumentException $e) {

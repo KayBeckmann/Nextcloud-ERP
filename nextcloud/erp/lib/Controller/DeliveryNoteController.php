@@ -81,15 +81,29 @@ class DeliveryNoteController extends AbstractResourceController {
 		}
 	}
 
+	/** @throws OCSBadRequestException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function addGroup(int $deliveryNoteId, string $title): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($title) === '') {
+			throw new OCSBadRequestException('title must not be empty');
+		}
+		try {
+			return new DataResponse($this->deliveryNoteService->addGroup($deliveryNoteId, $title));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Delivery note $deliveryNoteId not found");
+		}
+	}
+
 	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
-	public function addPosition(int $deliveryNoteId, string $positionType, string $description, float $quantity, ?int $referenceId = null, string $unit = 'Stk'): DataResponse {
+	public function addPosition(int $deliveryNoteId, string $positionType, string $description, float $quantity, ?int $groupId = null, ?int $referenceId = null, string $unit = 'Stk'): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($description) === '') {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->deliveryNoteService->addPosition($deliveryNoteId, $positionType, $referenceId, $description, $quantity, $unit));
+			return new DataResponse($this->deliveryNoteService->addPosition($deliveryNoteId, $groupId, $positionType, $referenceId, $description, $quantity, $unit));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Delivery note $deliveryNoteId not found");
 		} catch (\InvalidArgumentException $e) {

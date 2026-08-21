@@ -7,9 +7,12 @@ namespace OCA\ERP\Service;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
 use OCA\ERP\Db\Order;
+use OCA\ERP\Db\OrderGroup;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPosition;
 use OCA\ERP\Db\OrderPositionMapper;
+use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Projects\OrderStatus;
@@ -28,8 +31,10 @@ class OrderService {
 	public function __construct(
 		private OrderMapper $mapper,
 		private OrderPositionMapper $positionMapper,
+		private OrderGroupMapper $groupMapper,
 		private QuoteMapper $quoteMapper,
 		private QuotePositionMapper $quotePositionMapper,
+		private QuoteGroupMapper $quoteGroupMapper,
 		private InvoicePositionMapper $invoicePositionMapper,
 		private DeliveryNotePositionMapper $deliveryNotePositionMapper,
 	) {
@@ -56,6 +61,7 @@ class OrderService {
 	public function getFullOrder(int $id): array {
 		$order = $this->getOrder($id);
 		$positions = $this->positionMapper->findByOrder($id);
+		$groups = $this->groupMapper->findByOrder($id);
 
 		$annotated = array_map(function (OrderPosition $p) {
 			return [
@@ -65,19 +71,33 @@ class OrderService {
 			];
 		}, $positions);
 
-		$calculation = QuoteCalculationService::calculate([], array_map(static fn (OrderPosition $p) => [
-			'id' => $p->getId(),
-			'groupId' => null,
-			'quantity' => $p->getQuantity(),
-			'unitPriceNet' => $p->getUnitPriceNet(),
-			'vatRatePercent' => $p->getVatRatePercent(),
-		], $positions));
+		$calculation = QuoteCalculationService::calculate(
+			array_map(static fn (OrderGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups),
+			array_map(static fn (OrderPosition $p) => [
+				'id' => $p->getId(),
+				'groupId' => $p->getGroupId(),
+				'quantity' => $p->getQuantity(),
+				'unitPriceNet' => $p->getUnitPriceNet(),
+				'vatRatePercent' => $p->getVatRatePercent(),
+			], $positions),
+		);
 
 		return [
 			...$order->jsonSerialize(),
+			'groups' => $groups,
 			'positions' => $annotated,
 			'calculation' => $calculation,
 		];
+	}
+
+	/** @throws \OutOfBoundsException wenn der Auftrag nicht existiert */
+	public function addGroup(int $orderId, string $title): OrderGroup {
+		$this->getOrder($orderId);
+		$group = new OrderGroup();
+		$group->setOrderId($orderId);
+		$group->setTitle($title);
+		$group->setPosition(count($this->groupMapper->findByOrder($orderId)));
+		return $this->groupMapper->insert($group);
 	}
 
 	public function createOrder(int $projectId, string $title, ?string $description, ?string $customerContactUid = null): Order {
@@ -108,8 +128,11 @@ class OrderService {
 	}
 
 	/**
-	 * Legt einen Auftrag an und übernimmt alle Positionen eines Angebots 1:1
-	 * (Snapshot-Kopie, keine Live-Referenz danach) — ADR-0016.
+	 * Legt einen Auftrag an und übernimmt alle Gruppen und Positionen eines
+	 * Angebots 1:1 (Snapshot-Kopie, keine Live-Referenz danach) — ADR-0016,
+	 * Gruppen-Erhalt Nutzerwunsch 2026-08-21. Gruppen werden zuerst
+	 * angelegt und auf die neue ID gemappt, damit die Positionen die
+	 * richtige (neue) group_id bekommen.
 	 *
 	 * @throws \OutOfBoundsException wenn das Angebot nicht existiert
 	 */
@@ -123,9 +146,20 @@ class OrderService {
 		$order->setQuoteId($quoteId);
 		$order = $this->mapper->update($order);
 
+		$groupIdMap = [];
+		foreach ($this->quoteGroupMapper->findByQuote($quoteId) as $qg) {
+			$group = new OrderGroup();
+			$group->setOrderId($order->getId());
+			$group->setTitle($qg->getTitle());
+			$group->setPosition($qg->getPosition());
+			$group = $this->groupMapper->insert($group);
+			$groupIdMap[$qg->getId()] = $group->getId();
+		}
+
 		foreach ($this->quotePositionMapper->findByQuote($quoteId) as $qp) {
 			$position = new OrderPosition();
 			$position->setOrderId($order->getId());
+			$position->setGroupId($qp->getGroupId() !== null ? ($groupIdMap[$qp->getGroupId()] ?? null) : null);
 			$position->setPositionType($qp->getPositionType());
 			$position->setReferenceId($qp->getReferenceId());
 			$position->setDescription($qp->getDescription());
@@ -141,11 +175,12 @@ class OrderService {
 	}
 
 	/**
-	 * @throws \OutOfBoundsException wenn der Auftrag nicht existiert
+	 * @throws \OutOfBoundsException wenn der Auftrag oder die Gruppe nicht existiert
 	 * @throws \InvalidArgumentException wenn positionType unbekannt ist
 	 */
 	public function addPosition(
 		int $orderId,
+		?int $groupId,
 		string $positionType,
 		?int $referenceId,
 		string $description,
@@ -155,12 +190,16 @@ class OrderService {
 		float $vatRatePercent,
 	): OrderPosition {
 		$this->getOrder($orderId);
+		if ($groupId !== null && $this->groupMapper->findOne($orderId, $groupId) === null) {
+			throw new \OutOfBoundsException("Group $groupId not found in order $orderId");
+		}
 		if (!in_array($positionType, self::VALID_POSITION_TYPES, true)) {
 			throw new \InvalidArgumentException('positionType must be one of: ' . implode(', ', self::VALID_POSITION_TYPES));
 		}
 
 		$position = new OrderPosition();
 		$position->setOrderId($orderId);
+		$position->setGroupId($groupId);
 		$position->setPositionType($positionType);
 		$position->setReferenceId($referenceId);
 		$position->setDescription($description);

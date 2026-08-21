@@ -9,6 +9,8 @@ use OCP\AppFramework\Db\Entity;
 /**
  * @method int getInvoiceId()
  * @method void setInvoiceId(int $invoiceId)
+ * @method int|null getGroupId()
+ * @method void setGroupId(?int $groupId)
  * @method string getPositionType()
  * @method void setPositionType(string $positionType)
  * @method int|null getReferenceId()
@@ -30,6 +32,9 @@ use OCP\AppFramework\Db\Entity;
  */
 class InvoicePosition extends Entity implements \JsonSerializable {
 	protected int $invoiceId = 0;
+	// Gruppenzuordnung (Nutzerwunsch 2026-08-21) — bleibt bei Umwandlungen
+	// erhalten.
+	protected ?int $groupId = null;
 	// Kein sinnvoller Default: 'custom' ist ein echter Wert, siehe der
 	// identische Fallstrick bei QuotePosition::$positionType (ADR-0011/
 	// Phase 5) — Entity-Dirty-Tracking hätte ihn sonst beim Insert
@@ -50,6 +55,7 @@ class InvoicePosition extends Entity implements \JsonSerializable {
 	public function __construct() {
 		$this->addType('id', 'integer');
 		$this->addType('invoiceId', 'integer');
+		$this->addType('groupId', 'integer');
 		$this->addType('referenceId', 'integer');
 		$this->addType('quantity', 'float');
 		$this->addType('unitPriceNet', 'float');
@@ -62,6 +68,7 @@ class InvoicePosition extends Entity implements \JsonSerializable {
 		return [
 			'id' => $this->getId(),
 			'invoiceId' => $this->getInvoiceId(),
+			'groupId' => $this->getGroupId(),
 			'positionType' => $this->getPositionType(),
 			'referenceId' => $this->getReferenceId(),
 			'description' => $this->getDescription(),

@@ -143,6 +143,20 @@ class InvoiceController extends AbstractResourceController {
 		}
 	}
 
+	/** @throws OCSBadRequestException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function addGroup(int $invoiceId, string $title): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($title) === '') {
+			throw new OCSBadRequestException('title must not be empty');
+		}
+		try {
+			return new DataResponse($this->invoiceService->addGroup($invoiceId, $title));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Invoice $invoiceId not found");
+		}
+	}
+
 	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function addPosition(
@@ -152,6 +166,7 @@ class InvoiceController extends AbstractResourceController {
 		float $quantity,
 		float $unitPriceNet,
 		float $vatRatePercent,
+		?int $groupId = null,
 		?int $referenceId = null,
 		string $unit = 'Stk',
 	): DataResponse {
@@ -163,7 +178,7 @@ class InvoiceController extends AbstractResourceController {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->invoiceService->addPosition($invoiceId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent));
+			return new DataResponse($this->invoiceService->addPosition($invoiceId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Invoice $invoiceId not found");
 		} catch (\DomainException $e) {

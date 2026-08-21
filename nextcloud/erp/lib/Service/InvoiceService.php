@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Service;
 
+use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\Invoice;
+use OCA\ERP\Db\InvoiceGroup;
+use OCA\ERP\Db\InvoiceGroupMapper;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePosition;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
+use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Invoices\InvoiceNumberFormatter;
@@ -29,12 +34,16 @@ class InvoiceService {
 	public function __construct(
 		private InvoiceMapper $mapper,
 		private InvoicePositionMapper $positionMapper,
+		private InvoiceGroupMapper $groupMapper,
 		private QuoteMapper $quoteMapper,
 		private QuotePositionMapper $quotePositionMapper,
+		private QuoteGroupMapper $quoteGroupMapper,
 		private OrderMapper $orderMapper,
 		private OrderPositionMapper $orderPositionMapper,
+		private OrderGroupMapper $orderGroupMapper,
 		private DeliveryNoteMapper $deliveryNoteMapper,
 		private DeliveryNotePositionMapper $deliveryNotePositionMapper,
+		private DeliveryNoteGroupMapper $deliveryNoteGroupMapper,
 		private IDBConnection $db,
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
@@ -66,7 +75,8 @@ class InvoiceService {
 	public function getFullInvoice(int $id): array {
 		$invoice = $this->getInvoice($id);
 		$positions = $this->positionMapper->findByInvoice($id);
-		$calculation = $this->calculate($positions);
+		$groups = $this->groupMapper->findByInvoice($id);
+		$calculation = $this->calculate($positions, $groups);
 
 		$relatedInvoices = [];
 		if ($invoice->getOrderId() !== null) {
@@ -81,6 +91,7 @@ class InvoiceService {
 
 		return [
 			...$invoice->jsonSerialize(),
+			'groups' => $groups,
 			'positions' => $positions,
 			'calculation' => $calculation,
 			'isOverdue' => $this->isOverdue($invoice),
@@ -88,14 +99,28 @@ class InvoiceService {
 		];
 	}
 
-	private function calculate(array $positions): array {
-		return QuoteCalculationService::calculate([], array_map(static fn (InvoicePosition $p) => [
-			'id' => $p->getId(),
-			'groupId' => null,
-			'quantity' => $p->getQuantity(),
-			'unitPriceNet' => $p->getUnitPriceNet(),
-			'vatRatePercent' => $p->getVatRatePercent(),
-		], $positions));
+	/** @throws \OutOfBoundsException wenn die Rechnung nicht existiert */
+	public function addGroup(int $invoiceId, string $title): InvoiceGroup {
+		$this->getInvoice($invoiceId);
+		$group = new InvoiceGroup();
+		$group->setInvoiceId($invoiceId);
+		$group->setTitle($title);
+		$group->setPosition(count($this->groupMapper->findByInvoice($invoiceId)));
+		return $this->groupMapper->insert($group);
+	}
+
+	/** @param InvoiceGroup[] $groups */
+	private function calculate(array $positions, array $groups = []): array {
+		return QuoteCalculationService::calculate(
+			array_map(static fn (InvoiceGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups),
+			array_map(static fn (InvoicePosition $p) => [
+				'id' => $p->getId(),
+				'groupId' => $p->getGroupId(),
+				'quantity' => $p->getQuantity(),
+				'unitPriceNet' => $p->getUnitPriceNet(),
+				'vatRatePercent' => $p->getVatRatePercent(),
+			], $positions),
+		);
 	}
 
 	private function isOverdue(Invoice $invoice): bool {
@@ -137,8 +162,9 @@ class InvoiceService {
 	}
 
 	/**
-	 * Legt eine Rechnung an und übernimmt alle Positionen eines Angebots
-	 * 1:1 (Snapshot-Kopie, keine Live-Referenz auf das Angebot danach).
+	 * Legt eine Rechnung an und übernimmt alle Gruppen und Positionen eines
+	 * Angebots 1:1 (Snapshot-Kopie, keine Live-Referenz auf das Angebot
+	 * danach). Gruppen-Erhalt: Nutzerwunsch 2026-08-21.
 	 *
 	 * @throws \OutOfBoundsException wenn das Angebot nicht existiert
 	 */
@@ -152,9 +178,20 @@ class InvoiceService {
 		$invoice->setQuoteId($quoteId);
 		$invoice = $this->mapper->update($invoice);
 
+		$groupIdMap = [];
+		foreach ($this->quoteGroupMapper->findByQuote($quoteId) as $qg) {
+			$group = new InvoiceGroup();
+			$group->setInvoiceId($invoice->getId());
+			$group->setTitle($qg->getTitle());
+			$group->setPosition($qg->getPosition());
+			$group = $this->groupMapper->insert($group);
+			$groupIdMap[$qg->getId()] = $group->getId();
+		}
+
 		foreach ($this->quotePositionMapper->findByQuote($quoteId) as $qp) {
 			$position = new InvoicePosition();
 			$position->setInvoiceId($invoice->getId());
+			$position->setGroupId($qp->getGroupId() !== null ? ($groupIdMap[$qp->getGroupId()] ?? null) : null);
 			$position->setPositionType($qp->getPositionType());
 			$position->setReferenceId($qp->getReferenceId());
 			$position->setDescription($qp->getDescription());
@@ -173,7 +210,9 @@ class InvoiceService {
 	 * Legt eine Rechnung aus ausgewählten Auftragspositionen an (ADR-0016)
 	 * — mit `type='partial'` und einer Teilmenge/Teilmengen ergibt das eine
 	 * Teilrechnung durch Positionsauswahl. Jede erzeugte Position bekommt
-	 * `order_position_id` gesetzt.
+	 * `order_position_id` gesetzt. Die Gruppen der ausgewählten Positionen
+	 * werden mitkopiert (nur die tatsächlich referenzierten, Nutzerwunsch
+	 * 2026-08-21).
 	 *
 	 * @param array<int, array{orderPositionId: int, quantity?: float}> $positions
 	 * @throws \OutOfBoundsException wenn Auftrag oder Auftragsposition nicht existiert
@@ -188,18 +227,37 @@ class InvoiceService {
 			throw new \InvalidArgumentException('positions must not be empty');
 		}
 
-		$invoice = $this->createDraft($title, $type, $order->getProjectId(), $orderId, $order->getCustomerContactUid(), $dueDate, $notes);
-
+		$orderPositions = [];
 		foreach ($positions as $selection) {
 			$orderPositionId = (int)($selection['orderPositionId'] ?? 0);
 			$op = $this->orderPositionMapper->findOne($orderId, $orderPositionId);
 			if ($op === null) {
 				throw new \OutOfBoundsException("Order position $orderPositionId not found in order $orderId");
 			}
+			$orderPositions[] = $op;
+		}
+
+		$invoice = $this->createDraft($title, $type, $order->getProjectId(), $orderId, $order->getCustomerContactUid(), $dueDate, $notes);
+
+		$groupIdMap = $this->copyReferencedGroups(
+			$orderPositions,
+			fn (int $groupId) => $this->orderGroupMapper->findOne($orderId, $groupId),
+			function (string $groupTitle, int $groupPosition) use ($invoice) {
+				$group = new InvoiceGroup();
+				$group->setInvoiceId($invoice->getId());
+				$group->setTitle($groupTitle);
+				$group->setPosition($groupPosition);
+				return $this->groupMapper->insert($group)->getId();
+			},
+		);
+
+		foreach ($positions as $index => $selection) {
+			$op = $orderPositions[$index];
 			$quantity = isset($selection['quantity']) ? (float)$selection['quantity'] : $op->getQuantity();
 
 			$position = new InvoicePosition();
 			$position->setInvoiceId($invoice->getId());
+			$position->setGroupId($op->getGroupId() !== null ? ($groupIdMap[$op->getGroupId()] ?? null) : null);
 			$position->setPositionType($op->getPositionType());
 			$position->setReferenceId($op->getReferenceId());
 			$position->setDescription($op->getDescription());
@@ -208,7 +266,7 @@ class InvoiceService {
 			$position->setUnitPriceNet($op->getUnitPriceNet());
 			$position->setVatRatePercent($op->getVatRatePercent());
 			$position->setPositionOrder(count($this->positionMapper->findByInvoice($invoice->getId())));
-			$position->setOrderPositionId($orderPositionId);
+			$position->setOrderPositionId($op->getId());
 			$this->positionMapper->insert($position);
 		}
 
@@ -216,11 +274,38 @@ class InvoiceService {
 	}
 
 	/**
+	 * Kopiert nur die Gruppen, die von den übergebenen Quellpositionen
+	 * tatsächlich referenziert werden (keine leeren Gruppen im Ziel).
+	 *
+	 * @param array<int, object{getGroupId(): ?int}> $sourcePositions
+	 * @param callable(int): (object{getTitle(): string, getPosition(): int}|null) $findSourceGroup
+	 * @param callable(string, int): int $createTargetGroup
+	 * @return array<int, int> alte Gruppen-ID => neue Gruppen-ID
+	 */
+	private function copyReferencedGroups(array $sourcePositions, callable $findSourceGroup, callable $createTargetGroup): array {
+		$groupIdMap = [];
+		foreach ($sourcePositions as $sp) {
+			$sourceGroupId = $sp->getGroupId();
+			if ($sourceGroupId === null || isset($groupIdMap[$sourceGroupId])) {
+				continue;
+			}
+			$sourceGroup = $findSourceGroup($sourceGroupId);
+			if ($sourceGroup === null) {
+				continue;
+			}
+			$groupIdMap[$sourceGroupId] = $createTargetGroup($sourceGroup->getTitle(), $sourceGroup->getPosition());
+		}
+		return $groupIdMap;
+	}
+
+	/**
 	 * Legt eine Rechnung aus ausgewählten Lieferscheinpositionen an
 	 * (ADR-0016). Lieferscheinpositionen führen bewusst keine Preise
 	 * (ADR-0015) — ist die Lieferscheinposition mit einer Auftragsposition
 	 * verknüpft, wird deren Preis/MwSt.-Satz übernommen; ohne Verknüpfung
-	 * müssen `unitPriceNet`/`vatRatePercent` mitgeschickt werden.
+	 * müssen `unitPriceNet`/`vatRatePercent` mitgeschickt werden. Gruppen
+	 * der ausgewählten Positionen werden mitkopiert (Nutzerwunsch
+	 * 2026-08-21).
 	 *
 	 * @param array<int, array{deliveryNotePositionId: int, unitPriceNet?: float, vatRatePercent?: float}> $positions
 	 * @throws \OutOfBoundsException wenn Lieferschein/-position nicht existiert
@@ -235,16 +320,34 @@ class InvoiceService {
 			throw new \InvalidArgumentException('positions must not be empty');
 		}
 
-		$invoice = $this->createDraft($title, $type, $deliveryNote->getProjectId(), $deliveryNote->getOrderId(), null, $dueDate, $notes);
-		$invoice->setDeliveryNoteId($deliveryNoteId);
-		$invoice = $this->mapper->update($invoice);
-
+		$dnPositions = [];
 		foreach ($positions as $selection) {
 			$dnPositionId = (int)($selection['deliveryNotePositionId'] ?? 0);
 			$dnPosition = $this->deliveryNotePositionMapper->findOne($deliveryNoteId, $dnPositionId);
 			if ($dnPosition === null) {
 				throw new \OutOfBoundsException("Delivery note position $dnPositionId not found in delivery note $deliveryNoteId");
 			}
+			$dnPositions[] = $dnPosition;
+		}
+
+		$invoice = $this->createDraft($title, $type, $deliveryNote->getProjectId(), $deliveryNote->getOrderId(), null, $dueDate, $notes);
+		$invoice->setDeliveryNoteId($deliveryNoteId);
+		$invoice = $this->mapper->update($invoice);
+
+		$groupIdMap = $this->copyReferencedGroups(
+			$dnPositions,
+			fn (int $groupId) => $this->deliveryNoteGroupMapper->findOne($deliveryNoteId, $groupId),
+			function (string $groupTitle, int $groupPosition) use ($invoice) {
+				$group = new InvoiceGroup();
+				$group->setInvoiceId($invoice->getId());
+				$group->setTitle($groupTitle);
+				$group->setPosition($groupPosition);
+				return $this->groupMapper->insert($group)->getId();
+			},
+		);
+
+		foreach ($positions as $index => $selection) {
+			$dnPosition = $dnPositions[$index];
 
 			$orderPosition = $dnPosition->getOrderPositionId() !== null
 				? $this->orderPositionMapper->findById($dnPosition->getOrderPositionId())
@@ -253,11 +356,12 @@ class InvoiceService {
 			$unitPriceNet = $selection['unitPriceNet'] ?? $orderPosition?->getUnitPriceNet();
 			$vatRatePercent = $selection['vatRatePercent'] ?? $orderPosition?->getVatRatePercent();
 			if ($unitPriceNet === null || $vatRatePercent === null) {
-				throw new \InvalidArgumentException("Delivery note position $dnPositionId has no linked order position — unitPriceNet/vatRatePercent must be provided");
+				throw new \InvalidArgumentException("Delivery note position {$dnPosition->getId()} has no linked order position — unitPriceNet/vatRatePercent must be provided");
 			}
 
 			$position = new InvoicePosition();
 			$position->setInvoiceId($invoice->getId());
+			$position->setGroupId($dnPosition->getGroupId() !== null ? ($groupIdMap[$dnPosition->getGroupId()] ?? null) : null);
 			$position->setPositionType($dnPosition->getPositionType());
 			$position->setReferenceId($dnPosition->getReferenceId());
 			$position->setDescription($dnPosition->getDescription());
@@ -274,11 +378,12 @@ class InvoiceService {
 	}
 
 	/**
-	 * @throws \OutOfBoundsException wenn die Rechnung nicht existiert
+	 * @throws \OutOfBoundsException wenn die Rechnung oder die Gruppe nicht existiert
 	 * @throws \DomainException wenn die Rechnung nicht mehr im Entwurf ist
 	 */
 	public function addPosition(
 		int $invoiceId,
+		?int $groupId,
 		string $positionType,
 		?int $referenceId,
 		string $description,
@@ -289,9 +394,13 @@ class InvoiceService {
 	): InvoicePosition {
 		$invoice = $this->getInvoice($invoiceId);
 		$this->requireDraft($invoice);
+		if ($groupId !== null && $this->groupMapper->findOne($invoiceId, $groupId) === null) {
+			throw new \OutOfBoundsException("Group $groupId not found in invoice $invoiceId");
+		}
 
 		$position = new InvoicePosition();
 		$position->setInvoiceId($invoiceId);
+		$position->setGroupId($groupId);
 		$position->setPositionType($positionType);
 		$position->setReferenceId($referenceId);
 		$position->setDescription($description);

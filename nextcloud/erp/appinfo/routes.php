@@ -54,6 +54,7 @@ return [
 		// Auftragspositionen + Belegkette (ADR-0016).
 		['name' => 'order#show', 'url' => '/api/v1/orders/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'order#createFromQuote', 'url' => '/api/v1/orders/from-quote', 'verb' => 'POST'],
+		['name' => 'order#addGroup', 'url' => '/api/v1/orders/{orderId}/groups', 'verb' => 'POST', 'requirements' => ['orderId' => '\d+']],
 		['name' => 'order#addPosition', 'url' => '/api/v1/orders/{orderId}/positions', 'verb' => 'POST', 'requirements' => ['orderId' => '\d+']],
 		['name' => 'order#removePosition', 'url' => '/api/v1/orders/{orderId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['orderId' => '\d+', 'id' => '\d+']],
 		// Artikel/Produkte/Angebote (Roadmap Phase 5, ADR-0011).
@@ -124,6 +125,7 @@ return [
 		['name' => 'invoice#createFromOrder', 'url' => '/api/v1/invoices/from-order', 'verb' => 'POST'],
 		['name' => 'invoice#createFromDeliveryNote', 'url' => '/api/v1/invoices/from-delivery-note', 'verb' => 'POST'],
 		['name' => 'invoice#show', 'url' => '/api/v1/invoices/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'invoice#addGroup', 'url' => '/api/v1/invoices/{invoiceId}/groups', 'verb' => 'POST', 'requirements' => ['invoiceId' => '\d+']],
 		['name' => 'invoice#addPosition', 'url' => '/api/v1/invoices/{invoiceId}/positions', 'verb' => 'POST', 'requirements' => ['invoiceId' => '\d+']],
 		['name' => 'invoice#removePosition', 'url' => '/api/v1/invoices/{invoiceId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['invoiceId' => '\d+', 'id' => '\d+']],
 		['name' => 'invoice#issue', 'url' => '/api/v1/invoices/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
@@ -140,6 +142,7 @@ return [
 		['name' => 'delivery_note#create', 'url' => '/api/v1/delivery-notes', 'verb' => 'POST'],
 		['name' => 'delivery_note#createFromOrder', 'url' => '/api/v1/delivery-notes/from-order', 'verb' => 'POST'],
 		['name' => 'delivery_note#show', 'url' => '/api/v1/delivery-notes/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'delivery_note#addGroup', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/groups', 'verb' => 'POST', 'requirements' => ['deliveryNoteId' => '\d+']],
 		['name' => 'delivery_note#addPosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions', 'verb' => 'POST', 'requirements' => ['deliveryNoteId' => '\d+']],
 		['name' => 'delivery_note#removePosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['deliveryNoteId' => '\d+', 'id' => '\d+']],
 		['name' => 'delivery_note#issue', 'url' => '/api/v1/delivery-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],

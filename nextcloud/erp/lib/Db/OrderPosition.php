@@ -9,6 +9,8 @@ use OCP\AppFramework\Db\Entity;
 /**
  * @method int getOrderId()
  * @method void setOrderId(int $orderId)
+ * @method int|null getGroupId()
+ * @method void setGroupId(?int $groupId)
  * @method string getPositionType()
  * @method void setPositionType(string $positionType)
  * @method int|null getReferenceId()
@@ -28,6 +30,9 @@ use OCP\AppFramework\Db\Entity;
  */
 class OrderPosition extends Entity implements \JsonSerializable {
 	protected int $orderId = 0;
+	// Gruppenzuordnung (Nutzerwunsch 2026-08-21) — bleibt bei Umwandlungen
+	// erhalten, siehe OrderService::createFromQuote().
+	protected ?int $groupId = null;
 	// Kein sinnvoller Default: 'custom' ist ein echter Wert, identischer
 	// Fallstrick wie QuotePosition::$positionType (ADR-0011/Phase 5).
 	protected string $positionType = '';
@@ -42,6 +47,7 @@ class OrderPosition extends Entity implements \JsonSerializable {
 	public function __construct() {
 		$this->addType('id', 'integer');
 		$this->addType('orderId', 'integer');
+		$this->addType('groupId', 'integer');
 		$this->addType('referenceId', 'integer');
 		$this->addType('quantity', 'float');
 		$this->addType('unitPriceNet', 'float');
@@ -53,6 +59,7 @@ class OrderPosition extends Entity implements \JsonSerializable {
 		return [
 			'id' => $this->getId(),
 			'orderId' => $this->getOrderId(),
+			'groupId' => $this->getGroupId(),
 			'positionType' => $this->getPositionType(),
 			'referenceId' => $this->getReferenceId(),
 			'description' => $this->getDescription(),
