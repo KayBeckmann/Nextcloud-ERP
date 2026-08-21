@@ -436,6 +436,41 @@ durch die echte UI bestätigt (keine Konsolenfehler). Schlussrechnung
 zeigt die verknüpften Teilrechnungen/Materialabschläge korrekt an.
 Voller Docker-Cold-Restart-Zyklus bestanden.
 
+## 2026-08-21 — Nutzeranpassung: Positionsgruppen bleiben bei Umwandlung erhalten
+
+**Auslöser:** Direktes Nutzerfeedback im Anschluss an die Belegkette:
+Wenn ein Beleg in einen anderen gewandelt wird, sollen Gruppen und
+Positionen erhalten bleiben — bisher hatte nur das Angebot ein
+Gruppen-Konzept, Auftrag/Rechnung/Lieferschein waren bewusst flach
+(ADR-0016). Zusätzlich ein kleiner Layout-Fix: Formulare am Ende einer
+Detailseite (z. B. "Umwandeln") saßen beim Herunterscrollen direkt an
+der Fensterkante ohne Abstand.
+
+**Erledigt (3 neue Tabellen, 3 neue Spalten):**
+
+- `erp_order_groups`/`erp_invoice_groups`/`erp_delivery_note_groups`
+  (gleiches Schema wie `erp_quote_groups`) + `group_id` auf allen drei
+  Positionstabellen.
+- `createFromQuote()` (Order+Invoice) und `createFromOrder()`/
+  `createFromDeliveryNote()` (Invoice+DeliveryNote) kopieren jetzt zuerst
+  die tatsächlich referenzierten Gruppen (alte ID → neue ID gemappt,
+  keine leeren Gruppen im Ziel) und setzen `group_id` an jeder kopierten
+  Position entsprechend, statt die Gruppierung zu verlieren.
+- `addGroup()` auf allen drei Services + neue Endpunkte
+  (`order#addGroup`, `invoice#addGroup`, `delivery_note#addGroup`).
+- Web-UI: `AuftragDetailView`/`RechnungDetailView`/`LieferscheineView`
+  rendern Positionen jetzt gruppiert (wie `AngebotDetailView`), mit
+  Gruppen-Dropdown im Positionsformular und "+ Gruppe"-Formular.
+- Bottom-Padding auf allen Detailansichten (Angebot/Auftrag/Rechnung,
+  Projektdetail) von `20px` auf `20px 20px 80px` erhöht.
+- 8 neue Tests — App-Gesamtstand: **214 Tests**
+
+**Verifiziert:** Eine auf dem Angebot angelegte Gruppe ("Elektrik")
+bleibt nachweislich über Auftrag → Lieferschein UND Auftrag → Rechnung
+UND Lieferschein → Rechnung erhalten (curl und Playwright durch die
+echte UI, keine Konsolenfehler). Layout-Fix per Playwright bestätigt
+(Scroll-Position am Seitenende zeigt jetzt sichtbaren Abstand).
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
