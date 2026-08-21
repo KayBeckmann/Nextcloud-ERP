@@ -35,4 +35,13 @@ class CreditNoteMapper extends QBMapper {
 			->orderBy('created_at', 'DESC');
 		return $this->findEntities($qb);
 	}
+
+	/** @return CreditNote[] */
+	public function findByProject(int $projectId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, \PDO::PARAM_INT)))
+			->orderBy('created_at', 'DESC');
+		return $this->findEntities($qb);
+	}
 }

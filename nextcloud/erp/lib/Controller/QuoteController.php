@@ -52,12 +52,16 @@ class QuoteController extends AbstractResourceController {
 
 	/** @throws OCSBadRequestException */
 	#[NoAdminRequired]
-	public function create(string $title, ?int $projectId = null, ?string $customerContactUid = null, ?string $notes = null): DataResponse {
+	public function create(string $title, int $projectId, ?string $customerContactUid = null, ?string $notes = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($title) === '') {
 			throw new OCSBadRequestException('title must not be empty');
 		}
-		return new DataResponse($this->quoteService->createQuote($title, $projectId, $customerContactUid, $notes));
+		try {
+			return new DataResponse($this->quoteService->createQuote($title, $projectId, $customerContactUid, $notes));
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
 	}
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
@@ -66,7 +70,7 @@ class QuoteController extends AbstractResourceController {
 		int $id,
 		string $title,
 		string $status,
-		?int $projectId = null,
+		int $projectId,
 		?string $customerContactUid = null,
 		?int $validUntil = null,
 		?string $notes = null,
@@ -82,6 +86,8 @@ class QuoteController extends AbstractResourceController {
 			return new DataResponse($this->quoteService->updateQuote($id, $title, $status, $projectId, $customerContactUid, $validUntil, $notes));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Quote $id not found");
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
 		}
 	}
 

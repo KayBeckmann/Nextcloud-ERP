@@ -32,10 +32,17 @@ class CreditNoteController extends AbstractResourceController {
 		return ResourceType::Rechnungen;
 	}
 
+	/** @throws OCSBadRequestException */
 	#[NoAdminRequired]
-	public function index(int $invoiceId): DataResponse {
+	public function index(?int $invoiceId = null, ?int $projectId = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Read);
-		return new DataResponse($this->creditNoteService->listForInvoice($invoiceId));
+		if ($invoiceId !== null) {
+			return new DataResponse($this->creditNoteService->listForInvoice($invoiceId));
+		}
+		if ($projectId !== null) {
+			return new DataResponse($this->creditNoteService->listForProject($projectId));
+		}
+		throw new OCSBadRequestException('invoiceId or projectId is required');
 	}
 
 	/** @throws OCSNotFoundException */

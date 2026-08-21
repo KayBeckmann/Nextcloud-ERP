@@ -11,6 +11,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreditNoteNumber(?string $creditNoteNumber)
  * @method int getInvoiceId()
  * @method void setInvoiceId(int $invoiceId)
+ * @method int getProjectId()
+ * @method void setProjectId(int $projectId)
  * @method string getStatus()
  * @method void setStatus(string $status)
  * @method string|null getReason()
@@ -29,6 +31,9 @@ class CreditNote extends Entity implements \JsonSerializable {
 	// null ist ungefährlich fürs Entity-Dirty-Tracking.
 	protected ?string $creditNoteNumber = null;
 	protected int $invoiceId = 0;
+	// project_id ist seit ADR-0015 in der DB NOT NULL; wird beim Anlegen
+	// immer von der referenzierten Rechnung übernommen (CreditNoteService).
+	protected int $projectId = 0;
 	protected string $status = 'draft';
 	protected ?string $reason = null;
 	protected bool $cancelsInvoice = false;
@@ -50,6 +55,7 @@ class CreditNote extends Entity implements \JsonSerializable {
 			'id' => $this->getId(),
 			'creditNoteNumber' => $this->getCreditNoteNumber(),
 			'invoiceId' => $this->getInvoiceId(),
+			'projectId' => $this->getProjectId(),
 			'status' => $this->getStatus(),
 			'reason' => $this->getReason(),
 			'cancelsInvoice' => $this->getCancelsInvoice(),

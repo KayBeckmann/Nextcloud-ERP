@@ -49,7 +49,7 @@ final class QuoteControllerAccessTest extends TestCase {
 	public function testCreateRequiresWriteNotJustRead(): void {
 		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
 		$this->expectException(OCSForbiddenException::class);
-		$this->controller->create('Neues Angebot');
+		$this->controller->create('Neues Angebot', 1);
 	}
 
 	public function testAddPositionRejectsUnknownPositionTypeBeforeServiceCall(): void {
@@ -70,6 +70,6 @@ final class QuoteControllerAccessTest extends TestCase {
 	public function testUpdateRejectsUnknownStatus(): void {
 		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
 		$this->expectException(OCSBadRequestException::class);
-		$this->controller->update(1, 'Titel', 'not-a-status');
+		$this->controller->update(1, 'Titel', 'not-a-status', 1);
 	}
 }

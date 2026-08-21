@@ -64,7 +64,11 @@ class QuoteService {
 		];
 	}
 
-	public function createQuote(string $title, ?int $projectId, ?string $customerContactUid, ?string $notes): Quote {
+	/** @throws \InvalidArgumentException wenn projectId nicht gesetzt ist (ADR-0015: Angebote hängen zwingend an Projekten) */
+	public function createQuote(string $title, int $projectId, ?string $customerContactUid, ?string $notes): Quote {
+		if ($projectId <= 0) {
+			throw new \InvalidArgumentException('projectId is required');
+		}
 		$now = time();
 		$quote = new Quote();
 		$quote->setTitle($title);
@@ -80,16 +84,22 @@ class QuoteService {
 		return $this->mapper->update($quote);
 	}
 
-	/** @throws \OutOfBoundsException */
+	/**
+	 * @throws \OutOfBoundsException
+	 * @throws \InvalidArgumentException wenn projectId nicht gesetzt ist (ADR-0015)
+	 */
 	public function updateQuote(
 		int $id,
 		string $title,
 		string $status,
-		?int $projectId,
+		int $projectId,
 		?string $customerContactUid,
 		?int $validUntil,
 		?string $notes,
 	): Quote {
+		if ($projectId <= 0) {
+			throw new \InvalidArgumentException('projectId is required');
+		}
 		$quote = $this->getQuote($id);
 		$quote->setTitle($title);
 		$quote->setStatus($status);

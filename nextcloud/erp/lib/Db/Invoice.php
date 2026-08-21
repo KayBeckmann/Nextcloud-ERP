@@ -13,8 +13,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setType(string $type)
  * @method string getStatus()
  * @method void setStatus(string $status)
- * @method int|null getProjectId()
- * @method void setProjectId(?int $projectId)
+ * @method int getProjectId()
+ * @method void setProjectId(int $projectId)
  * @method int|null getOrderId()
  * @method void setOrderId(?int $orderId)
  * @method int|null getQuoteId()
@@ -46,7 +46,9 @@ class Invoice extends Entity implements \JsonSerializable {
 	protected ?string $invoiceNumber = null;
 	protected string $type = 'invoice';
 	protected string $status = 'draft';
-	protected ?int $projectId = null;
+	// project_id ist seit ADR-0015 in der DB NOT NULL ohne Default; echte
+	// Projekt-IDs starten nie bei 0 (siehe Quote::$projectId-Kommentar).
+	protected int $projectId = 0;
 	protected ?int $orderId = null;
 	protected ?int $quoteId = null;
 	protected ?string $customerContactUid = null;

@@ -81,15 +81,19 @@ class InvoiceService {
 		return $invoice->getDueDate() < date('Y-m-d');
 	}
 
+	/** @throws \InvalidArgumentException wenn projectId nicht gesetzt ist (ADR-0015: Rechnungen hängen zwingend an Projekten) */
 	public function createDraft(
 		string $title,
 		string $type,
-		?int $projectId,
+		int $projectId,
 		?int $orderId,
 		?string $customerContactUid,
 		?string $dueDate,
 		?string $notes,
 	): Invoice {
+		if ($projectId <= 0) {
+			throw new \InvalidArgumentException('projectId is required');
+		}
 		$now = time();
 		$invoice = new Invoice();
 		$invoice->setTitle($title);
@@ -190,10 +194,11 @@ class InvoiceService {
 	}
 
 	/**
-	 * Vergibt die Rechnungsnummer atomar, setzt status='issued' und legt bei
-	 * vorhandenem project_id ein Rechnungsdokument im Projektordner an
-	 * (optional — ein fehlender Ordnerzugriff lässt das Ausstellen nicht
-	 * scheitern, siehe ADR-0013).
+	 * Vergibt die Rechnungsnummer atomar, setzt status='issued' und legt ein
+	 * Rechnungsdokument im Projektordner an (Rechnungen hängen seit
+	 * ADR-0015 immer an einem Projekt) — das Dokument selbst bleibt
+	 * optional, ein fehlender Ordnerzugriff lässt das Ausstellen nicht
+	 * scheitern (siehe ADR-0013).
 	 *
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn die Rechnung bereits ausgestellt ist oder keine Positionen hat
@@ -216,9 +221,7 @@ class InvoiceService {
 		$invoice->setUpdatedAt(time());
 		$invoice = $this->mapper->update($invoice);
 
-		if ($invoice->getProjectId() !== null) {
-			$this->tryWriteDocument($invoice, $positions, $issuer);
-		}
+		$this->tryWriteDocument($invoice, $positions, $issuer);
 
 		return $invoice;
 	}

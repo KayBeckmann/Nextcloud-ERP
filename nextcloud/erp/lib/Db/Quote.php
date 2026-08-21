@@ -11,8 +11,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setQuoteNumber(?string $quoteNumber)
  * @method string getTitle()
  * @method void setTitle(string $title)
- * @method int|null getProjectId()
- * @method void setProjectId(?int $projectId)
+ * @method int getProjectId()
+ * @method void setProjectId(int $projectId)
  * @method string|null getCustomerContactUid()
  * @method void setCustomerContactUid(?string $customerContactUid)
  * @method string getStatus()
@@ -31,7 +31,10 @@ use OCP\AppFramework\Db\Entity;
 class Quote extends Entity implements \JsonSerializable {
 	protected ?string $quoteNumber = null;
 	protected string $title = '';
-	protected ?int $projectId = null;
+	// project_id ist seit ADR-0015 in der DB NOT NULL ohne Default; echte
+	// Projekt-IDs starten nie bei 0, der Default hier ist ungefährlich
+	// (siehe WorkType::$workTypeId-Kommentar, ADR-0011/Phase 5).
+	protected int $projectId = 0;
 	protected ?string $customerContactUid = null;
 	protected string $status = 'draft';
 	protected ?int $validUntil = null;

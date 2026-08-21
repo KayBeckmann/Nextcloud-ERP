@@ -8,6 +8,8 @@ use OCA\ERP\Db\CreditNoteMapper;
 use OCA\ERP\Db\CreditNotePositionMapper;
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\Project;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
@@ -33,7 +35,9 @@ final class CreditNoteServiceTest extends TestCase {
 	private CreditNotePositionMapper $positionMapper;
 	private InvoiceMapper $invoiceMapper;
 	private InvoicePositionMapper $invoicePositionMapper;
+	private ProjectMapper $projectMapper;
 	private IUser $user;
+	private int $projectId;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -42,8 +46,9 @@ final class CreditNoteServiceTest extends TestCase {
 		$this->positionMapper = new CreditNotePositionMapper($db);
 		$this->invoiceMapper = new InvoiceMapper($db);
 		$this->invoicePositionMapper = new InvoicePositionMapper($db);
+		$this->projectMapper = new ProjectMapper($db);
 		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
-		$projectService = new ProjectService(new \OCA\ERP\Db\ProjectMapper($db), $folderService);
+		$projectService = new ProjectService($this->projectMapper, $folderService);
 
 		$this->invoiceService = new InvoiceService(
 			$this->invoiceMapper,
@@ -62,6 +67,13 @@ final class CreditNoteServiceTest extends TestCase {
 		}
 		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
 		self::loginAsUser(self::TEST_UID);
+
+		$project = new Project();
+		$project->setTitle('phpunit-cn-project');
+		$project->setStatus('draft');
+		$project->setCreatedAt(time());
+		$project->setUpdatedAt(time());
+		$this->projectId = $this->projectMapper->insert($project)->getId();
 	}
 
 	protected function tearDown(): void {
@@ -79,13 +91,14 @@ final class CreditNoteServiceTest extends TestCase {
 				$this->invoiceMapper->delete($invoice);
 			}
 		}
+		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
 		self::logout();
 		$this->user->delete();
 		parent::tearDown();
 	}
 
 	private function issuedInvoice(float $unitPriceNet = 100.0): \OCA\ERP\Db\Invoice {
-		$invoice = $this->invoiceService->createDraft('phpunit-cn-invoice', 'invoice', null, null, null, null, null);
+		$invoice = $this->invoiceService->createDraft('phpunit-cn-invoice', 'invoice', $this->projectId, null, null, null, null);
 		$this->invoiceService->addPosition($invoice->getId(), 'custom', null, 'x', 1.0, 'Stk', $unitPriceNet, 19.0);
 		return $this->invoiceService->issue($invoice->getId(), $this->user);
 	}
@@ -97,6 +110,18 @@ final class CreditNoteServiceTest extends TestCase {
 		$full = $this->service->getFull($creditNote->getId());
 		$this->assertCount(1, $full['positions']);
 		$this->assertTrue($creditNote->getCancelsInvoice());
+	}
+
+	/** ADR-0015: Gutschriften übernehmen die project_id der referenzierten Rechnung. */
+	public function testCreditNoteInheritsProjectIdFromInvoice(): void {
+		$invoice = $this->issuedInvoice();
+		$creditNote = $this->service->createFullCancellation($invoice->getId(), 'phpunit-cn-storno');
+
+		$this->assertSame($this->projectId, $creditNote->getProjectId());
+		$this->assertContains($creditNote->getId(), array_map(
+			static fn ($cn) => $cn->getId(),
+			$this->service->listForProject($this->projectId),
+		));
 	}
 
 	public function testIssueFullCancellationCancelsInvoice(): void {

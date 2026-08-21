@@ -32,6 +32,11 @@ class CreditNoteService {
 		return $this->mapper->findByInvoice($invoiceId);
 	}
 
+	/** @return CreditNote[] */
+	public function listForProject(int $projectId): array {
+		return $this->mapper->findByProject($projectId);
+	}
+
 	/** @throws \OutOfBoundsException */
 	public function get(int $id): CreditNote {
 		$creditNote = $this->mapper->findById($id);
@@ -65,9 +70,9 @@ class CreditNoteService {
 	 * @throws \OutOfBoundsException wenn die Rechnung nicht existiert
 	 */
 	public function createFullCancellation(int $invoiceId, string $reason): CreditNote {
-		$this->invoiceService->getInvoice($invoiceId);
+		$invoice = $this->invoiceService->getInvoice($invoiceId);
 
-		$creditNote = $this->createDraft($invoiceId, $reason, true);
+		$creditNote = $this->createDraft($invoiceId, $invoice->getProjectId(), $reason, true);
 		foreach ($this->invoicePositionMapper->findByInvoice($invoiceId) as $ip) {
 			$position = new CreditNotePosition();
 			$position->setCreditNoteId($creditNote->getId());
@@ -84,14 +89,15 @@ class CreditNoteService {
 
 	/** @throws \OutOfBoundsException wenn die Rechnung nicht existiert */
 	public function createPartial(int $invoiceId, string $reason): CreditNote {
-		$this->invoiceService->getInvoice($invoiceId);
-		return $this->createDraft($invoiceId, $reason, false);
+		$invoice = $this->invoiceService->getInvoice($invoiceId);
+		return $this->createDraft($invoiceId, $invoice->getProjectId(), $reason, false);
 	}
 
-	private function createDraft(int $invoiceId, string $reason, bool $cancelsInvoice): CreditNote {
+	private function createDraft(int $invoiceId, int $projectId, string $reason, bool $cancelsInvoice): CreditNote {
 		$now = time();
 		$creditNote = new CreditNote();
 		$creditNote->setInvoiceId($invoiceId);
+		$creditNote->setProjectId($projectId);
 		$creditNote->setStatus('draft');
 		$creditNote->setReason($reason);
 		$creditNote->setCancelsInvoice($cancelsInvoice);

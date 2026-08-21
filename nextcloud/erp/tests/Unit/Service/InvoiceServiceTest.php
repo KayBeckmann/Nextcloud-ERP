@@ -6,6 +6,7 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\InvoiceMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
@@ -29,7 +30,11 @@ final class InvoiceServiceTest extends TestCase {
 	private InvoiceMapper $mapper;
 	private InvoicePositionMapper $positionMapper;
 	private QuoteService $quoteService;
+	private ProjectMapper $projectMapper;
+	private ErpFolderService $folderService;
 	private IUser $user;
+	private int $projectId;
+	private string $projectNumber;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -39,10 +44,11 @@ final class InvoiceServiceTest extends TestCase {
 		$quoteMapper = new QuoteMapper($db);
 		$quotePositionMapper = new QuotePositionMapper($db);
 		$this->quoteService = new QuoteService($quoteMapper, new QuoteGroupMapper($db), $quotePositionMapper);
-		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
-		$projectService = new ProjectService(new \OCA\ERP\Db\ProjectMapper($db), $folderService);
+		$this->folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
+		$this->projectMapper = new ProjectMapper($db);
+		$projectService = new ProjectService($this->projectMapper, $this->folderService);
 
-		$this->service = new InvoiceService($this->mapper, $this->positionMapper, $quoteMapper, $quotePositionMapper, $db, $folderService, $projectService);
+		$this->service = new InvoiceService($this->mapper, $this->positionMapper, $quoteMapper, $quotePositionMapper, $db, $this->folderService, $projectService);
 
 		$userManager = \OC::$server->get(IUserManager::class);
 		if ($userManager->userExists(self::TEST_UID)) {
@@ -50,6 +56,10 @@ final class InvoiceServiceTest extends TestCase {
 		}
 		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
 		self::loginAsUser(self::TEST_UID);
+
+		$project = $projectService->createProject($this->user, 'phpunit-invoice-project', null, null, null);
+		$this->projectId = $project->getId();
+		$this->projectNumber = $project->getProjectNumber();
 	}
 
 	protected function tearDown(): void {
@@ -61,21 +71,28 @@ final class InvoiceServiceTest extends TestCase {
 				$this->mapper->delete($invoice);
 			}
 		}
+		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
 		self::logout();
 		$this->user->delete();
 		parent::tearDown();
 	}
 
 	private function draftWithOnePosition(float $unitPriceNet = 100.0, float $vat = 19.0): \OCA\ERP\Db\Invoice {
-		$invoice = $this->service->createDraft('phpunit-invoice-1', 'invoice', null, null, 'cust-1', null, null);
+		$invoice = $this->service->createDraft('phpunit-invoice-1', 'invoice', $this->projectId, null, 'cust-1', null, null);
 		$this->service->addPosition($invoice->getId(), 'custom', null, 'Testposition', 1.0, 'Stk', $unitPriceNet, $vat);
 		return $invoice;
 	}
 
 	public function testCreateDraftHasNoInvoiceNumberYet(): void {
-		$invoice = $this->service->createDraft('phpunit-invoice-2', 'invoice', null, null, null, null, null);
+		$invoice = $this->service->createDraft('phpunit-invoice-2', 'invoice', $this->projectId, null, null, null, null);
 		$this->assertNull($invoice->getInvoiceNumber());
 		$this->assertSame('draft', $invoice->getStatus());
+	}
+
+	/** ADR-0015: Rechnungen hängen zwingend an einem Projekt. */
+	public function testCreateDraftWithoutProjectThrows(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->createDraft('phpunit-invoice-no-project', 'invoice', 0, null, null, null, null);
 	}
 
 	public function testIssueAssignsSequentialNumberInCurrentYear(): void {
@@ -89,7 +106,7 @@ final class InvoiceServiceTest extends TestCase {
 	}
 
 	public function testIssueWithoutPositionsThrows(): void {
-		$invoice = $this->service->createDraft('phpunit-invoice-3', 'invoice', null, null, null, null, null);
+		$invoice = $this->service->createDraft('phpunit-invoice-3', 'invoice', $this->projectId, null, null, null, null);
 		$this->expectException(\DomainException::class);
 		$this->service->issue($invoice->getId(), $this->user);
 	}
@@ -115,7 +132,7 @@ final class InvoiceServiceTest extends TestCase {
 	 * 'custom' ist zufällig der PHP-Default von InvoicePosition::$positionType.
 	 */
 	public function testCustomPositionTypeIsPersistedCorrectly(): void {
-		$invoice = $this->service->createDraft('phpunit-invoice-4', 'invoice', null, null, null, null, null);
+		$invoice = $this->service->createDraft('phpunit-invoice-4', 'invoice', $this->projectId, null, null, null, null);
 		$position = $this->service->addPosition($invoice->getId(), 'custom', null, 'Anfahrt', 1.0, 'psch.', 25.0, 19.0);
 
 		$this->assertSame('custom', $position->getPositionType());
@@ -126,7 +143,7 @@ final class InvoiceServiceTest extends TestCase {
 	}
 
 	public function testCreateFromQuoteCopiesPositions(): void {
-		$quote = $this->quoteService->createQuote('phpunit-quote-for-invoice', null, 'cust-2', null);
+		$quote = $this->quoteService->createQuote('phpunit-quote-for-invoice', $this->projectId, 'cust-2', null);
 		$this->quoteService->addPosition($quote->getId(), null, 'labor', null, 'Arbeitsstunden', 3.0, 'Std', 55.0, 19.0);
 
 		$invoice = $this->service->createFromQuote($quote->getId(), 'phpunit-invoice-5', 'invoice', null, null);
@@ -136,6 +153,7 @@ final class InvoiceServiceTest extends TestCase {
 		$this->assertSame('labor', $full['positions'][0]->getPositionType());
 		$this->assertSame($quote->getId(), $invoice->getQuoteId());
 		$this->assertSame('cust-2', $invoice->getCustomerContactUid());
+		$this->assertSame($this->projectId, $invoice->getProjectId());
 	}
 
 	public function testRecordPaymentTransitionsToPartiallyPaidThenPaid(): void {
@@ -164,22 +182,13 @@ final class InvoiceServiceTest extends TestCase {
 		$this->assertSame(119.0, $full['calculation']['grossTotal']);
 	}
 
-	public function testIssueWithProjectWritesDocumentToProjectFolder(): void {
-		$db = \OC::$server->get(IDBConnection::class);
-		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
-		$projectMapper = new \OCA\ERP\Db\ProjectMapper($db);
-		$projectService = new ProjectService($projectMapper, $folderService);
-		$project = $projectService->createProject($this->user, 'phpunit-invoice-project', null, null, null);
-
-		$invoice = $this->service->createDraft('phpunit-invoice-6', 'invoice', $project->getId(), null, null, null, null);
-		$this->service->addPosition($invoice->getId(), 'custom', null, 'x', 1.0, 'Stk', 10.0, 19.0);
+	public function testIssueWritesDocumentToProjectFolder(): void {
+		$invoice = $this->draftWithOnePosition();
 		$issued = $this->service->issue($invoice->getId(), $this->user);
 
 		$this->assertNotNull($issued->getDocumentFileId());
 
-		$invoiceFolder = $folderService->ensureInvoiceFolder($this->user, $project->getProjectNumber());
+		$invoiceFolder = $this->folderService->ensureInvoiceFolder($this->user, $this->projectNumber);
 		$this->assertTrue($invoiceFolder->nodeExists($issued->getInvoiceNumber() . '.html'));
-
-		$projectMapper->delete($project);
 	}
 }

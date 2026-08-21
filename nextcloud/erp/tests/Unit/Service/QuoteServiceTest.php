@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\Project;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
@@ -17,12 +19,22 @@ use Test\TestCase;
 final class QuoteServiceTest extends TestCase {
 	private QuoteService $service;
 	private QuoteMapper $mapper;
+	private ProjectMapper $projectMapper;
+	private int $projectId;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$db = \OC::$server->get(IDBConnection::class);
 		$this->mapper = new QuoteMapper($db);
+		$this->projectMapper = new ProjectMapper($db);
 		$this->service = new QuoteService($this->mapper, new QuoteGroupMapper($db), new QuotePositionMapper($db));
+
+		$project = new Project();
+		$project->setTitle('phpunit-quote-project');
+		$project->setStatus('draft');
+		$project->setCreatedAt(time());
+		$project->setUpdatedAt(time());
+		$this->projectId = $this->projectMapper->insert($project)->getId();
 	}
 
 	protected function tearDown(): void {
@@ -31,13 +43,21 @@ final class QuoteServiceTest extends TestCase {
 				$this->mapper->delete($quote);
 			}
 		}
+		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
 		parent::tearDown();
 	}
 
 	public function testCreateQuoteGeneratesNumber(): void {
-		$quote = $this->service->createQuote('phpunit-quote-1', null, null, null);
+		$quote = $this->service->createQuote('phpunit-quote-1', $this->projectId, null, null);
 		$this->assertSame(sprintf('A-%05d', $quote->getId()), $quote->getQuoteNumber());
 		$this->assertSame('draft', $quote->getStatus());
+		$this->assertSame($this->projectId, $quote->getProjectId());
+	}
+
+	/** ADR-0015: Angebote hängen zwingend an einem Projekt. */
+	public function testCreateQuoteWithoutProjectThrows(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->createQuote('phpunit-quote-no-project', 0, null, null);
 	}
 
 	/**
@@ -47,7 +67,7 @@ final class QuoteServiceTest extends TestCase {
 	 * NOT-NULL-Spalte position_type verletzt wurde (siehe Commit-Message).
 	 */
 	public function testCustomPositionTypeIsPersistedCorrectly(): void {
-		$quote = $this->service->createQuote('phpunit-quote-2', null, null, null);
+		$quote = $this->service->createQuote('phpunit-quote-2', $this->projectId, null, null);
 		$position = $this->service->addPosition(
 			$quote->getId(),
 			null,
@@ -71,7 +91,7 @@ final class QuoteServiceTest extends TestCase {
 	}
 
 	public function testGroupNetTotalAndOverallCalculation(): void {
-		$quote = $this->service->createQuote('phpunit-quote-3', null, null, null);
+		$quote = $this->service->createQuote('phpunit-quote-3', $this->projectId, null, null);
 		$group = $this->service->addGroup($quote->getId(), 'Material');
 		$this->service->addPosition($quote->getId(), $group->getId(), 'article', null, 'Artikel A', 2.0, 'Stk', 10.0, 19.0);
 		$this->service->addPosition($quote->getId(), null, 'custom', null, 'Pauschale', 1.0, 'psch.', 5.0, 19.0);
@@ -85,26 +105,26 @@ final class QuoteServiceTest extends TestCase {
 	}
 
 	public function testAddPositionToUnknownGroupThrows(): void {
-		$quote = $this->service->createQuote('phpunit-quote-4', null, null, null);
+		$quote = $this->service->createQuote('phpunit-quote-4', $this->projectId, null, null);
 		$this->expectException(\OutOfBoundsException::class);
 		$this->service->addPosition($quote->getId(), 999999999, 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
 	}
 
 	public function testUpdateQuoteToSentSetsSentAtOnce(): void {
-		$quote = $this->service->createQuote('phpunit-quote-5', null, null, null);
+		$quote = $this->service->createQuote('phpunit-quote-5', $this->projectId, null, null);
 		$this->assertNull($quote->getSentAt());
 
-		$sent = $this->service->updateQuote($quote->getId(), 'phpunit-quote-5', 'sent', null, null, null, null);
+		$sent = $this->service->updateQuote($quote->getId(), 'phpunit-quote-5', 'sent', $this->projectId, null, null, null);
 		$this->assertNotNull($sent->getSentAt());
 		$firstSentAt = $sent->getSentAt();
 
 		// Erneutes Speichern im Status 'sent' darf sentAt nicht überschreiben.
-		$sentAgain = $this->service->updateQuote($quote->getId(), 'phpunit-quote-5', 'sent', null, null, null, null);
+		$sentAgain = $this->service->updateQuote($quote->getId(), 'phpunit-quote-5', 'sent', $this->projectId, null, null, null);
 		$this->assertSame($firstSentAt, $sentAgain->getSentAt());
 	}
 
 	public function testRemovePosition(): void {
-		$quote = $this->service->createQuote('phpunit-quote-6', null, null, null);
+		$quote = $this->service->createQuote('phpunit-quote-6', $this->projectId, null, null);
 		$position = $this->service->addPosition($quote->getId(), null, 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
 
 		$this->service->removePosition($quote->getId(), $position->getId());

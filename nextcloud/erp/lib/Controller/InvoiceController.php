@@ -56,8 +56,8 @@ class InvoiceController extends AbstractResourceController {
 	#[NoAdminRequired]
 	public function create(
 		string $title,
+		int $projectId,
 		string $type = 'invoice',
-		?int $projectId = null,
 		?int $orderId = null,
 		?string $customerContactUid = null,
 		?string $dueDate = null,
@@ -70,7 +70,11 @@ class InvoiceController extends AbstractResourceController {
 		if (!in_array($type, self::VALID_TYPES, true)) {
 			throw new OCSBadRequestException('Unknown type: ' . $type);
 		}
-		return new DataResponse($this->invoiceService->createDraft($title, $type, $projectId, $orderId, $customerContactUid, $dueDate, $notes));
+		try {
+			return new DataResponse($this->invoiceService->createDraft($title, $type, $projectId, $orderId, $customerContactUid, $dueDate, $notes));
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
 	}
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
