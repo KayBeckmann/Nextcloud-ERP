@@ -26,8 +26,8 @@ class QuoteService {
 	}
 
 	/** @return Quote[] */
-	public function listQuotes(?string $status = null): array {
-		return $this->mapper->findAll($status);
+	public function listQuotes(?string $status = null, ?int $projectId = null): array {
+		return $this->mapper->findAll($status, $projectId);
 	}
 
 	/** @throws \OutOfBoundsException */

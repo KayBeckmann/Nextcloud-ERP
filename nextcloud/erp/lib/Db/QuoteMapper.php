@@ -17,11 +17,14 @@ class QuoteMapper extends QBMapper {
 	}
 
 	/** @return Quote[] */
-	public function findAll(?string $status = null): array {
+	public function findAll(?string $status = null, ?int $projectId = null): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())->orderBy('created_at', 'DESC');
 		if ($status !== null) {
-			$qb->where($qb->expr()->eq('status', $qb->createNamedParameter($status)));
+			$qb->andWhere($qb->expr()->eq('status', $qb->createNamedParameter($status)));
+		}
+		if ($projectId !== null) {
+			$qb->andWhere($qb->expr()->eq('project_id', $qb->createNamedParameter($projectId, \PDO::PARAM_INT)));
 		}
 		return $this->findEntities($qb);
 	}

@@ -34,9 +34,9 @@ class QuoteController extends AbstractResourceController {
 	}
 
 	#[NoAdminRequired]
-	public function index(?string $status = null): DataResponse {
+	public function index(?string $status = null, ?int $projectId = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Read);
-		return new DataResponse($this->quoteService->listQuotes($status));
+		return new DataResponse($this->quoteService->listQuotes($status, $projectId));
 	}
 
 	/** @throws OCSNotFoundException */
