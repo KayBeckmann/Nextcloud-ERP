@@ -18,6 +18,7 @@
 | [0014](0014-lager-inventur-bestellvorschlaege.md) | Lager, Inventur und Bestellvorschläge | accepted |
 | [0015](0015-projektpflicht-lieferscheine-picker.md) | Projektpflicht, Lieferscheine, Kontakt-/User-Picker | accepted |
 | [0016](0016-belegkette-teilrechnungen.md) | Belegkette Angebot→Auftrag→Lieferschein/Rechnung, Teilrechnungen | accepted |
+| [0017](0017-fuhrpark.md) | Fuhrpark | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per

@@ -3,6 +3,12 @@
 **Status:** accepted
 **Datum:** 2026-08-20
 
+> **Hinweis (2026-08-21):** Die Fuhrpark-Verknüpfung für Fahrzeuglager
+> wurde in [ADR-0017](0017-fuhrpark.md) nachgezogen —
+> `erp_warehouses.vehicle_id` (nullable) verweist jetzt optional auf
+> einen echten `erp_vehicles`-Datensatz. Der Rest dieses ADRs gilt
+> unverändert.
+
 ## Kontext
 
 Roadmap Phase 8 verlangt Materialbestand und -verbrauch steuerbar zu
