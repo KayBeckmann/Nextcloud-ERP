@@ -18,8 +18,8 @@
 						<option v-for="s in statusOptions" :key="s" :value="s">{{ statusLabel(s) }}</option>
 					</select>
 				</label>
-				<label>Kunde (Contact-UID) <input v-model="edit.customerContactUid"></label>
-				<label>Verantwortlich (Nextcloud-UID) <input v-model="edit.responsibleUserId"></label>
+				<label>Kunde <ContactPicker v-model="edit.customerContactUid" placeholder="Kunde suchen …" /></label>
+				<label>Verantwortlich <UserPicker v-model="edit.responsibleUserId" placeholder="User suchen …" /></label>
 				<label>Notizen <textarea v-model="edit.notes" rows="4"></textarea></label>
 				<button @click="save">Speichern</button>
 				<p v-if="project.filesFolderId">
@@ -59,6 +59,35 @@
 				</form>
 			</section>
 
+			<section v-else-if="tab === 'Angebote'" class="erp-project-detail__section">
+				<AngeboteView :project-id="id" />
+			</section>
+
+			<section v-else-if="tab === 'Rechnungen'" class="erp-project-detail__section">
+				<RechnungenView :project-id="id" />
+			</section>
+
+			<section v-else-if="tab === 'Lieferscheine'" class="erp-project-detail__section">
+				<LieferscheineView :project-id="id" />
+			</section>
+
+			<section v-else-if="tab === 'Gutschriften'" class="erp-project-detail__section">
+				<h3>Gutschriften</h3>
+				<table v-if="creditNotes.length" class="erp-project-detail__credit-notes">
+					<thead><tr><th>Nr.</th><th>Grund</th><th>Vollstorno</th><th>Status</th><th></th></tr></thead>
+					<tbody>
+						<tr v-for="cn in creditNotes" :key="cn.id">
+							<td>{{ cn.creditNoteNumber || '(Entwurf)' }}</td>
+							<td>{{ cn.reason }}</td>
+							<td>{{ cn.cancelsInvoice ? 'ja' : 'nein' }}</td>
+							<td><span class="erp-status-badge" :class="`is-${cn.status}`">{{ cn.status }}</span></td>
+							<td><a href="#" @click.prevent="openInvoice(cn.invoiceId)">zur Rechnung</a></td>
+						</tr>
+					</tbody>
+				</table>
+				<p v-else>Noch keine Gutschriften in diesem Projekt.</p>
+			</section>
+
 			<section v-else-if="tab === 'Termine'" class="erp-project-detail__section">
 				<ul class="erp-project-detail__events">
 					<li v-for="l in calendarLinks" :key="l.id">{{ l.summary }} <small>({{ l.calendarUri }})</small></li>
@@ -89,6 +118,12 @@ import {
 	fetchOrders, createOrder, updateOrder,
 } from '../services/projectsApi.js'
 import { fetchCalendarLinks, createCalendarEvent } from '../services/calendarApi.js'
+import { fetchCreditNotes } from '../services/invoicesApi.js'
+import ContactPicker from '../components/ContactPicker.vue'
+import UserPicker from '../components/UserPicker.vue'
+import AngeboteView from './AngeboteView.vue'
+import RechnungenView from './RechnungenView.vue'
+import LieferscheineView from './LieferscheineView.vue'
 
 const STATUS_LABELS = {
 	draft: 'Entwurf',
@@ -101,19 +136,21 @@ const STATUS_LABELS = {
 
 export default {
 	name: 'ProjektDetailView',
+	components: { ContactPicker, UserPicker, AngeboteView, RechnungenView, LieferscheineView },
 	props: {
 		id: { type: [String, Number], required: true },
 	},
 	data() {
 		return {
 			project: null,
-			edit: { title: '', status: 'draft', customerContactUid: '', responsibleUserId: '', notes: '' },
+			edit: { title: '', status: 'draft', customerContactUid: null, responsibleUserId: null, notes: '' },
 			tasks: [],
 			orders: [],
 			calendarLinks: [],
+			creditNotes: [],
 			loadError: null,
 			tab: 'Übersicht',
-			tabs: ['Übersicht', 'Aufgaben', 'Aufträge', 'Termine', 'Dokumente'],
+			tabs: ['Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Termine', 'Dokumente'],
 			statusOptions: Object.keys(STATUS_LABELS),
 			newTaskTitle: '',
 			newOrderTitle: '',
@@ -125,6 +162,13 @@ export default {
 	async mounted() {
 		await this.loadAll()
 	},
+	watch: {
+		async tab(newTab) {
+			if (newTab === 'Gutschriften') {
+				await this.loadCreditNotes()
+			}
+		},
+	},
 	methods: {
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
@@ -132,14 +176,17 @@ export default {
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
 		},
+		openInvoice(invoiceId) {
+			this.$router.push({ name: 'rechnung-detail', params: { id: invoiceId } })
+		},
 		async loadAll() {
 			try {
 				this.project = await fetchProject(this.id)
 				this.edit = {
 					title: this.project.title,
 					status: this.project.status,
-					customerContactUid: this.project.customerContactUid ?? '',
-					responsibleUserId: this.project.responsibleUserId ?? '',
+					customerContactUid: this.project.customerContactUid ?? null,
+					responsibleUserId: this.project.responsibleUserId ?? null,
 					notes: this.project.notes ?? '',
 				}
 				const [tasks, orders, links] = await Promise.all([
@@ -150,6 +197,13 @@ export default {
 				this.tasks = tasks
 				this.orders = orders
 				this.calendarLinks = links
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		async loadCreditNotes() {
+			try {
+				this.creditNotes = await fetchCreditNotes(null, this.id)
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
@@ -208,7 +262,7 @@ export default {
 <style scoped>
 .erp-project-detail {
 	padding: 20px;
-	max-width: 720px;
+	max-width: 960px;
 }
 .erp-project-detail__error {
 	color: var(--color-error-text, #c00);
@@ -223,6 +277,7 @@ header {
 	gap: 4px;
 	margin: 16px 0;
 	border-bottom: 1px solid var(--color-border);
+	flex-wrap: wrap;
 }
 .erp-project-detail__tabs button {
 	background: none;
@@ -244,6 +299,7 @@ header {
 	display: block;
 	width: 100%;
 	margin-top: 2px;
+	max-width: 400px;
 }
 .erp-project-detail__tasks,
 .erp-project-detail__orders,
@@ -264,6 +320,17 @@ header {
 	display: flex;
 	gap: 8px;
 	margin-top: 10px;
+}
+.erp-project-detail__credit-notes {
+	border-collapse: collapse;
+	width: 100%;
+	max-width: 900px;
+}
+.erp-project-detail__credit-notes th,
+.erp-project-detail__credit-notes td {
+	text-align: left;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--color-border);
 }
 .erp-status-badge {
 	font-size: 11px;

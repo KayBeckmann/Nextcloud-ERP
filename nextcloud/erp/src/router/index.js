@@ -10,15 +10,18 @@ import ProjekteView from '../views/ProjekteView.vue'
 import ProjektDetailView from '../views/ProjektDetailView.vue'
 import ArtikelView from '../views/ArtikelView.vue'
 import ProdukteView from '../views/ProdukteView.vue'
-import AngeboteView from '../views/AngeboteView.vue'
 import AngebotDetailView from '../views/AngebotDetailView.vue'
 import StundenZeitkontoView from '../views/StundenZeitkontoView.vue'
-import RechnungenView from '../views/RechnungenView.vue'
 import RechnungDetailView from '../views/RechnungDetailView.vue'
 import LagerView from '../views/LagerView.vue'
 
 // Module, die schon eine echte View statt des generischen Platzhalters haben.
 // `props` überschreibt die generischen Platzhalter-Props (title/description/phase).
+// Angebote/Aufträge/Rechnungen/Lieferscheine haben bewusst KEINEN eigenen
+// Seitenleisten-Eintrag mehr (ADR-0015) — sie hängen zwingend an einem
+// Projekt und leben als Tabs in ProjektDetailView. Die zugehörigen
+// Detail-Routen (angebot-detail/rechnung-detail) bleiben unten erhalten,
+// weil sie von dort aus verlinkt werden.
 const dedicatedViews = {
 	'berechtigungen-saetze': { component: BerechtigungenView },
 	kunden: { component: ContactLinksView, props: { role: 'customer', title: 'Kunden' } },
@@ -27,9 +30,7 @@ const dedicatedViews = {
 	projekte: { component: ProjekteView },
 	artikel: { component: ArtikelView },
 	produkte: { component: ProdukteView },
-	angebote: { component: AngeboteView },
 	'stunden-zeitkonto': { component: StundenZeitkontoView },
-	rechnungen: { component: RechnungenView },
 	lager: { component: LagerView },
 }
 
@@ -73,24 +74,6 @@ export const modules = [
 		title: 'Produkte',
 		description: 'Produkte/Bundles aus Artikeln und Arbeitsleistungen.',
 		phase: 'Phase 5',
-	},
-	{
-		path: 'angebote',
-		title: 'Angebote',
-		description: 'Angebote mit Positionsgruppen, Netto-Gruppensummen und MwSt.-Abschlussblock.',
-		phase: 'Phase 5',
-	},
-	{
-		path: 'auftraege',
-		title: 'Aufträge',
-		description: 'Auftragsabwicklung mit Material- und Stundenbuchung.',
-		phase: 'Phase 4',
-	},
-	{
-		path: 'rechnungen',
-		title: 'Rechnungen',
-		description: 'Rechnungen, Gutschriften und Zahlungsstatus.',
-		phase: 'Phase 7',
 	},
 	{
 		path: 'lager',

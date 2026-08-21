@@ -15,7 +15,7 @@
 						<option v-for="s in statusOptions" :key="s" :value="s">{{ statusLabel(s) }}</option>
 					</select>
 				</label>
-				<label>Kunde (Contact-UID) <input v-model="edit.customerContactUid"></label>
+				<label>Kunde <ContactPicker v-model="edit.customerContactUid" placeholder="Kunde suchen …" /></label>
 				<label>Notizen <textarea v-model="edit.notes" rows="2"></textarea></label>
 				<button @click="save">Speichern</button>
 				<span v-if="quote.sentAt" class="erp-quote-detail__hint">Versendet am {{ formatDate(quote.sentAt) }} — Preise/Sätze sind ab Hinzufügen der jeweiligen Position festgeschrieben.</span>
@@ -87,12 +87,14 @@
 import { addGroup, addPosition, fetchQuote, removePosition, updateQuote } from '../services/quotesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
 import { createInvoiceFromQuote } from '../services/invoicesApi.js'
+import ContactPicker from '../components/ContactPicker.vue'
 
 const STATUS_LABELS = { draft: 'Entwurf', sent: 'Versendet', accepted: 'Angenommen', rejected: 'Abgelehnt', expired: 'Abgelaufen' }
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', labor: 'Arbeitsstunden', custom: 'Freitext' }
 
 export default {
 	name: 'AngebotDetailView',
+	components: { ContactPicker },
 	props: {
 		id: { type: [String, Number], required: true },
 	},
@@ -103,7 +105,7 @@ export default {
 			positions: [],
 			vatRates: [],
 			loadError: null,
-			edit: { title: '', status: 'draft', customerContactUid: '', notes: '' },
+			edit: { title: '', status: 'draft', customerContactUid: null, notes: '' },
 			statusOptions: Object.keys(STATUS_LABELS),
 			newGroupTitle: '',
 			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
@@ -153,7 +155,7 @@ export default {
 				this.edit = {
 					title: full.title,
 					status: full.status,
-					customerContactUid: full.customerContactUid ?? '',
+					customerContactUid: full.customerContactUid ?? null,
 					notes: full.notes ?? '',
 				}
 			} catch (e) {
@@ -164,6 +166,7 @@ export default {
 			await updateQuote(this.id, {
 				title: this.edit.title,
 				status: this.edit.status,
+				projectId: this.quote.projectId,
 				customerContactUid: this.edit.customerContactUid || null,
 				notes: this.edit.notes || null,
 			})

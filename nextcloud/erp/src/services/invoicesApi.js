@@ -1,8 +1,8 @@
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 
-export async function fetchInvoices(status) {
-	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/invoices'), { params: { status } })
+export async function fetchInvoices(status, projectId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/invoices'), { params: { status, projectId } })
 	return data.ocs.data
 }
 
@@ -40,8 +40,8 @@ export async function recordInvoicePayment(id, amount) {
 	return data.ocs.data
 }
 
-export async function fetchCreditNotes(invoiceId) {
-	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/credit-notes'), { params: { invoiceId } })
+export async function fetchCreditNotes(invoiceId, projectId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/credit-notes'), { params: { invoiceId, projectId } })
 	return data.ocs.data
 }
 

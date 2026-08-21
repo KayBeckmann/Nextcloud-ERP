@@ -1,7 +1,7 @@
 <template>
 	<div class="erp-invoices">
 		<div class="erp-invoices__header">
-			<h2>Rechnungen</h2>
+			<h3>Rechnungen</h3>
 			<button @click="showCreate = !showCreate">+ Rechnung</button>
 		</div>
 
@@ -12,7 +12,7 @@
 				<option value="partial">Abschlagsrechnung</option>
 				<option value="final">Schlussrechnung</option>
 			</select>
-			<input v-model="newInvoice.customerContactUid" placeholder="Kunde (Contact-UID, optional)">
+			<ContactPicker v-model="newInvoice.customerContactUid" placeholder="Kunde (optional)" />
 			<input v-model="newInvoice.dueDate" type="date" placeholder="Fällig am">
 			<button type="submit">Anlegen</button>
 		</form>
@@ -33,23 +33,28 @@
 				</tr>
 			</tbody>
 		</table>
-		<p v-else-if="!loadError">Noch keine Rechnungen.</p>
+		<p v-else-if="!loadError">Noch keine Rechnungen in diesem Projekt.</p>
 	</div>
 </template>
 
 <script>
 import { createInvoice, fetchInvoices } from '../services/invoicesApi.js'
+import ContactPicker from '../components/ContactPicker.vue'
 
 const STATUS_LABELS = { draft: 'Entwurf', issued: 'Ausgestellt', partially_paid: 'Teilweise bezahlt', paid: 'Bezahlt', cancelled: 'Storniert' }
 
 export default {
 	name: 'RechnungenView',
+	components: { ContactPicker },
+	props: {
+		projectId: { type: [String, Number], required: true },
+	},
 	data() {
 		return {
 			invoices: [],
 			loadError: null,
 			showCreate: false,
-			newInvoice: { title: '', type: 'invoice', customerContactUid: '', dueDate: '' },
+			newInvoice: { title: '', type: 'invoice', customerContactUid: null, dueDate: '' },
 		}
 	},
 	async mounted() {
@@ -61,20 +66,24 @@ export default {
 		},
 		async load() {
 			try {
-				this.invoices = await fetchInvoices()
+				this.invoices = await fetchInvoices(null, this.projectId)
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
 		},
 		async submitCreate() {
-			await createInvoice({
-				...this.newInvoice,
-				customerContactUid: this.newInvoice.customerContactUid || null,
-				dueDate: this.newInvoice.dueDate || null,
-			})
-			this.newInvoice = { title: '', type: 'invoice', customerContactUid: '', dueDate: '' }
-			this.showCreate = false
-			await this.load()
+			try {
+				await createInvoice({
+					...this.newInvoice,
+					projectId: this.projectId,
+					dueDate: this.newInvoice.dueDate || null,
+				})
+				this.newInvoice = { title: '', type: 'invoice', customerContactUid: null, dueDate: '' }
+				this.showCreate = false
+				await this.load()
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
 		},
 		open(id) {
 			this.$router.push({ name: 'rechnung-detail', params: { id } })
@@ -84,9 +93,9 @@ export default {
 </script>
 
 <style scoped>
-.erp-invoices { padding: 20px; }
+.erp-invoices { padding: 4px 0; }
 .erp-invoices__header { display: flex; align-items: center; justify-content: space-between; max-width: 900px; }
-.erp-invoices__create { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.erp-invoices__create { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
 .erp-invoices__error { color: var(--color-error-text, #c00); }
 .erp-invoices__table { border-collapse: collapse; width: 100%; max-width: 900px; }
 .erp-invoices__table th, .erp-invoices__table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border); }

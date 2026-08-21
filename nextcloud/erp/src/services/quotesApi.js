@@ -1,8 +1,8 @@
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 
-export async function fetchQuotes(status) {
-	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/quotes'), { params: { status } })
+export async function fetchQuotes(status, projectId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/quotes'), { params: { status, projectId } })
 	return data.ocs.data
 }
 

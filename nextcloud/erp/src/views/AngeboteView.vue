@@ -1,13 +1,13 @@
 <template>
 	<div class="erp-quotes">
 		<div class="erp-quotes__header">
-			<h2>Angebote</h2>
+			<h3>Angebote</h3>
 			<button @click="showCreate = !showCreate">+ Angebot</button>
 		</div>
 
 		<form v-if="showCreate" class="erp-quotes__create" @submit.prevent="submitCreate">
 			<input v-model="newQuote.title" placeholder="Angebotstitel" required>
-			<input v-model="newQuote.customerContactUid" placeholder="Kunde (Contact-UID, optional)">
+			<ContactPicker v-model="newQuote.customerContactUid" placeholder="Kunde (optional)" />
 			<button type="submit">Anlegen</button>
 		</form>
 
@@ -26,23 +26,28 @@
 				</tr>
 			</tbody>
 		</table>
-		<p v-else-if="!loadError">Noch keine Angebote.</p>
+		<p v-else-if="!loadError">Noch keine Angebote in diesem Projekt.</p>
 	</div>
 </template>
 
 <script>
 import { createQuote, fetchQuotes } from '../services/quotesApi.js'
+import ContactPicker from '../components/ContactPicker.vue'
 
 const STATUS_LABELS = { draft: 'Entwurf', sent: 'Versendet', accepted: 'Angenommen', rejected: 'Abgelehnt', expired: 'Abgelaufen' }
 
 export default {
 	name: 'AngeboteView',
+	components: { ContactPicker },
+	props: {
+		projectId: { type: [String, Number], required: true },
+	},
 	data() {
 		return {
 			quotes: [],
 			loadError: null,
 			showCreate: false,
-			newQuote: { title: '', customerContactUid: '' },
+			newQuote: { title: '', customerContactUid: null },
 		}
 	},
 	async mounted() {
@@ -54,16 +59,20 @@ export default {
 		},
 		async load() {
 			try {
-				this.quotes = await fetchQuotes()
+				this.quotes = await fetchQuotes(null, this.projectId)
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
 		},
 		async submitCreate() {
-			await createQuote({ ...this.newQuote, customerContactUid: this.newQuote.customerContactUid || null })
-			this.newQuote = { title: '', customerContactUid: '' }
-			this.showCreate = false
-			await this.load()
+			try {
+				await createQuote({ ...this.newQuote, projectId: this.projectId })
+				this.newQuote = { title: '', customerContactUid: null }
+				this.showCreate = false
+				await this.load()
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
 		},
 		open(id) {
 			this.$router.push({ name: 'angebot-detail', params: { id } })
@@ -73,9 +82,9 @@ export default {
 </script>
 
 <style scoped>
-.erp-quotes { padding: 20px; }
+.erp-quotes { padding: 4px 0; }
 .erp-quotes__header { display: flex; align-items: center; justify-content: space-between; max-width: 900px; }
-.erp-quotes__create { display: flex; gap: 8px; margin: 12px 0; }
+.erp-quotes__create { display: flex; gap: 8px; margin: 12px 0; align-items: center; flex-wrap: wrap; }
 .erp-quotes__error { color: var(--color-error-text, #c00); }
 .erp-quotes__table { border-collapse: collapse; width: 100%; max-width: 900px; }
 .erp-quotes__table th, .erp-quotes__table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
