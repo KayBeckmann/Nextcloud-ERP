@@ -104,6 +104,11 @@ class PermissionService {
 		return $results;
 	}
 
+	/** Anzeigename für eine bekannte User-UID nachschlagen — für UserPicker beim Editieren (ADR-0015). */
+	public function displayNameForUser(string $uid): string {
+		return $this->userManager->get($uid)?->getDisplayName() ?? $uid;
+	}
+
 	/**
 	 * Setzt/entfernt einen Rechte-Eintrag. `PermissionLevel::None` löscht den
 	 * Eintrag (kein Eintrag = "none" per Default, siehe ADR-0008) statt ihn

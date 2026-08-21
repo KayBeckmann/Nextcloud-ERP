@@ -22,6 +22,7 @@ return [
 		['name' => 'permissions#principals', 'url' => '/api/v1/permissions/principals', 'verb' => 'GET'],
 		['name' => 'permissions#matrix', 'url' => '/api/v1/permissions/matrix', 'verb' => 'GET'],
 		['name' => 'permissions#users', 'url' => '/api/v1/permissions/users', 'verb' => 'GET'],
+		['name' => 'permissions#resolveUser', 'url' => '/api/v1/permissions/users/resolve', 'verb' => 'GET'],
 		['name' => 'permissions#setMatrixEntry', 'url' => '/api/v1/permissions/matrix', 'verb' => 'PUT'],
 		['name' => 'permissions#me', 'url' => '/api/v1/permissions/me', 'verb' => 'GET'],
 		// Contacts-Integration (Roadmap Phase 3, ADR-0009) — Rechte-Gate über

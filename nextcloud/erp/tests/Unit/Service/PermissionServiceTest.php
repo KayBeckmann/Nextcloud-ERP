@@ -44,6 +44,10 @@ final class PermissionServiceTest extends TestCase {
 
 		$userManager = $this->createMock(IUserManager::class);
 		$userManager->method('searchDisplayName')->willReturn([$this->user]);
+		$userManager->method('get')->willReturnMap([
+			['phpunit-test-user', $this->user],
+			['unknown-uid', null],
+		]);
 
 		$this->service = new PermissionService($this->mapper, $userManager, $groupManager);
 	}
@@ -53,6 +57,15 @@ final class PermissionServiceTest extends TestCase {
 
 		$results = $this->service->searchUsers('phpunit');
 		$this->assertSame([['uid' => 'phpunit-test-user', 'displayName' => 'Phpunit Test User']], $results);
+	}
+
+	public function testDisplayNameForUserReturnsDisplayName(): void {
+		$this->user->method('getDisplayName')->willReturn('Phpunit Test User');
+		$this->assertSame('Phpunit Test User', $this->service->displayNameForUser('phpunit-test-user'));
+	}
+
+	public function testDisplayNameForUnknownUserFallsBackToUid(): void {
+		$this->assertSame('unknown-uid', $this->service->displayNameForUser('unknown-uid'));
 	}
 
 	protected function tearDown(): void {

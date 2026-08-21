@@ -28,3 +28,13 @@ export async function fetchMyPermissions() {
 	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/permissions/me'))
 	return data.ocs.data
 }
+
+export async function searchUsers(q) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/permissions/users'), { params: { q } })
+	return data.ocs.data
+}
+
+export async function resolveUserName(uid) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/permissions/users/resolve'), { params: { uid } })
+	return data.ocs.data
+}

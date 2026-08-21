@@ -48,6 +48,12 @@ class PermissionsController extends OCSController {
 		return new DataResponse($this->permissionService->searchUsers($q));
 	}
 
+	/** Anzeigename für eine bekannte User-UID nachschlagen (UserPicker beim Editieren, ADR-0015). */
+	#[NoAdminRequired]
+	public function resolveUser(string $uid): DataResponse {
+		return new DataResponse(['uid' => $uid, 'displayName' => $this->permissionService->displayNameForUser($uid)]);
+	}
+
 	public function matrix(): DataResponse {
 		return new DataResponse([
 			'resourceTypes' => ResourceType::values(),
