@@ -15,7 +15,7 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - Tests und Entwicklungsumgebung sollen auf unterschiedlichen Maschinen reproduzierbar sein.
 - Das Repository steht unter **MIT-Lizenz**.
 
-## Status (Stand 2026-08-19)
+## Status (Stand 2026-08-21)
 
 - [x] Phase 0 — Projekt- und Architekturfundament
 - [x] Phase 1 — Nextcloud-App-Skeleton und Web-Grundgerüst
@@ -26,7 +26,9 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 6 — Zeitwirtschaft und Verrechnungssätze
 - [x] Phase 7 — Rechnungen, Gutschriften und Zahlungsstatus
 - [x] Phase 8 — Lager, Inventur und Bestellvorschläge
-- [ ] Phase 9–14 — noch nicht begonnen — **Phase 9 nächster Schritt**
+- [x] Phase 9 — Fuhrpark
+- [x] Phase 10 — Betriebliche Kosten und Kalkulation
+- [ ] Phase 11–14 — noch nicht begonnen — **Phase 11 nächster Schritt**
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 

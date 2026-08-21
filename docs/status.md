@@ -505,6 +505,45 @@ Foto-Upload über den Browser, Fahrzeuglager-Verknüpfung — jeweils per
 curl und Playwright durch die echte UI bestätigt (keine Konsolenfehler
 durch die ERP-App selbst).
 
+## 2026-08-21 — Phase 10 (Betriebliche Kosten und Kalkulation)
+
+**Erledigt (ADR-0018, 2 neue Tabellen):**
+
+- Kostenposten (`erp_cost_entries`: Kostenart, Bezeichnung, Betrag/Monat,
+  Jahr/Monat, Notiz) — bewusst itemisiert statt eines einzigen
+  Freitext-Jahresbetrags, damit die Kalkulation nachvollziehbar bleibt
+  (Roadmap-Prüfkriterium).
+- 14 feste Kostenarten als PHP-Enum (`CostCategory`): Miete,
+  Telefon/Internet, Software, Gehälter, Lohnnebenkosten, Versicherungen,
+  Berufsgenossenschaft, Steuerberater, Fahrzeuge, Werkzeuge, Energie,
+  Finanzierung/Leasing, Marketing, Sonstiges.
+- Kalkulations-Einstellungen je Jahr (`erp_cost_settings`: produktive
+  Stunden/Jahr, Material-/Produktaufschlag %) — Default 1.600 Std./0%,
+  wird beim ersten Zugriff automatisch angelegt.
+- `CostCalculationService` (pure, DB-frei): Jahressumme,
+  Kategorie-Aufschlüsselung, interner Stundensatz
+  (Jahreskosten ÷ produktive Stunden), Aufschlagspreis.
+- Interner Stundensatz und Aufschlagspreise sind **rein informativ** —
+  keine automatische Übernahme in Verrechnungssätze (ADR-0012) oder
+  Artikel-/Produktpreise; interne Kosten und externe Verrechnung bleiben
+  getrennt, wie von der Roadmap gefordert.
+- Neue Web-UI: `KostenKalkulationView` (ersetzt den Phase-10-Platzhalter)
+  mit zwei Tabs — Kostenarten (Liste + Anlage + Summen je Kategorie) und
+  Kalkulation (Einstellungen, interner Stundensatz, Aufschlagsrechner).
+- 18 neue Tests — App-Gesamtstand: **245 Tests**
+
+**Nicht Teil dieser Phase:** keine automatische Verknüpfung mit echten
+Zeiterfassungsdaten für produktive Stunden, keine automatische
+Aufschlagsanwendung auf Artikel/Produkt, kein Plan/Ist-Vergleich, keine
+Kostenstellen-Verteilung auf Projekte.
+
+**Verifiziert:** Kostenposten anlegen/löschen, Validierung (unbekannte
+Kostenart, Monat außerhalb 1–12, negative Einstellungswerte) lehnt mit
+HTTP 400 ab, Jahresübersicht berechnet Summen und internen Stundensatz
+korrekt, Aufschlagsrechner im Browser reagiert live auf Eingaben —
+jeweils per curl und Playwright durch die echte UI bestätigt (keine
+Konsolenfehler durch die ERP-App selbst).
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
