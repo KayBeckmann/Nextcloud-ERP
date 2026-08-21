@@ -345,6 +345,44 @@ Formular-Submit (Lagerort anlegen), keine Konsolenfehler. Voller
 Cold-Restart-Zyklus bestätigt, dass Migration, Routen und Autoload robust
 neu aufgesetzt werden.
 
+## 2026-08-21 — Nutzeranpassung: Projektpflicht, Lieferscheine, Kontakt-/User-Picker
+
+**Auslöser:** Direktes Nutzerfeedback nach Phase 8 (kein Roadmap-Phasen-
+Schritt, sondern eine Architektur-/UX-Korrektur): Angebote, Aufträge,
+Rechnungen, Lieferscheine und Gutschriften sollen zwingend an Projekten
+hängen und aus dem Hauptmenü verschwinden; Kunde/Verantwortlicher sollen
+über Dropdown mit Suchfeld statt Freitext ausgewählt werden.
+
+**Erledigt (ADR-0015, 2 neue Tabellen, 1 neuer Controller):**
+
+- `erp_quotes`/`erp_invoices.project_id` von nullable auf `NOT NULL`
+  umgestellt (Waisen-Datensätze vorher bereinigt, `erp_credit_notes`
+  bekommt eine eigene `project_id`-Spalte, aus der jeweiligen Rechnung
+  befüllt) — ersetzt den entsprechenden Teil von ADR-0011/ADR-0013 (siehe
+  Hinweis-Blöcke dort, ADRs selbst bleiben `accepted` und unverändert).
+- Neues Modul **Lieferscheine** (`erp_delivery_notes` +
+  `erp_delivery_note_positions`): Nummer sofort bei Anlage vergeben
+  (`L-%05d`), Positionen ohne Preise/MwSt. (nur Menge/Einheit), nur im
+  Entwurf änderbar. Neuer Rechtebereich `ResourceType::Lieferscheine`.
+- `ContactPicker.vue`/`UserPicker.vue`: wiederverwendbare Suchfeld-
+  Dropdown-Komponenten, nutzen bestehende (`ContactPicker`) bzw. neue
+  (`UserPicker`, `GET /permissions/users`) Endpunkte.
+- Angebote/Aufträge/Rechnungen aus der Seitenleiste entfernt; die
+  bestehenden Listen-Views laufen jetzt als Tabs in `ProjektDetailView`
+  (Übersicht, Aufgaben, **Angebote, Aufträge, Rechnungen, Lieferscheine,
+  Gutschriften**, Termine, Dokumente) — 4 neue Tabs.
+- 12 neue Tests — App-Gesamtstand: **189 Tests**
+
+**Verifiziert:** Seitenleiste zeigt Angebote/Aufträge/Rechnungen/
+Lieferscheine nicht mehr an; alle neuen Projekt-Tabs zeigen echte Daten;
+vollständiger Lieferschein-Workflow (Anlegen → Position → Ausstellen) per
+curl; Gutschrift übernimmt `project_id` automatisch von der Rechnung;
+ContactPicker/UserPicker per Playwright interaktiv getestet (Suche,
+Dropdown-Auswahl, Speichern, Neuladen zeigt korrekt aufgelösten
+Anzeigenamen); 403 für User ohne Rechte auf `lieferscheine`; offener
+Zugriff auf die User-Suche bestätigt (keine sensible Information). Voller
+Docker-Cold-Restart-Zyklus bestanden.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -401,3 +439,11 @@ neu aufgesetzt werden.
   — `reserve()`/`release()` sind manuelle Aufrufe ohne Automatismus.
 - Keine eigene Bestellungs-/Einkaufs-Entität — Bestellvorschläge bleiben
   ein reiner, nie gespeicherter Bericht (ADR-0014).
+- Kein Lieferschein-PDF/-Dokument im Projektordner (anders als bei
+  Rechnungen) — kann bei Bedarf später nachgezogen werden (ADR-0015).
+- ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
+  verbaut (Projekt, Angebot, Rechnung) — Lieferanten-Auswahl bei
+  Artikelpreisen und Kundenverträge (Phase 6) nutzen weiterhin Freitext.
+- Rechnung aus Angebot ohne Projekt ist seit ADR-0015 unmöglich, da beide
+  jetzt zwingend ein Projekt erfordern — kein produktiv genutzter
+  Anwendungsfall betroffen (lokale Docker-Testdaten).
