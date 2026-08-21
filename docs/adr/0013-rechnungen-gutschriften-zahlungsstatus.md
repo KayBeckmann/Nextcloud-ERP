@@ -3,6 +3,12 @@
 **Status:** accepted
 **Datum:** 2026-08-20
 
+> **Hinweis (2026-08-21):** `project_id` ist für Rechnungen seit
+> [ADR-0015](0015-projektpflicht-lieferscheine-picker.md) Pflicht (`NOT
+> NULL`), Gutschriften bekommen dort zusätzlich eine eigene
+> `project_id`-Spalte. Der Rest dieses ADRs (Nummernvergabe, Snapshot-
+> Prinzip, Storno-Konzept) gilt unverändert.
+
 ## Kontext
 
 Roadmap Phase 7 verlangt abrechenbare Dokumente aus Angebot/Auftrag:

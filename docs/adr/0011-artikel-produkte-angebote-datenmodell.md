@@ -3,6 +3,12 @@
 **Status:** accepted
 **Datum:** 2026-08-20
 
+> **Hinweis (2026-08-21):** Die Vorgabe "Angebot kann ohne Projekt
+> starten" wurde durch [ADR-0015](0015-projektpflicht-lieferscheine-picker.md)
+> aufgehoben — `project_id` ist seitdem Pflicht. Der Rest dieses ADRs
+> (Snapshot-Prinzip, Netto-/MwSt.-Berechnung, Angebotsnummernlogik) gilt
+> unverändert.
+
 ## Kontext
 
 Roadmap Phase 5 verlangt einen vollständigen Angebotsprozess: Artikel mit

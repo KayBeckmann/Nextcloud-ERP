@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace OCA\ERP\Permissions;
 
 /**
- * Die 16 Hauptbereiche aus der Web-Navigation (siehe src/router/index.js) —
- * bewusst identische Slugs, damit Frontend und Rechte-Matrix nicht
- * auseinanderlaufen.
+ * Ursprünglich die Hauptbereiche aus der Web-Navigation (siehe
+ * src/router/index.js) — bewusst identische Slugs, damit Frontend und
+ * Rechte-Matrix nicht auseinanderlaufen. Seit ADR-0015 haben nicht mehr
+ * alle Fälle einen eigenen Seitenleisten-Eintrag (Angebote/Aufträge/
+ * Rechnungen leben jetzt im Projekt) — die Rechteprüfung selbst bleibt
+ * davon unberührt, nur der UI-Einstiegspunkt hat sich geändert.
  */
 enum ResourceType: string {
 	case Dashboard = 'dashboard';
@@ -20,6 +23,7 @@ enum ResourceType: string {
 	case Angebote = 'angebote';
 	case Auftraege = 'auftraege';
 	case Rechnungen = 'rechnungen';
+	case Lieferscheine = 'lieferscheine';
 	case Lager = 'lager';
 	case Fuhrpark = 'fuhrpark';
 	case KostenKalkulation = 'kosten-kalkulation';
