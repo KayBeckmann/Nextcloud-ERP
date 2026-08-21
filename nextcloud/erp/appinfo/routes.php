@@ -126,6 +126,13 @@ return [
 		['name' => 'credit_note#createPartial', 'url' => '/api/v1/credit-notes/partial', 'verb' => 'POST'],
 		['name' => 'credit_note#addPosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions', 'verb' => 'POST', 'requirements' => ['creditNoteId' => '\d+']],
 		['name' => 'credit_note#issue', 'url' => '/api/v1/credit-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		// Lieferscheine (ADR-0015).
+		['name' => 'delivery_note#index', 'url' => '/api/v1/delivery-notes', 'verb' => 'GET'],
+		['name' => 'delivery_note#create', 'url' => '/api/v1/delivery-notes', 'verb' => 'POST'],
+		['name' => 'delivery_note#show', 'url' => '/api/v1/delivery-notes/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'delivery_note#addPosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions', 'verb' => 'POST', 'requirements' => ['deliveryNoteId' => '\d+']],
+		['name' => 'delivery_note#removePosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['deliveryNoteId' => '\d+', 'id' => '\d+']],
+		['name' => 'delivery_note#issue', 'url' => '/api/v1/delivery-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		// Lager (Roadmap Phase 8, ADR-0014).
 		['name' => 'warehouse#index', 'url' => '/api/v1/warehouses', 'verb' => 'GET'],
 		['name' => 'warehouse#create', 'url' => '/api/v1/warehouses', 'verb' => 'POST'],
