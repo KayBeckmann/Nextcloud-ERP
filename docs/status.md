@@ -544,6 +544,52 @@ korrekt, Aufschlagsrechner im Browser reagiert live auf Eingaben —
 jeweils per curl und Playwright durch die echte UI bestätigt (keine
 Konsolenfehler durch die ERP-App selbst).
 
+## 2026-08-22 — Phase 11 (Auswertungen, Dashboard, Exporte)
+
+**Erledigt (ADR-0019, keine neue Migration — reine Aggregation):**
+
+- `ProjectProfitLossCalculationService` (pure): Soll/Ist-Vergleich und
+  Ergebnis eines Projekts.
+- `ReportingService` aggregiert aus den bestehenden Services/Mappern der
+  Phasen 4–10:
+  - Dashboard-Summary (`GET /api/v1/dashboard/summary`, Gate:
+    `ResourceType::Dashboard`, seit Phase 1 reserviert): offene Angebote,
+    offene/überfällige Rechnungen, Projekte in Bearbeitung, Mindestbestand,
+    Bestellvorschläge, fällige TÜV/Werkstatttermine, Fuhrparkkosten
+    laufender Monat, interner Stundensatz, eigenes Zeitkonto (Monat,
+    bewusst nur die Daten des angemeldeten Users, kein firmenweites
+    Zeitkonto über dieses Gate).
+  - Projekt-Gewinn/Verlust (`GET /api/v1/reports/projects/{id}/profit-loss`,
+    Gate: `ResourceType::Projekte`): Soll aus Auftrag/versendetem Angebot,
+    Ist-Umsatz aus ausgestellten Rechnungen, Personalkosten aus
+    Zeiterfassung × internem Stundensatz (ADR-0018), Materialkosten als
+    Approximation über den günstigsten aktuell hinterlegten
+    Einkaufspreis (keine historische Preis-Momentaufnahme).
+  - CSV-Export für Steuerberater/Buchhaltung (`GET /export/invoices.csv`) —
+    erster Nicht-OCS-API-Endpunkt (roher Datei-Download statt JSON,
+    eigener `ReportExportController extends Controller`), nur ausgestellte
+    Rechnungen, Semikolon-getrennt für deutsche Excel-Locale.
+- Web-UI: `DashboardView` zeigt jetzt echte Werte statt Platzhalter-Kacheln
+  plus CSV-Export-Formular (Von/Bis); `ProjektDetailView` bekommt einen
+  neuen Tab "Auswertung" mit der Projekt-P&L-Anzeige.
+- 15 neue Tests — App-Gesamtstand: **259 Tests**
+
+**Nicht Teil dieser Phase (siehe ADR-0019):** XRechnung/ZUGFeRD (laut
+Roadmap optional, rechtlich eigenständig zu prüfen), firmenweite
+Zeitkonto-/Überstundenübersicht für Admins, historisierte Einkaufspreise,
+gespeicherte/planbare Exporte.
+
+**Verifiziert:** Dashboard-Summary, Projekt-P&L (inkl. 404 bei unbekanntem
+Projekt) und CSV-Export per curl gegen die echte Instanz bestätigt; im
+Browser per Playwright das Dashboard mit echten Zahlen, der neue
+Auswertung-Tab und ein echter CSV-Download über den Browser-Download-Dialog
+verifiziert (keine Konsolenfehler durch die ERP-App selbst). Ein bekannter,
+bereits aus früheren Phasen dokumentierter Playwright-Testartefakt
+(direktes `page.goto()` auf eine Vue-Router-History-Mode-URL doppelt den
+Pfad clientseitig und rendert kurzzeitig eine leere Seite) betraf auch
+diese Verifikation — Workaround: einmal per Klick weg- und
+zurücknavigieren, kein App-Bug.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
