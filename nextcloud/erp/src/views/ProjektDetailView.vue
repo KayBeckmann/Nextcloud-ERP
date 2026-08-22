@@ -74,6 +74,21 @@
 				<p v-else>Noch keine Gutschriften in diesem Projekt.</p>
 			</section>
 
+			<section v-else-if="tab === 'Auswertung'" class="erp-project-detail__section">
+				<p v-if="profitLoss">
+					<template v-if="profitLoss.sollNet !== null">Soll (Auftrag/Angebot, netto): <strong>{{ formatCurrency(profitLoss.sollNet) }}</strong><br></template>
+					<template v-else>Kein Soll erfasst (weder Auftrag noch versendetes Angebot).<br></template>
+					Ist-Umsatz (ausgestellte Rechnungen, netto): <strong>{{ formatCurrency(profitLoss.invoicedNet) }}</strong><br>
+					Personalkosten (Zeiterfassung × interner Stundensatz): <strong>{{ formatCurrency(profitLoss.laborCost) }}</strong><br>
+					Materialkosten (Approximation, günstigster Einkaufspreis): <strong>{{ formatCurrency(profitLoss.materialCost) }}</strong><br>
+					Kosten gesamt: <strong>{{ formatCurrency(profitLoss.totalCost) }}</strong><br>
+					<span :class="{ 'is-negative': profitLoss.result < 0 }">Ergebnis: <strong>{{ formatCurrency(profitLoss.result) }}</strong></span>
+				</p>
+				<p class="erp-project-detail__hint">
+					Materialkosten nutzen den aktuell günstigsten Einkaufspreis (keine historische Preis-Momentaufnahme zum Rechnungsdatum), siehe ADR-0019.
+				</p>
+			</section>
+
 			<section v-else-if="tab === 'Termine'" class="erp-project-detail__section">
 				<ul class="erp-project-detail__events">
 					<li v-for="l in calendarLinks" :key="l.id">{{ l.summary }} <small>({{ l.calendarUri }})</small></li>
@@ -104,6 +119,7 @@ import {
 } from '../services/projectsApi.js'
 import { fetchCalendarLinks, createCalendarEvent } from '../services/calendarApi.js'
 import { fetchCreditNotes } from '../services/invoicesApi.js'
+import { fetchProjectProfitLoss } from '../services/reportingApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
 import UserPicker from '../components/UserPicker.vue'
 import AngeboteView from './AngeboteView.vue'
@@ -133,9 +149,10 @@ export default {
 			tasks: [],
 			calendarLinks: [],
 			creditNotes: [],
+			profitLoss: null,
 			loadError: null,
 			tab: 'Übersicht',
-			tabs: ['Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Termine', 'Dokumente'],
+			tabs: ['Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Auswertung', 'Termine', 'Dokumente'],
 			statusOptions: Object.keys(STATUS_LABELS),
 			newTaskTitle: '',
 			newEventSummary: '',
@@ -150,12 +167,17 @@ export default {
 		async tab(newTab) {
 			if (newTab === 'Gutschriften') {
 				await this.loadCreditNotes()
+			} else if (newTab === 'Auswertung') {
+				await this.loadProfitLoss()
 			}
 		},
 	},
 	methods: {
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
+		},
+		formatCurrency(value) {
+			return `${Number(value ?? 0).toFixed(2)} €`
 		},
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
@@ -186,6 +208,13 @@ export default {
 		async loadCreditNotes() {
 			try {
 				this.creditNotes = await fetchCreditNotes(null, this.id)
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		async loadProfitLoss() {
+			try {
+				this.profitLoss = await fetchProjectProfitLoss(this.id)
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
@@ -309,5 +338,13 @@ header {
 	padding: 2px 8px;
 	border-radius: 10px;
 	background: var(--color-background-dark);
+}
+.erp-project-detail__hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	margin-top: 12px;
+}
+.is-negative {
+	color: var(--color-error-text, #c00);
 }
 </style>
