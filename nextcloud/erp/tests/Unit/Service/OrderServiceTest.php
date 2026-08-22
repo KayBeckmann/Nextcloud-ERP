@@ -138,6 +138,14 @@ final class OrderServiceTest extends TestCase {
 		$this->assertSame('kay', $order->getCustomerContactUid());
 	}
 
+	public function testCreateAndUpdateOrderStoreAssignedUserId(): void {
+		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Zuweisung', null, null, 'mitarbeiter-a');
+		$this->assertSame('mitarbeiter-a', $order->getAssignedUserId());
+
+		$updated = $this->service->updateOrder(self::PROJECT_ID, $order->getId(), 'Mit Zuweisung', OrderStatus::Confirmed, null, null, 'mitarbeiter-b');
+		$this->assertSame('mitarbeiter-b', $updated->getAssignedUserId());
+	}
+
 	public function testAddAndRemovePosition(): void {
 		$order = $this->service->createOrder(self::PROJECT_ID, 'Mit Positionen', null);
 		$position = $this->service->addPosition($order->getId(), null, 'article', null, 'Kabel', 10, 'Stk', 2.5, 19);

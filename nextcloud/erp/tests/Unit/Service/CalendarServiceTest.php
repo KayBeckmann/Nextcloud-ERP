@@ -40,6 +40,11 @@ final class CalendarServiceTest extends TestCase {
 		foreach ($this->mapper->findByResource('phpunit-resource', '1') as $link) {
 			$this->mapper->delete($link);
 		}
+		foreach (['10', '11', '12', '13'] as $resourceId) {
+			foreach ($this->mapper->findByResource('phpunit-resource-assign', $resourceId) as $link) {
+				$this->mapper->delete($link);
+			}
+		}
 		parent::tearDown();
 	}
 
@@ -99,5 +104,143 @@ final class CalendarServiceTest extends TestCase {
 
 		$this->assertSame('phpunit-event.ics', $link->getEventUri());
 		$this->assertCount(1, $this->service->listLinks('phpunit-resource', '1'));
+	}
+
+	private function mockEventBuilder(string $eventUri): ICalendarEventBuilder&MockObject {
+		$builder = $this->createMock(ICalendarEventBuilder::class);
+		$builder->method('setStartDate')->willReturnSelf();
+		$builder->method('setEndDate')->willReturnSelf();
+		$builder->method('setSummary')->willReturnSelf();
+		$builder->method('setDescription')->willReturnSelf();
+		$builder->method('createInCalendar')->willReturn($eventUri);
+		return $builder;
+	}
+
+	public function testCreateEventForAssignedUserUsesTheirPersonalCalendar(): void {
+		$assigneePersonal = $this->mockWritableCalendar('personal');
+		$this->calendarManager->method('getCalendarsForPrincipal')
+			->with('principals/users/mitarbeiter-x')
+			->willReturn([$assigneePersonal]);
+		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('assigned-event.ics'));
+
+		$link = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'10',
+			'Baustelle A',
+			new DateTimeImmutable('2026-09-01T08:00:00'),
+			new DateTimeImmutable('2026-09-01T12:00:00'),
+			null,
+			'mitarbeiter-x',
+		);
+
+		$this->assertSame('mitarbeiter-x', $link->getAssignedUserId());
+		$this->assertSame('personal', $link->getCalendarUri());
+	}
+
+	public function testCreateEventForAssignedUserFallsBackToFirstWritableCalendar(): void {
+		$other = $this->mockWritableCalendar('baustellen');
+		$this->calendarManager->method('getCalendarsForPrincipal')
+			->with('principals/users/mitarbeiter-y')
+			->willReturn([$other]);
+		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('fallback-event.ics'));
+
+		$link = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'11',
+			'Baustelle B',
+			new DateTimeImmutable('2026-09-02T08:00:00'),
+			new DateTimeImmutable('2026-09-02T12:00:00'),
+			null,
+			'mitarbeiter-y',
+		);
+
+		$this->assertSame('baustellen', $link->getCalendarUri());
+	}
+
+	public function testCreateEventForAssignedUserWithoutWritableCalendarThrows(): void {
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([]);
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'12',
+			'Baustelle C',
+			new DateTimeImmutable('2026-09-03T08:00:00'),
+			new DateTimeImmutable('2026-09-03T12:00:00'),
+			null,
+			'mitarbeiter-z',
+		);
+	}
+
+	public function testCreateEventRejectsOverlappingAssignmentForSameUser(): void {
+		$calendar = $this->mockWritableCalendar('personal');
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
+		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('first-event.ics'));
+
+		$this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'13',
+			'Baustelle Vormittag',
+			new DateTimeImmutable('2026-09-04T08:00:00'),
+			new DateTimeImmutable('2026-09-04T12:00:00'),
+			null,
+			'mitarbeiter-kollision',
+		);
+
+		$this->expectException(\DomainException::class);
+		$this->expectExceptionMessageMatches('/Baustelle Vormittag/');
+		// Überlappt um eine Stunde (11:00–13:00 vs. bestehendem 08:00–12:00).
+		$this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'13',
+			'Baustelle Mittag',
+			new DateTimeImmutable('2026-09-04T11:00:00'),
+			new DateTimeImmutable('2026-09-04T13:00:00'),
+			null,
+			'mitarbeiter-kollision',
+		);
+	}
+
+	public function testCreateEventAllowsAdjacentAssignmentsForSameUser(): void {
+		$calendar = $this->mockWritableCalendar('personal');
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
+		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('adjacent-event.ics'));
+
+		$this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'13',
+			'Baustelle Vormittag',
+			new DateTimeImmutable('2026-09-05T08:00:00'),
+			new DateTimeImmutable('2026-09-05T12:00:00'),
+			null,
+			'mitarbeiter-adjazent',
+		);
+
+		// Startet exakt, wenn der erste Termin endet — keine Kollision
+		// (offenes Intervall, ADR-0020).
+		$link = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-assign',
+			'13',
+			'Baustelle Nachmittag',
+			new DateTimeImmutable('2026-09-05T12:00:00'),
+			new DateTimeImmutable('2026-09-05T16:00:00'),
+			null,
+			'mitarbeiter-adjazent',
+		);
+
+		$this->assertSame('mitarbeiter-adjazent', $link->getAssignedUserId());
 	}
 }
