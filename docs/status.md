@@ -590,6 +590,45 @@ Pfad clientseitig und rendert kurzzeitig eine leere Seite) betraf auch
 diese Verifikation — Workaround: einmal per Klick weg- und
 zurücknavigieren, kein App-Bug.
 
+## 2026-08-22 — Nutzeranpassung: Mitarbeiter-Zuweisung Termine + Kollisionserkennung + Auftrags-Zuweisung
+
+**Erledigt (ADR-0020, additive Migration — 3 neue Spalten + 1 Index auf
+`erp_calendar_links`, 1 neue Spalte auf `erp_orders`):**
+
+- Im Projekt angelegte Termine können optional einem Mitarbeiter
+  zugewiesen werden — der Termin landet dann in dessen eigenem
+  Nextcloud-Kalender (Standardkalender `personal`, sonst der erste
+  beschreibbare Kalender des Zielusers) statt im Kalender des anlegenden
+  Users. `OCP\Calendar\IManager` arbeitet rein über Principal-URIs, kein
+  Zugriff auf die Session des Zielusers nötig.
+- Kollisionserkennung: Vor dem Anlegen wird geprüft, ob der zugewiesene
+  Mitarbeiter im selben Zeitraum bereits einem anderen ERP-Termin
+  zugewiesen ist (offene Intervalle — direkt aneinandergrenzende Termine
+  sind erlaubt). Bei einer Überschneidung lehnt die API mit HTTP 412 und
+  einer sprechenden Meldung (Titel + Zeitraum des Konflikts) ab —
+  dasselbe Muster wie bei anderen Geschäftsregel-Ablehnungen in diesem
+  Projekt.
+- Start/Ende werden bewusst zusätzlich zum Kalender-Event in
+  `erp_calendar_links` gespeichert (Ausnahme von der
+  "keine-Schattenkopie"-Leitplanke, fachlich begründet: schneller
+  DB-Query für die Kollisionsprüfung statt Re-Query gegen fremde
+  Kalender, auf die der anlegende User ohnehin keinen Lesezugriff hat).
+- Aufträge bekommen ein `assignedUserId`-Feld (analog zu
+  `Project::responsibleUserId`) — im Auftrag-Detail zuweisbar, kein
+  technischer Zusammenhang zur Kalender-Zuweisung.
+- Web-UI: Termine-Formular im Projekt hat einen `UserPicker` "Mitarbeiter
+  zuweisen" (optional) mit Fehleranzeige bei Kollision;
+  Auftrag-Detailansicht hat einen `UserPicker` "Zugewiesener Mitarbeiter".
+- 8 neue Tests — App-Gesamtstand: **266 Tests**
+
+**Verifiziert:** Termin mit Zuweisung anlegen, überlappender Termin für
+denselben Mitarbeiter lehnt mit HTTP 412 ab, direkt angrenzender Termin
+wird akzeptiert, Auftrag anlegen/umzuweisen — jeweils per curl und
+Playwright durch die echte UI bestätigt (Kollisionsmeldung erscheint im
+UI als Fehlertext, keine Konsolenfehler durch die ERP-App selbst
+abgesehen vom erwarteten 412-Netzwerkfehler bei der bewusst provozierten
+Kollision).
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -655,4 +694,11 @@ zurücknavigieren, kein App-Bug.
 - Kein Fahrtenbuch, keine automatische TÜV-Erinnerungs-Benachrichtigung
   (nur farbliche Markierung im UI), keine Fahrer-Zuweisungs-Historie,
   keine Kraftstoffverbrauchsstatistik — bewusst zurückgestellt (ADR-0017,
+  "Nicht Teil dieser Phase").
+- Kollisionserkennung deckt nur ERP-Termine ab (mit Mitarbeiter-Zuweisung
+  über die ERP-API angelegt), nicht private/sonstige Termine im
+  Nextcloud-Kalender eines Users; kein Bearbeiten/Verschieben/Löschen
+  bereits angelegter Termine; genau ein zugewiesener Mitarbeiter pro
+  Termin; ein zugewiesener Auftrag legt keinen Kalender-Termin an
+  (bleibt ein separater Schritt) — bewusst zurückgestellt (ADR-0020,
   "Nicht Teil dieser Phase").
