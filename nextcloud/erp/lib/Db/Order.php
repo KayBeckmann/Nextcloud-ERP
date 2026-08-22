@@ -17,6 +17,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDescription(?string $description)
  * @method string|null getCustomerContactUid()
  * @method void setCustomerContactUid(?string $customerContactUid)
+ * @method string|null getAssignedUserId()
+ * @method void setAssignedUserId(?string $assignedUserId)
  * @method int|null getQuoteId()
  * @method void setQuoteId(?int $quoteId)
  * @method int getCreatedAt()
@@ -30,6 +32,10 @@ class Order extends Entity implements \JsonSerializable {
 	protected string $status = 'draft';
 	protected ?string $description = null;
 	protected ?string $customerContactUid = null;
+	// Zugewiesener Mitarbeiter (ADR-0020), analog zu
+	// Project::responsibleUserId — kein technischer Zusammenhang zur
+	// Kalender-Zuweisung, bewusst getrennt.
+	protected ?string $assignedUserId = null;
 	protected ?int $quoteId = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
@@ -50,6 +56,7 @@ class Order extends Entity implements \JsonSerializable {
 			'status' => $this->getStatus(),
 			'description' => $this->getDescription(),
 			'customerContactUid' => $this->getCustomerContactUid(),
+			'assignedUserId' => $this->getAssignedUserId(),
 			'quoteId' => $this->getQuoteId(),
 		];
 	}

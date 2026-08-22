@@ -100,7 +100,7 @@ class OrderService {
 		return $this->groupMapper->insert($group);
 	}
 
-	public function createOrder(int $projectId, string $title, ?string $description, ?string $customerContactUid = null): Order {
+	public function createOrder(int $projectId, string $title, ?string $description, ?string $customerContactUid = null, ?string $assignedUserId = null): Order {
 		$now = time();
 		$order = new Order();
 		$order->setProjectId($projectId);
@@ -108,13 +108,14 @@ class OrderService {
 		$order->setStatus(OrderStatus::Draft->value);
 		$order->setDescription($description);
 		$order->setCustomerContactUid($customerContactUid);
+		$order->setAssignedUserId($assignedUserId);
 		$order->setCreatedAt($now);
 		$order->setUpdatedAt($now);
 		return $this->mapper->insert($order);
 	}
 
 	/** @throws \OutOfBoundsException */
-	public function updateOrder(int $projectId, int $id, string $title, OrderStatus $status, ?string $description, ?string $customerContactUid = null): Order {
+	public function updateOrder(int $projectId, int $id, string $title, OrderStatus $status, ?string $description, ?string $customerContactUid = null, ?string $assignedUserId = null): Order {
 		$order = $this->mapper->findOne($projectId, $id);
 		if ($order === null) {
 			throw new \OutOfBoundsException("Order $id not found in project $projectId");
@@ -123,6 +124,7 @@ class OrderService {
 		$order->setStatus($status->value);
 		$order->setDescription($description);
 		$order->setCustomerContactUid($customerContactUid);
+		$order->setAssignedUserId($assignedUserId);
 		$order->setUpdatedAt(time());
 		return $this->mapper->update($order);
 	}

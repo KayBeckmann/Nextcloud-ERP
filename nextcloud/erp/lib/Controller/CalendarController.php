@@ -13,6 +13,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSBadRequestException;
 use OCP\AppFramework\OCS\OCSForbiddenException;
+use OCP\AppFramework\OCS\OCSPreconditionFailedException;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUser;
@@ -67,7 +68,7 @@ class CalendarController extends OCSController {
 	}
 
 	/**
-	 * @throws OCSBadRequestException|OCSForbiddenException
+	 * @throws OCSBadRequestException|OCSForbiddenException|OCSPreconditionFailedException
 	 */
 	#[NoAdminRequired]
 	public function createEvent(
@@ -78,6 +79,7 @@ class CalendarController extends OCSController {
 		string $start,
 		string $end,
 		?string $description = null,
+		?string $assignedUserId = null,
 	): DataResponse {
 		$user = $this->requireUser();
 		$resource = self::parseResource($resourceType);
@@ -91,9 +93,14 @@ class CalendarController extends OCSController {
 		}
 
 		try {
-			$link = $this->calendarService->createEvent($user, $calendarUri, $resourceType, $resourceId, $summary, $startDt, $endDt, $description);
+			$link = $this->calendarService->createEvent($user, $calendarUri, $resourceType, $resourceId, $summary, $startDt, $endDt, $description, $assignedUserId);
 		} catch (\InvalidArgumentException|\OutOfBoundsException $e) {
 			throw new OCSBadRequestException($e->getMessage());
+		} catch (\DomainException $e) {
+			// Terminkollision beim zugewiesenen Mitarbeiter (ADR-0020) —
+			// dasselbe 412-Muster wie bei anderen Geschäftsregel-Ablehnungen
+			// in diesem Projekt (z. B. DeliveryNoteController).
+			throw new OCSPreconditionFailedException($e->getMessage());
 		}
 
 		return new DataResponse($link);
