@@ -225,7 +225,7 @@ class ReportingService {
 	 */
 	public function exportInvoicesCsv(?string $from, ?string $to, ?string $status): string {
 		$handle = fopen('php://temp', 'r+');
-		fputcsv($handle, ['Rechnungsnummer', 'Datum', 'Kunde', 'Netto', 'MwSt', 'Brutto', 'Status', 'Bezahlt'], ';');
+		fputcsv($handle, ['Rechnungsnummer', 'Datum', 'Kunde', 'Netto', 'MwSt', 'Brutto', 'Status', 'Bezahlt'], ';', '"', '\\');
 
 		foreach ($this->invoiceService->listInvoices($status, null) as $invoice) {
 			if ($invoice->getInvoiceNumber() === null || $invoice->getIssuedAt() === null) {
@@ -248,7 +248,7 @@ class ReportingService {
 				number_format($gross, 2, ',', ''),
 				$invoice->getStatus(),
 				number_format($invoice->getPaidAmount(), 2, ',', ''),
-			], ';');
+			], ';', '"', '\\');
 		}
 
 		rewind($handle);

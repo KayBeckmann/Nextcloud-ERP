@@ -11,6 +11,7 @@ use OCA\ERP\Service\ReportingService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
@@ -35,7 +36,11 @@ class ReportExportController extends Controller {
 		parent::__construct($appName, $request);
 	}
 
+	// NoCSRFRequired wie bei PageController::index() — reiner GET-Lesezugriff
+	// ohne Zustandsänderung, ein CSRF-Token wäre für einen einfachen
+	// Datei-Download-Link (z. B. per Browser-Adresszeile) unpraktikabel.
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function invoicesCsv(?string $from = null, ?string $to = null, ?string $status = null): DataDownloadResponse|DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
