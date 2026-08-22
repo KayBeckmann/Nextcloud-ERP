@@ -7,6 +7,13 @@ declare(strict_types=1);
 // api.php trägt die versionierte OCS-/REST-API (Phase 2).
 return [
 	'routes' => [
+		// CSV-Export für Steuerberater/Buchhaltung (Roadmap Phase 11,
+		// ADR-0019) — roher Datei-Download statt JSON-Envelope, deshalb
+		// außerhalb des 'ocs'-Blocks. Muss VOR page#index registriert
+		// werden: dessen Catch-all-Requirement '.*' würde sonst jeden
+		// nachfolgenden Pfad abfangen (Routen werden in
+		// Registrierungsreihenfolge geprüft).
+		['name' => 'reportExport#invoicesCsv', 'url' => '/export/invoices.csv', 'verb' => 'GET'],
 		// Eine einzige Route mit optionalem Pfad (Default '') statt zweier
 		// gleichnamiger Routen — sonst schlägt die Navigations-URL-Generierung
 		// fehl, weil Symfony für 'erp.page.index' die zuletzt registrierte
@@ -178,5 +185,9 @@ return [
 		['name' => 'inventory#show', 'url' => '/api/v1/inventories/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'inventory#recordCount', 'url' => '/api/v1/inventories/{inventoryId}/counts', 'verb' => 'POST', 'requirements' => ['inventoryId' => '\d+']],
 		['name' => 'inventory#close', 'url' => '/api/v1/inventories/{id}/close', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		// Auswertungen, Dashboard (Roadmap Phase 11, ADR-0019) — der
+		// CSV-Export liegt bewusst im 'routes'-Block oben (roher Download).
+		['name' => 'reporting#summary', 'url' => '/api/v1/dashboard/summary', 'verb' => 'GET'],
+		['name' => 'reporting#projectProfitLoss', 'url' => '/api/v1/reports/projects/{projectId}/profit-loss', 'verb' => 'GET', 'requirements' => ['projectId' => '\d+']],
 	],
 ];
