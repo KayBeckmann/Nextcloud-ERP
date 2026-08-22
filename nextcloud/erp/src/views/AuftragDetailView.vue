@@ -16,6 +16,7 @@
 					</select>
 				</label>
 				<label>Kunde <ContactPicker v-model="edit.customerContactUid" placeholder="Kunde suchen …" /></label>
+				<label>Zugewiesener Mitarbeiter <UserPicker v-model="edit.assignedUserId" placeholder="Mitarbeiter suchen …" /></label>
 				<label>Beschreibung <textarea v-model="edit.description" rows="2"></textarea></label>
 				<button @click="save">Speichern</button>
 			</section>
@@ -133,6 +134,7 @@ import { createDeliveryNoteFromOrder } from '../services/deliveryNotesApi.js'
 import { createInvoice, createInvoiceFromOrder, addInvoicePosition } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
+import UserPicker from '../components/UserPicker.vue'
 
 const STATUS_LABELS = { draft: 'Entwurf', confirmed: 'Bestätigt', done: 'Abgeschlossen' }
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', labor: 'Arbeitsstunden', custom: 'Freitext' }
@@ -140,7 +142,7 @@ const DELIVERABLE_TYPES = ['article', 'product']
 
 export default {
 	name: 'AuftragDetailView',
-	components: { ContactPicker },
+	components: { ContactPicker, UserPicker },
 	props: {
 		id: { type: [String, Number], required: true },
 	},
@@ -151,7 +153,7 @@ export default {
 			loadError: null,
 			convertError: null,
 			convertSuccess: null,
-			edit: { title: '', status: 'draft', customerContactUid: null, description: '' },
+			edit: { title: '', status: 'draft', customerContactUid: null, assignedUserId: null, description: '' },
 			statusOptions: Object.keys(STATUS_LABELS),
 			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
 			newGroupTitle: '',
@@ -214,6 +216,7 @@ export default {
 					title: this.order.title,
 					status: this.order.status,
 					customerContactUid: this.order.customerContactUid ?? null,
+					assignedUserId: this.order.assignedUserId ?? null,
 					description: this.order.description ?? '',
 				}
 			} catch (e) {

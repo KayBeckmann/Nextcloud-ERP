@@ -91,14 +91,23 @@
 
 			<section v-else-if="tab === 'Termine'" class="erp-project-detail__section">
 				<ul class="erp-project-detail__events">
-					<li v-for="l in calendarLinks" :key="l.id">{{ l.summary }} <small>({{ l.calendarUri }})</small></li>
+					<li v-for="l in calendarLinks" :key="l.id">
+						{{ l.summary }} <small>({{ l.calendarUri }}{{ l.assignedUserId ? ` — ${l.assignedUserId}` : '' }})</small>
+					</li>
 				</ul>
+				<p v-if="eventError" class="erp-project-detail__error">{{ eventError }}</p>
 				<form class="erp-project-detail__inline-form" @submit.prevent="addEvent">
 					<input v-model="newEventSummary" placeholder="Termintitel" required>
 					<input v-model="newEventStart" type="datetime-local" required>
 					<input v-model="newEventEnd" type="datetime-local" required>
+					<UserPicker v-model="newEventAssignedUserId" placeholder="Mitarbeiter zuweisen (optional) …" />
 					<button type="submit">Termin anlegen</button>
 				</form>
+				<p class="erp-project-detail__hint">
+					Ohne Zuweisung landet der Termin im eigenen Kalender. Mit Zuweisung landet er im Kalender
+					des Mitarbeiters — eine zeitliche Überschneidung mit einem anderen zugewiesenen ERP-Termin
+					desselben Mitarbeiters wird abgelehnt.
+				</p>
 			</section>
 
 			<section v-else-if="tab === 'Dokumente'" class="erp-project-detail__section">
@@ -158,6 +167,8 @@ export default {
 			newEventSummary: '',
 			newEventStart: '',
 			newEventEnd: '',
+			newEventAssignedUserId: null,
+			eventError: null,
 		}
 	},
 	async mounted() {
@@ -246,15 +257,23 @@ export default {
 			this.tasks = this.tasks.filter((t) => t.id !== task.id)
 		},
 		async addEvent() {
-			await createCalendarEvent({
-				calendarUri: 'personal',
-				resourceType: 'projekte',
-				resourceId: String(this.id),
-				summary: this.newEventSummary,
-				start: this.newEventStart,
-				end: this.newEventEnd,
-			})
+			this.eventError = null
+			try {
+				await createCalendarEvent({
+					calendarUri: 'personal',
+					resourceType: 'projekte',
+					resourceId: String(this.id),
+					summary: this.newEventSummary,
+					start: this.newEventStart,
+					end: this.newEventEnd,
+					assignedUserId: this.newEventAssignedUserId || null,
+				})
+			} catch (e) {
+				this.eventError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+				return
+			}
 			this.newEventSummary = ''
+			this.newEventAssignedUserId = null
 			this.calendarLinks = await fetchCalendarLinks('projekte', String(this.id))
 		},
 	},
