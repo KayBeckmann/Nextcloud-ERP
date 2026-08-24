@@ -11,6 +11,7 @@ use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePosition;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Quotes\QuoteCalculationService;
+use OCP\IUser;
 
 /**
  * Angebote (Roadmap Phase 5, ADR-0011). Preise/Sätze werden direkt auf der
@@ -22,6 +23,9 @@ class QuoteService {
 		private QuoteMapper $mapper,
 		private QuoteGroupMapper $groupMapper,
 		private QuotePositionMapper $positionMapper,
+		private ErpFolderService $folderService,
+		private ProjectService $projectService,
+		private DocumentPdfService $pdfService,
 	) {
 	}
 
@@ -96,6 +100,7 @@ class QuoteService {
 		?string $customerContactUid,
 		?int $validUntil,
 		?string $notes,
+		?IUser $issuer = null,
 	): Quote {
 		if ($projectId <= 0) {
 			throw new \InvalidArgumentException('projectId is required');
@@ -108,10 +113,72 @@ class QuoteService {
 		$quote->setValidUntil($validUntil);
 		$quote->setNotes($notes);
 		$quote->setUpdatedAt(time());
-		if ($status === 'sent' && $quote->getSentAt() === null) {
+		$becomesSent = $status === 'sent' && $quote->getSentAt() === null;
+		if ($becomesSent) {
 			$quote->setSentAt(time());
 		}
-		return $this->mapper->update($quote);
+		$quote = $this->mapper->update($quote);
+
+		// PDF-Erzeugung (ADR-0021) nur beim erstmaligen Wechsel nach 'sent',
+		// nicht bei jedem Update — $issuer ist optional, weil ältere/interne
+		// Aufrufer (z. B. Tests, die nur den Status ändern) keinen Nutzer
+		// mitgeben müssen; ohne $issuer entfällt nur die PDF-Ablage.
+		if ($becomesSent && $issuer !== null) {
+			$this->tryWriteDocument($quote, $issuer);
+		}
+
+		return $quote;
+	}
+
+	private function tryWriteDocument(Quote $quote, IUser $issuer): void {
+		try {
+			$project = $this->projectService->getProject($quote->getProjectId());
+			$folder = $this->folderService->ensureQuoteFolder($issuer, $project->getProjectNumber());
+			$html = $this->renderHtml($quote);
+			$fileId = $this->pdfService->writePdf($folder, (string)$quote->getQuoteNumber(), $html);
+
+			$quote->setDocumentFileId($fileId);
+			$this->mapper->update($quote);
+		} catch (\Throwable) {
+			// Dokumentablage ist optional (ADR-0021).
+		}
+	}
+
+	private function renderHtml(Quote $quote): string {
+		$positions = $this->positionMapper->findByQuote($quote->getId());
+		$calc = QuoteCalculationService::calculate([], array_map(static fn (QuotePosition $p) => [
+			'id' => $p->getId(),
+			'groupId' => null,
+			'quantity' => $p->getQuantity(),
+			'unitPriceNet' => $p->getUnitPriceNet(),
+			'vatRatePercent' => $p->getVatRatePercent(),
+		], $positions));
+
+		$rows = '';
+		foreach ($positions as $p) {
+			$rows .= sprintf(
+				"<tr><td>%s</td><td>%s %s</td><td>%s €</td><td>%s %%</td><td>%s €</td></tr>\n",
+				htmlspecialchars($p->getDescription()),
+				htmlspecialchars((string)$p->getQuantity()),
+				htmlspecialchars($p->getUnit()),
+				htmlspecialchars(number_format($p->getUnitPriceNet(), 2, ',', '.')),
+				htmlspecialchars((string)$p->getVatRatePercent()),
+				htmlspecialchars(number_format($p->getQuantity() * $p->getUnitPriceNet(), 2, ',', '.')),
+			);
+		}
+
+		return sprintf(
+			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
+			"<h1>Angebot %s</h1>\n<p>%s</p>\n" .
+			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Menge</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n" .
+			"<p>Netto-Zwischensumme: %s €<br>Brutto-Gesamt: %s €</p>\n</body></html>\n",
+			htmlspecialchars((string)$quote->getQuoteNumber()),
+			htmlspecialchars((string)$quote->getQuoteNumber()),
+			htmlspecialchars($quote->getTitle()),
+			$rows,
+			number_format($calc['netSubtotal'], 2, ',', '.'),
+			number_format($calc['grossTotal'], 2, ',', '.'),
+		);
 	}
 
 	/** @throws \OutOfBoundsException */

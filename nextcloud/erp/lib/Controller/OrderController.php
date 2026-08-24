@@ -77,7 +77,7 @@ class OrderController extends OCSController {
 	/** @throws OCSBadRequestException|OCSNotFoundException */
 	#[NoAdminRequired]
 	public function update(int $projectId, int $id, string $title, string $status, ?string $description = null, ?string $customerContactUid = null, ?string $assignedUserId = null): DataResponse {
-		$this->requireLevel(PermissionLevel::Write);
+		$user = $this->requireLevel(PermissionLevel::Write);
 		if (trim($title) === '') {
 			throw new OCSBadRequestException('title must not be empty');
 		}
@@ -86,7 +86,7 @@ class OrderController extends OCSController {
 			throw new OCSBadRequestException("Unknown status: $status");
 		}
 		try {
-			return new DataResponse($this->orderService->updateOrder($projectId, $id, $title, $parsedStatus, $description, $customerContactUid, $assignedUserId));
+			return new DataResponse($this->orderService->updateOrder($projectId, $id, $title, $parsedStatus, $description, $customerContactUid, $assignedUserId, $user));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Order $id not found");
 		}

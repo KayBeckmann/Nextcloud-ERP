@@ -17,6 +17,7 @@ use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Projects\OrderStatus;
 use OCA\ERP\Quotes\QuoteCalculationService;
+use OCP\IUser;
 
 /**
  * Aufträge pro Projekt (ADR-0010). Seit ADR-0016 mit eigenen Positionen und
@@ -37,6 +38,9 @@ class OrderService {
 		private QuoteGroupMapper $quoteGroupMapper,
 		private InvoicePositionMapper $invoicePositionMapper,
 		private DeliveryNotePositionMapper $deliveryNotePositionMapper,
+		private ErpFolderService $folderService,
+		private ProjectService $projectService,
+		private DocumentPdfService $pdfService,
 	) {
 	}
 
@@ -115,18 +119,83 @@ class OrderService {
 	}
 
 	/** @throws \OutOfBoundsException */
-	public function updateOrder(int $projectId, int $id, string $title, OrderStatus $status, ?string $description, ?string $customerContactUid = null, ?string $assignedUserId = null): Order {
+	public function updateOrder(int $projectId, int $id, string $title, OrderStatus $status, ?string $description, ?string $customerContactUid = null, ?string $assignedUserId = null, ?IUser $issuer = null): Order {
 		$order = $this->mapper->findOne($projectId, $id);
 		if ($order === null) {
 			throw new \OutOfBoundsException("Order $id not found in project $projectId");
 		}
+		// PDF-Erzeugung (ADR-0021) nur beim erstmaligen Wechsel nach
+		// 'confirmed' — Aufträge haben (anders als Rechnungen/Angebote)
+		// keinen eigenen Zeitstempel für diesen Übergang, deshalb dient
+		// "noch kein Dokument abgelegt" als Erstmaligkeits-Signal.
+		$becomesConfirmed = $order->getStatus() !== OrderStatus::Confirmed->value
+			&& $status === OrderStatus::Confirmed
+			&& $order->getDocumentFileId() === null;
 		$order->setTitle($title);
 		$order->setStatus($status->value);
 		$order->setDescription($description);
 		$order->setCustomerContactUid($customerContactUid);
 		$order->setAssignedUserId($assignedUserId);
 		$order->setUpdatedAt(time());
-		return $this->mapper->update($order);
+		$order = $this->mapper->update($order);
+
+		if ($becomesConfirmed && $issuer !== null) {
+			$this->tryWriteDocument($order, $issuer);
+		}
+
+		return $order;
+	}
+
+	private function tryWriteDocument(Order $order, IUser $issuer): void {
+		try {
+			$project = $this->projectService->getProject($order->getProjectId());
+			$folder = $this->folderService->ensureOrderFolder($issuer, $project->getProjectNumber());
+			$html = $this->renderHtml($order);
+			$fileId = $this->pdfService->writePdf($folder, sprintf('AU-%05d', $order->getId()), $html);
+
+			$order->setDocumentFileId($fileId);
+			$this->mapper->update($order);
+		} catch (\Throwable) {
+			// Dokumentablage ist optional (ADR-0021).
+		}
+	}
+
+	private function renderHtml(Order $order): string {
+		$positions = $this->positionMapper->findByOrder($order->getId());
+		$calc = QuoteCalculationService::calculate([], array_map(static fn (OrderPosition $p) => [
+			'id' => $p->getId(),
+			'groupId' => null,
+			'quantity' => $p->getQuantity(),
+			'unitPriceNet' => $p->getUnitPriceNet(),
+			'vatRatePercent' => $p->getVatRatePercent(),
+		], $positions));
+
+		$rows = '';
+		foreach ($positions as $p) {
+			$rows .= sprintf(
+				"<tr><td>%s</td><td>%s %s</td><td>%s €</td><td>%s %%</td><td>%s €</td></tr>\n",
+				htmlspecialchars($p->getDescription()),
+				htmlspecialchars((string)$p->getQuantity()),
+				htmlspecialchars($p->getUnit()),
+				htmlspecialchars(number_format($p->getUnitPriceNet(), 2, ',', '.')),
+				htmlspecialchars((string)$p->getVatRatePercent()),
+				htmlspecialchars(number_format($p->getQuantity() * $p->getUnitPriceNet(), 2, ',', '.')),
+			);
+		}
+
+		$orderNumber = sprintf('AU-%05d', $order->getId());
+		return sprintf(
+			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
+			"<h1>Auftrag %s</h1>\n<p>%s</p>\n" .
+			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Menge</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n" .
+			"<p>Netto-Zwischensumme: %s €<br>Brutto-Gesamt: %s €</p>\n</body></html>\n",
+			htmlspecialchars($orderNumber),
+			htmlspecialchars($orderNumber),
+			htmlspecialchars($order->getTitle()),
+			$rows,
+			number_format($calc['netSubtotal'], 2, ',', '.'),
+			number_format($calc['grossTotal'], 2, ',', '.'),
+		);
 	}
 
 	/**

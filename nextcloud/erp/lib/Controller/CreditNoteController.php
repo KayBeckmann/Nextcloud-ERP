@@ -103,9 +103,9 @@ class CreditNoteController extends AbstractResourceController {
 	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function issue(int $id): DataResponse {
-		$this->requireLevel(PermissionLevel::Write);
+		$user = $this->requireLevel(PermissionLevel::Write);
 		try {
-			return new DataResponse($this->creditNoteService->issue($id));
+			return new DataResponse($this->creditNoteService->issue($id, $user));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Credit note $id not found");
 		} catch (\DomainException $e) {

@@ -13,6 +13,7 @@ use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
+use OCP\IUser;
 
 /**
  * Lieferscheine (ADR-0015) — dokumentieren nur die gelieferte Menge, keinen
@@ -34,6 +35,9 @@ class DeliveryNoteService {
 		private OrderMapper $orderMapper,
 		private OrderPositionMapper $orderPositionMapper,
 		private OrderGroupMapper $orderGroupMapper,
+		private ErpFolderService $folderService,
+		private ProjectService $projectService,
+		private DocumentPdfService $pdfService,
 	) {
 	}
 
@@ -221,18 +225,61 @@ class DeliveryNoteService {
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn bereits ausgestellt oder keine Positionen vorhanden
 	 */
-	public function issue(int $id): DeliveryNote {
+	public function issue(int $id, IUser $issuer): DeliveryNote {
 		$deliveryNote = $this->get($id);
 		if ($deliveryNote->getStatus() !== 'draft') {
 			throw new \DomainException("Delivery note $id is not in status 'draft'");
 		}
-		if ($this->positionMapper->findByDeliveryNote($id) === []) {
+		$positions = $this->positionMapper->findByDeliveryNote($id);
+		if ($positions === []) {
 			throw new \DomainException("Delivery note $id has no positions");
 		}
 
 		$deliveryNote->setStatus('issued');
 		$deliveryNote->setDeliveredAt(time());
 		$deliveryNote->setUpdatedAt(time());
-		return $this->mapper->update($deliveryNote);
+		$deliveryNote = $this->mapper->update($deliveryNote);
+
+		$this->tryWriteDocument($deliveryNote, $positions, $issuer);
+
+		return $deliveryNote;
+	}
+
+	/** @param DeliveryNotePosition[] $positions */
+	private function tryWriteDocument(DeliveryNote $deliveryNote, array $positions, IUser $issuer): void {
+		try {
+			$project = $this->projectService->getProject($deliveryNote->getProjectId());
+			$folder = $this->folderService->ensureDeliveryNoteFolder($issuer, $project->getProjectNumber());
+			$html = $this->renderHtml($deliveryNote, $positions);
+			$fileId = $this->pdfService->writePdf($folder, (string)$deliveryNote->getDeliveryNoteNumber(), $html);
+
+			$deliveryNote->setDocumentFileId($fileId);
+			$this->mapper->update($deliveryNote);
+		} catch (\Throwable) {
+			// Dokumentablage ist optional (ADR-0013/ADR-0021).
+		}
+	}
+
+	/** @param DeliveryNotePosition[] $positions */
+	private function renderHtml(DeliveryNote $deliveryNote, array $positions): string {
+		$rows = '';
+		foreach ($positions as $p) {
+			$rows .= sprintf(
+				"<tr><td>%s</td><td>%s</td><td>%s %s</td></tr>\n",
+				htmlspecialchars($p->getDescription()),
+				htmlspecialchars($p->getPositionType()),
+				htmlspecialchars((string)$p->getQuantity()),
+				htmlspecialchars($p->getUnit()),
+			);
+		}
+
+		return sprintf(
+			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
+			"<h1>Lieferschein %s</h1>\n" .
+			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Typ</th><th>Menge</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n</body></html>\n",
+			htmlspecialchars((string)$deliveryNote->getDeliveryNoteNumber()),
+			htmlspecialchars((string)$deliveryNote->getDeliveryNoteNumber()),
+			$rows,
+		);
 	}
 }

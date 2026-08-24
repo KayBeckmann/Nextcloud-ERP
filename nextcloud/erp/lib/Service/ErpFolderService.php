@@ -80,6 +80,30 @@ class ErpFolderService {
 	}
 
 	/**
+	 * Je ein weiterer Unterordner pro Belegtyp im Projektordner für den
+	 * PDF-Export (ADR-0021) — analog zu ensureInvoiceFolder().
+	 */
+	public function ensureQuoteFolder(IUser $user, string $projectNumber): Folder {
+		$projectFolder = $this->ensureProjectFolder($user, $projectNumber);
+		return $this->ensureFolder($projectFolder, 'Angebote');
+	}
+
+	public function ensureOrderFolder(IUser $user, string $projectNumber): Folder {
+		$projectFolder = $this->ensureProjectFolder($user, $projectNumber);
+		return $this->ensureFolder($projectFolder, 'Aufträge');
+	}
+
+	public function ensureDeliveryNoteFolder(IUser $user, string $projectNumber): Folder {
+		$projectFolder = $this->ensureProjectFolder($user, $projectNumber);
+		return $this->ensureFolder($projectFolder, 'Lieferscheine');
+	}
+
+	public function ensureCreditNoteFolder(IUser $user, string $projectNumber): Folder {
+		$projectFolder = $this->ensureProjectFolder($user, $projectNumber);
+		return $this->ensureFolder($projectFolder, 'Gutschriften');
+	}
+
+	/**
 	 * Legt (falls nötig) ERP/Fuhrpark/<Kennzeichen>/Tankbelege an, für
 	 * hochgeladene Tankbeleg-Fotos (ADR-0017).
 	 */

@@ -11,6 +11,7 @@ use OCA\ERP\Db\CreditNotePositionMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
 use OCA\ERP\Invoices\InvoiceNumberFormatter;
 use OCA\ERP\Quotes\QuoteCalculationService;
+use OCP\IUser;
 
 /**
  * Gutschriften (Roadmap Phase 7, ADR-0013) — der einzige Korrekturweg für
@@ -24,6 +25,9 @@ class CreditNoteService {
 		private CreditNotePositionMapper $positionMapper,
 		private InvoicePositionMapper $invoicePositionMapper,
 		private InvoiceService $invoiceService,
+		private ErpFolderService $folderService,
+		private ProjectService $projectService,
+		private DocumentPdfService $pdfService,
 	) {
 	}
 
@@ -134,12 +138,13 @@ class CreditNoteService {
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn bereits ausgestellt oder keine Positionen vorhanden
 	 */
-	public function issue(int $id): CreditNote {
+	public function issue(int $id, IUser $issuer): CreditNote {
 		$creditNote = $this->get($id);
 		if ($creditNote->getStatus() !== 'draft') {
 			throw new \DomainException("Credit note $id is not in status 'draft'");
 		}
-		if ($this->positionMapper->findByCreditNote($id) === []) {
+		$positions = $this->positionMapper->findByCreditNote($id);
+		if ($positions === []) {
 			throw new \DomainException("Credit note $id has no positions");
 		}
 
@@ -155,6 +160,62 @@ class CreditNoteService {
 			$this->invoiceService->markCancelled($creditNote->getInvoiceId());
 		}
 
+		$this->tryWriteDocument($creditNote, $positions, $issuer);
+
 		return $creditNote;
+	}
+
+	/** @param CreditNotePosition[] $positions */
+	private function tryWriteDocument(CreditNote $creditNote, array $positions, IUser $issuer): void {
+		try {
+			$project = $this->projectService->getProject($creditNote->getProjectId());
+			$folder = $this->folderService->ensureCreditNoteFolder($issuer, $project->getProjectNumber());
+			$html = $this->renderHtml($creditNote, $positions);
+			$fileId = $this->pdfService->writePdf($folder, (string)$creditNote->getCreditNoteNumber(), $html);
+
+			$creditNote->setDocumentFileId($fileId);
+			$this->mapper->update($creditNote);
+		} catch (\Throwable) {
+			// Dokumentablage ist optional (ADR-0013/ADR-0021) — Ausstellen
+			// der Gutschrift selbst ist zu diesem Zeitpunkt bereits
+			// abgeschlossen.
+		}
+	}
+
+	/** @param CreditNotePosition[] $positions */
+	private function renderHtml(CreditNote $creditNote, array $positions): string {
+		$calc = QuoteCalculationService::calculate([], array_map(static fn (CreditNotePosition $p) => [
+			'id' => $p->getId(),
+			'groupId' => null,
+			'quantity' => $p->getQuantity(),
+			'unitPriceNet' => $p->getUnitPriceNet(),
+			'vatRatePercent' => $p->getVatRatePercent(),
+		], $positions));
+
+		$rows = '';
+		foreach ($positions as $p) {
+			$rows .= sprintf(
+				"<tr><td>%s</td><td>%s %s</td><td>%s €</td><td>%s %%</td><td>%s €</td></tr>\n",
+				htmlspecialchars($p->getDescription()),
+				htmlspecialchars((string)$p->getQuantity()),
+				htmlspecialchars($p->getUnit()),
+				htmlspecialchars(number_format($p->getUnitPriceNet(), 2, ',', '.')),
+				htmlspecialchars((string)$p->getVatRatePercent()),
+				htmlspecialchars(number_format($p->getQuantity() * $p->getUnitPriceNet(), 2, ',', '.')),
+			);
+		}
+
+		return sprintf(
+			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
+			"<h1>Gutschrift %s</h1>\n<p>%s</p>\n" .
+			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Menge</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n" .
+			"<p>Netto-Zwischensumme: %s €<br>Brutto-Gesamt: %s €</p>\n</body></html>\n",
+			htmlspecialchars((string)$creditNote->getCreditNoteNumber()),
+			htmlspecialchars((string)$creditNote->getCreditNoteNumber()),
+			htmlspecialchars((string)$creditNote->getReason()),
+			$rows,
+			number_format($calc['netSubtotal'], 2, ',', '.'),
+			number_format($calc['grossTotal'], 2, ',', '.'),
+		);
 	}
 }

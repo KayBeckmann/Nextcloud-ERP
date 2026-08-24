@@ -47,6 +47,7 @@ class InvoiceService {
 		private IDBConnection $db,
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
+		private DocumentPdfService $pdfService,
 	) {
 	}
 
@@ -471,11 +472,9 @@ class InvoiceService {
 			$project = $this->projectService->getProject($invoice->getProjectId());
 			$folder = $this->folderService->ensureInvoiceFolder($issuer, $project->getProjectNumber());
 			$html = $this->renderHtml($invoice, $positions);
-			$fileName = $invoice->getInvoiceNumber() . '.html';
-			$file = $folder->nodeExists($fileName) ? $folder->get($fileName) : $folder->newFile($fileName);
-			$file->putContent($html);
+			$fileId = $this->pdfService->writePdf($folder, (string)$invoice->getInvoiceNumber(), $html);
 
-			$invoice->setDocumentFileId($file->getId());
+			$invoice->setDocumentFileId($fileId);
 			$this->mapper->update($invoice);
 		} catch (\Throwable) {
 			// Dokumentablage ist optional (ADR-0013) — Ausstellen der

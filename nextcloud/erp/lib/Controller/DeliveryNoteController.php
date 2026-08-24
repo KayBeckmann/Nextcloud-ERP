@@ -130,9 +130,9 @@ class DeliveryNoteController extends AbstractResourceController {
 	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function issue(int $id): DataResponse {
-		$this->requireLevel(PermissionLevel::Write);
+		$user = $this->requireLevel(PermissionLevel::Write);
 		try {
-			return new DataResponse($this->deliveryNoteService->issue($id));
+			return new DataResponse($this->deliveryNoteService->issue($id, $user));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Delivery note $id not found");
 		} catch (\DomainException $e) {

@@ -75,7 +75,7 @@ class QuoteController extends AbstractResourceController {
 		?int $validUntil = null,
 		?string $notes = null,
 	): DataResponse {
-		$this->requireLevel(PermissionLevel::Write);
+		$user = $this->requireLevel(PermissionLevel::Write);
 		if (trim($title) === '') {
 			throw new OCSBadRequestException('title must not be empty');
 		}
@@ -83,7 +83,7 @@ class QuoteController extends AbstractResourceController {
 			throw new OCSBadRequestException('Unknown status: ' . $status);
 		}
 		try {
-			return new DataResponse($this->quoteService->updateQuote($id, $title, $status, $projectId, $customerContactUid, $validUntil, $notes));
+			return new DataResponse($this->quoteService->updateQuote($id, $title, $status, $projectId, $customerContactUid, $validUntil, $notes, $user));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Quote $id not found");
 		} catch (\InvalidArgumentException $e) {
