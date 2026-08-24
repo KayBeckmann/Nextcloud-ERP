@@ -16,6 +16,7 @@ use OCP\AppFramework\OCS\OCSForbiddenException;
 use OCP\AppFramework\OCS\OCSNotFoundException;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
+use OCP\IUser;
 use OCP\IUserSession;
 
 /** Aufträge — eigener Rechtebereich ResourceType::Auftraege (ADR-0010, seit ADR-0016 mit Positionen). */
@@ -31,7 +32,7 @@ class OrderController extends OCSController {
 	}
 
 	/** @throws OCSForbiddenException */
-	private function requireLevel(PermissionLevel $required): void {
+	private function requireLevel(PermissionLevel $required): IUser {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			throw new OCSForbiddenException('No active user session');
@@ -40,6 +41,7 @@ class OrderController extends OCSController {
 		if (!$level->atLeast($required)) {
 			throw new OCSForbiddenException("Requires at least '{$required->value}' on 'auftraege'");
 		}
+		return $user;
 	}
 
 	#[NoAdminRequired]

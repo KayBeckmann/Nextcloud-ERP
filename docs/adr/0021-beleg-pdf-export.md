@@ -25,6 +25,22 @@ holt genau das jetzt nach.
 
 ## Entscheidung
 
+### Gotcha: Nextcloud lädt den Composer-Vendor-Autoloader einer App nicht automatisch
+
+`dompdf/dompdf` ist die erste echte Runtime-Abhängigkeit dieses Projekts
+(vorher stand nur `phpunit` in `require-dev`). Nextclouds eigener
+App-Loader (`OC_App::registerAutoloading()`) sucht ausschließlich
+`<appPath>/composer/autoload.php` — **nicht** das Standard-Composer-
+Vendor-Verzeichnis `vendor/`. Ohne Gegenmaßnahme bleibt jede Fremdklasse
+(`Dompdf\Dompdf`, `Dompdf\Options`, …) zur Laufzeit "Class not found",
+obwohl `composer install`/`composer update` sauber durchläuft und
+PHPUnit-Tests (die über `vendor/bin/phpunit` ihren eigenen
+`vendor/autoload.php` laden) grün sind — ein Stolperstein, der nur beim
+echten HTTP-Request auffällt, nicht in der Testsuite. Behoben durch einen
+expliziten `require_once __DIR__ . '/../../vendor/autoload.php';` in
+`Application::register()`, wie von der offiziellen Nextcloud-Doku zum
+Dependency-Management empfohlen.
+
 ### dompdf als PDF-Bibliothek
 
 `dompdf/dompdf` (LGPL-2.1, alternativ PHP License 3.0) wird als neue
@@ -144,6 +160,14 @@ angepasst.
   pro-User im Home-Verzeichnis (bereits in ADR-0009 als Einschränkung
   vermerkt) — diese ADR ändert daran nichts, sie fügt nur der bestehenden
   Struktur PDF-Dateien hinzu.
+- Bei der Docker-Verifikation aufgedeckt: `OrderController` erbt (anders
+  als Quote-/Invoice-/DeliveryNote-/CreditNoteController) nicht von
+  `AbstractResourceController`, sondern hat eine eigene lokale
+  `requireLevel()`. Die war `void` statt den angemeldeten `IUser`
+  zurückzugeben — dadurch kam beim Auftrags-PDF-Trigger stets `null` als
+  `$issuer` an, ohne dass ein Fehler sichtbar wurde (PDF-Erzeugung ist
+  laut Design best-effort). Mitgefixt: `requireLevel()` gibt jetzt wie bei
+  den anderen Controllern den `IUser` zurück.
 
 ## Alternativen erwogen
 
