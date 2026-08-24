@@ -15,12 +15,12 @@ use OCA\ERP\Db\InvoicePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
-use OCA\ERP\Db\Project;
 use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Service\CreditNoteService;
+use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\InvoiceService;
 use OCA\ERP\Service\ProjectService;
@@ -73,8 +73,17 @@ final class CreditNoteServiceTest extends TestCase {
 			$db,
 			$folderService,
 			$projectService,
+			new DocumentPdfService(),
 		);
-		$this->service = new CreditNoteService($this->mapper, $this->positionMapper, $this->invoicePositionMapper, $this->invoiceService);
+		$this->service = new CreditNoteService(
+			$this->mapper,
+			$this->positionMapper,
+			$this->invoicePositionMapper,
+			$this->invoiceService,
+			$folderService,
+			$projectService,
+			new DocumentPdfService(),
+		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
 		if ($userManager->userExists(self::TEST_UID)) {
@@ -83,12 +92,8 @@ final class CreditNoteServiceTest extends TestCase {
 		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
 		self::loginAsUser(self::TEST_UID);
 
-		$project = new Project();
-		$project->setTitle('phpunit-cn-project');
-		$project->setStatus('draft');
-		$project->setCreatedAt(time());
-		$project->setUpdatedAt(time());
-		$this->projectId = $this->projectMapper->insert($project)->getId();
+		$project = $projectService->createProject($this->user, 'phpunit-cn-project', null, null, null);
+		$this->projectId = $project->getId();
 	}
 
 	protected function tearDown(): void {
@@ -165,6 +170,16 @@ final class CreditNoteServiceTest extends TestCase {
 
 		$year = (int) date('Y');
 		$this->assertMatchesRegularExpression("/^G-$year-\\d{5}$/", $issued->getCreditNoteNumber());
+	}
+
+	/** ADR-0021: PDF wird beim Ausstellen abgelegt, wenn ein Issuer übergeben wird. */
+	public function testIssueWithIssuerWritesPdfDocument(): void {
+		$invoice = $this->issuedInvoice();
+		$creditNote = $this->service->createFullCancellation($invoice->getId(), 'phpunit-cn-storno');
+		$this->assertNull($creditNote->getDocumentFileId());
+
+		$issued = $this->service->issue($creditNote->getId(), $this->user);
+		$this->assertNotNull($issued->getDocumentFileId());
 	}
 
 	public function testIssueWithoutPositionsThrows(): void {

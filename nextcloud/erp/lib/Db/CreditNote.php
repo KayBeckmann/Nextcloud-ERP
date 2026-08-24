@@ -47,6 +47,7 @@ class CreditNote extends Entity implements \JsonSerializable {
 	public function __construct() {
 		$this->addType('id', 'integer');
 		$this->addType('invoiceId', 'integer');
+		$this->addType('projectId', 'integer');
 		$this->addType('cancelsInvoice', 'boolean');
 		$this->addType('issuedAt', 'integer');
 		$this->addType('documentFileId', 'integer');

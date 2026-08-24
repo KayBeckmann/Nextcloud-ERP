@@ -10,17 +10,24 @@ use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
-use OCA\ERP\Db\Project;
 use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Service\DeliveryNoteService;
+use OCA\ERP\Service\DocumentPdfService;
+use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\OrderService;
+use OCA\ERP\Service\ProjectService;
+use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
+use OCP\IUser;
+use OCP\IUserManager;
 use Test\TestCase;
 
 /**
  * @group DB
  */
 final class DeliveryNoteServiceTest extends TestCase {
+	private const TEST_UID = 'phpunit-dn-user';
+
 	private DeliveryNoteService $service;
 	private DeliveryNoteMapper $mapper;
 	private DeliveryNotePositionMapper $positionMapper;
@@ -29,6 +36,7 @@ final class DeliveryNoteServiceTest extends TestCase {
 	private OrderPositionMapper $orderPositionMapper;
 	private OrderGroupMapper $orderGroupMapper;
 	private ProjectMapper $projectMapper;
+	private IUser $user;
 	private int $projectId;
 
 	protected function setUp(): void {
@@ -41,6 +49,8 @@ final class DeliveryNoteServiceTest extends TestCase {
 		$this->orderPositionMapper = new OrderPositionMapper($db);
 		$this->orderGroupMapper = new OrderGroupMapper($db);
 		$this->projectMapper = new ProjectMapper($db);
+		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
+		$projectService = new ProjectService($this->projectMapper, $folderService);
 		$this->service = new DeliveryNoteService(
 			$this->mapper,
 			$this->positionMapper,
@@ -48,14 +58,20 @@ final class DeliveryNoteServiceTest extends TestCase {
 			$this->orderMapper,
 			$this->orderPositionMapper,
 			$this->orderGroupMapper,
+			$folderService,
+			$projectService,
+			new DocumentPdfService(),
 		);
 
-		$project = new Project();
-		$project->setTitle('phpunit-dn-project');
-		$project->setStatus('draft');
-		$project->setCreatedAt(time());
-		$project->setUpdatedAt(time());
-		$this->projectId = $this->projectMapper->insert($project)->getId();
+		$userManager = \OC::$server->get(IUserManager::class);
+		if ($userManager->userExists(self::TEST_UID)) {
+			$userManager->get(self::TEST_UID)->delete();
+		}
+		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
+		self::loginAsUser(self::TEST_UID);
+
+		$project = $projectService->createProject($this->user, 'phpunit-dn-project', null, null, null);
+		$this->projectId = $project->getId();
 	}
 
 	protected function tearDown(): void {
@@ -75,6 +91,8 @@ final class DeliveryNoteServiceTest extends TestCase {
 			$this->orderMapper->delete($order);
 		}
 		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
+		self::logout();
+		$this->user->delete();
 		parent::tearDown();
 	}
 
@@ -150,6 +168,16 @@ final class DeliveryNoteServiceTest extends TestCase {
 
 		$this->expectException(\DomainException::class);
 		$this->service->addPosition($deliveryNote->getId(), null, 'custom', null, 'y', 1.0, 'Stk');
+	}
+
+	/** ADR-0021: PDF wird beim Ausstellen abgelegt, wenn ein Issuer übergeben wird. */
+	public function testIssueWithIssuerWritesPdfDocument(): void {
+		$deliveryNote = $this->service->createDraft($this->projectId, null, null);
+		$this->service->addPosition($deliveryNote->getId(), null, 'custom', null, 'x', 1.0, 'Stk');
+		$this->assertNull($deliveryNote->getDocumentFileId());
+
+		$issued = $this->service->issue($deliveryNote->getId(), $this->user);
+		$this->assertNotNull($issued->getDocumentFileId());
 	}
 
 	public function testRemovePosition(): void {

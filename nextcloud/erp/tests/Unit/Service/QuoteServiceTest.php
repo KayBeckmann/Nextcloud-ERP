@@ -9,17 +9,26 @@ use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Service\DocumentPdfService;
+use OCA\ERP\Service\ErpFolderService;
+use OCA\ERP\Service\ProjectService;
 use OCA\ERP\Service\QuoteService;
+use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
+use OCP\IUser;
+use OCP\IUserManager;
 use Test\TestCase;
 
 /**
  * @group DB
  */
 final class QuoteServiceTest extends TestCase {
+	private const TEST_UID = 'phpunit-quote-user';
+
 	private QuoteService $service;
 	private QuoteMapper $mapper;
 	private ProjectMapper $projectMapper;
+	private IUser $user;
 	private int $projectId;
 
 	protected function setUp(): void {
@@ -27,14 +36,26 @@ final class QuoteServiceTest extends TestCase {
 		$db = \OC::$server->get(IDBConnection::class);
 		$this->mapper = new QuoteMapper($db);
 		$this->projectMapper = new ProjectMapper($db);
-		$this->service = new QuoteService($this->mapper, new QuoteGroupMapper($db), new QuotePositionMapper($db));
+		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
+		$projectService = new ProjectService($this->projectMapper, $folderService);
+		$this->service = new QuoteService(
+			$this->mapper,
+			new QuoteGroupMapper($db),
+			new QuotePositionMapper($db),
+			$folderService,
+			$projectService,
+			new DocumentPdfService(),
+		);
 
-		$project = new Project();
-		$project->setTitle('phpunit-quote-project');
-		$project->setStatus('draft');
-		$project->setCreatedAt(time());
-		$project->setUpdatedAt(time());
-		$this->projectId = $this->projectMapper->insert($project)->getId();
+		$userManager = \OC::$server->get(IUserManager::class);
+		if ($userManager->userExists(self::TEST_UID)) {
+			$userManager->get(self::TEST_UID)->delete();
+		}
+		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
+		self::loginAsUser(self::TEST_UID);
+
+		$project = $projectService->createProject($this->user, 'phpunit-quote-project', null, null, null);
+		$this->projectId = $project->getId();
 	}
 
 	protected function tearDown(): void {
@@ -44,6 +65,8 @@ final class QuoteServiceTest extends TestCase {
 			}
 		}
 		$this->projectMapper->delete($this->projectMapper->findById($this->projectId));
+		self::logout();
+		$this->user->delete();
 		parent::tearDown();
 	}
 
@@ -121,6 +144,16 @@ final class QuoteServiceTest extends TestCase {
 		// Erneutes Speichern im Status 'sent' darf sentAt nicht überschreiben.
 		$sentAgain = $this->service->updateQuote($quote->getId(), 'phpunit-quote-5', 'sent', $this->projectId, null, null, null);
 		$this->assertSame($firstSentAt, $sentAgain->getSentAt());
+	}
+
+	/** ADR-0021: PDF wird beim erstmaligen Wechsel nach 'sent' abgelegt. */
+	public function testUpdateQuoteToSentWritesPdfDocument(): void {
+		$quote = $this->service->createQuote('phpunit-quote-7', $this->projectId, null, null);
+		$this->service->addPosition($quote->getId(), null, 'custom', null, 'Pauschale', 1.0, 'psch.', 100.0, 19.0);
+		$this->assertNull($quote->getDocumentFileId());
+
+		$sent = $this->service->updateQuote($quote->getId(), 'phpunit-quote-7', 'sent', $this->projectId, null, null, null, $this->user);
+		$this->assertNotNull($sent->getDocumentFileId());
 	}
 
 	public function testRemovePosition(): void {

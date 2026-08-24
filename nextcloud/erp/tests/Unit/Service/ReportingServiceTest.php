@@ -30,6 +30,7 @@ use OCA\ERP\Service\AbsenceRequestService;
 use OCA\ERP\Service\ArticleService;
 use OCA\ERP\Service\CalendarService;
 use OCA\ERP\Service\CostService;
+use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\InvoiceService;
 use OCA\ERP\Service\OrderService;
@@ -71,10 +72,15 @@ final class ReportingServiceTest extends TestCase {
 		parent::setUp();
 		$db = \OC::$server->get(IDBConnection::class);
 
+		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
+		$this->projectMapper = new ProjectMapper($db);
+		$this->projectService = new ProjectService($this->projectMapper, $folderService);
+		$pdfService = new DocumentPdfService();
+
 		$this->quoteMapper = new QuoteMapper($db);
 		$quotePositionMapper = new QuotePositionMapper($db);
 		$quoteGroupMapper = new QuoteGroupMapper($db);
-		$this->quoteService = new QuoteService($this->quoteMapper, $quoteGroupMapper, $quotePositionMapper);
+		$this->quoteService = new QuoteService($this->quoteMapper, $quoteGroupMapper, $quotePositionMapper, $folderService, $this->projectService, $pdfService);
 
 		$orderMapper = new OrderMapper($db);
 		$orderPositionMapper = new OrderPositionMapper($db);
@@ -90,11 +96,10 @@ final class ReportingServiceTest extends TestCase {
 			$quoteGroupMapper,
 			$invoicePositionMapper,
 			$deliveryNotePositionMapper,
+			$folderService,
+			$this->projectService,
+			$pdfService,
 		);
-
-		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
-		$this->projectMapper = new ProjectMapper($db);
-		$this->projectService = new ProjectService($this->projectMapper, $folderService);
 
 		$this->invoiceMapper = new InvoiceMapper($db);
 		$invoiceGroupMapper = new InvoiceGroupMapper($db);
@@ -114,6 +119,7 @@ final class ReportingServiceTest extends TestCase {
 			$db,
 			$folderService,
 			$this->projectService,
+			$pdfService,
 		);
 
 		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));

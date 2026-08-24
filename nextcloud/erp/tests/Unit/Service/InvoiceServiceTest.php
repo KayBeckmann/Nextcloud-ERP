@@ -17,6 +17,7 @@ use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\InvoiceService;
 use OCA\ERP\Service\ProjectService;
@@ -59,10 +60,11 @@ final class InvoiceServiceTest extends TestCase {
 		$quoteMapper = new QuoteMapper($db);
 		$quotePositionMapper = new QuotePositionMapper($db);
 		$quoteGroupMapper = new QuoteGroupMapper($db);
-		$this->quoteService = new QuoteService($quoteMapper, $quoteGroupMapper, $quotePositionMapper);
 		$this->folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
 		$this->projectMapper = new ProjectMapper($db);
 		$projectService = new ProjectService($this->projectMapper, $this->folderService);
+		$pdfService = new DocumentPdfService();
+		$this->quoteService = new QuoteService($quoteMapper, $quoteGroupMapper, $quotePositionMapper, $this->folderService, $projectService, $pdfService);
 
 		$this->orderMapper = new OrderMapper($db);
 		$this->orderPositionMapper = new OrderPositionMapper($db);
@@ -87,6 +89,7 @@ final class InvoiceServiceTest extends TestCase {
 			$db,
 			$this->folderService,
 			$projectService,
+			$pdfService,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -266,6 +269,7 @@ final class InvoiceServiceTest extends TestCase {
 		$this->assertSame(119.0, $full['calculation']['grossTotal']);
 	}
 
+	/** ADR-0021: Rechnungsdokument ist seither ein echtes PDF, kein HTML mehr. */
 	public function testIssueWritesDocumentToProjectFolder(): void {
 		$invoice = $this->draftWithOnePosition();
 		$issued = $this->service->issue($invoice->getId(), $this->user);
@@ -273,7 +277,11 @@ final class InvoiceServiceTest extends TestCase {
 		$this->assertNotNull($issued->getDocumentFileId());
 
 		$invoiceFolder = $this->folderService->ensureInvoiceFolder($this->user, $this->projectNumber);
-		$this->assertTrue($invoiceFolder->nodeExists($issued->getInvoiceNumber() . '.html'));
+		$matches = array_filter(
+			$invoiceFolder->getDirectoryListing(),
+			static fn ($node) => str_starts_with($node->getName(), $issued->getInvoiceNumber() . '_') && str_ends_with($node->getName(), '.pdf'),
+		);
+		$this->assertNotEmpty($matches);
 	}
 
 	public function testCreateFromOrderCopiesSelectedPositionWithPartialQuantity(): void {

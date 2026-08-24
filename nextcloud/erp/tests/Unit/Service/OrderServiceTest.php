@@ -14,6 +14,7 @@ use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
 use OCA\ERP\Projects\OrderStatus;
+use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\OrderService;
 use OCA\ERP\Service\ProjectService;
@@ -50,7 +51,10 @@ final class OrderServiceTest extends TestCase {
 		$this->quoteMapper = new QuoteMapper($db);
 		$this->quotePositionMapper = new QuotePositionMapper($db);
 		$this->quoteGroupMapper = new QuoteGroupMapper($db);
-		$this->quoteService = new QuoteService($this->quoteMapper, $this->quoteGroupMapper, $this->quotePositionMapper);
+		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
+		$projectService = new ProjectService(new ProjectMapper($db), $folderService);
+		$pdfService = new DocumentPdfService();
+		$this->quoteService = new QuoteService($this->quoteMapper, $this->quoteGroupMapper, $this->quotePositionMapper, $folderService, $projectService, $pdfService);
 		$this->groupMapper = new OrderGroupMapper($db);
 		$this->service = new OrderService(
 			$this->mapper,
@@ -61,6 +65,9 @@ final class OrderServiceTest extends TestCase {
 			$this->quoteGroupMapper,
 			new InvoicePositionMapper($db),
 			new DeliveryNotePositionMapper($db),
+			$folderService,
+			$projectService,
+			$pdfService,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -70,8 +77,6 @@ final class OrderServiceTest extends TestCase {
 		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
 		self::loginAsUser(self::TEST_UID);
 
-		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
-		$projectService = new ProjectService(new ProjectMapper($db), $folderService);
 		$project = $projectService->createProject($this->user, 'phpunit-order-project', null, null, null);
 		$this->realProjectId = $project->getId();
 	}
@@ -120,6 +125,16 @@ final class OrderServiceTest extends TestCase {
 		$order = $this->service->createOrder(self::PROJECT_ID, 'Ausführung', null);
 		$updated = $this->service->updateOrder(self::PROJECT_ID, $order->getId(), 'Ausführung', OrderStatus::Confirmed, null);
 		$this->assertSame('confirmed', $updated->getStatus());
+	}
+
+	/** ADR-0021: PDF wird beim erstmaligen Wechsel nach 'confirmed' abgelegt. */
+	public function testUpdateOrderToConfirmedWritesPdfDocument(): void {
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-pdf', null);
+		$this->service->addPosition($order->getId(), null, 'custom', null, 'Pauschale', 1.0, 'psch.', 50.0, 19.0);
+		$this->assertNull($order->getDocumentFileId());
+
+		$updated = $this->service->updateOrder($this->realProjectId, $order->getId(), 'phpunit-order-pdf', OrderStatus::Confirmed, null, null, null, $this->user);
+		$this->assertNotNull($updated->getDocumentFileId());
 	}
 
 	public function testUpdateUnknownOrderThrows(): void {

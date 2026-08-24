@@ -225,7 +225,7 @@ class DeliveryNoteService {
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn bereits ausgestellt oder keine Positionen vorhanden
 	 */
-	public function issue(int $id, IUser $issuer): DeliveryNote {
+	public function issue(int $id, ?IUser $issuer = null): DeliveryNote {
 		$deliveryNote = $this->get($id);
 		if ($deliveryNote->getStatus() !== 'draft') {
 			throw new \DomainException("Delivery note $id is not in status 'draft'");
@@ -240,7 +240,9 @@ class DeliveryNoteService {
 		$deliveryNote->setUpdatedAt(time());
 		$deliveryNote = $this->mapper->update($deliveryNote);
 
-		$this->tryWriteDocument($deliveryNote, $positions, $issuer);
+		if ($issuer !== null) {
+			$this->tryWriteDocument($deliveryNote, $positions, $issuer);
+		}
 
 		return $deliveryNote;
 	}

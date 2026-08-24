@@ -138,7 +138,7 @@ class CreditNoteService {
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn bereits ausgestellt oder keine Positionen vorhanden
 	 */
-	public function issue(int $id, IUser $issuer): CreditNote {
+	public function issue(int $id, ?IUser $issuer = null): CreditNote {
 		$creditNote = $this->get($id);
 		if ($creditNote->getStatus() !== 'draft') {
 			throw new \DomainException("Credit note $id is not in status 'draft'");
@@ -160,7 +160,9 @@ class CreditNoteService {
 			$this->invoiceService->markCancelled($creditNote->getInvoiceId());
 		}
 
-		$this->tryWriteDocument($creditNote, $positions, $issuer);
+		if ($issuer !== null) {
+			$this->tryWriteDocument($creditNote, $positions, $issuer);
+		}
 
 		return $creditNote;
 	}
