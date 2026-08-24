@@ -23,6 +23,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setNotes(?string $notes)
  * @method int|null getSentAt()
  * @method void setSentAt(?int $sentAt)
+ * @method int|null getDocumentFileId()
+ * @method void setDocumentFileId(?int $documentFileId)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -40,6 +42,7 @@ class Quote extends Entity implements \JsonSerializable {
 	protected ?int $validUntil = null;
 	protected ?string $notes = null;
 	protected ?int $sentAt = null;
+	protected ?int $documentFileId = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -48,6 +51,7 @@ class Quote extends Entity implements \JsonSerializable {
 		$this->addType('projectId', 'integer');
 		$this->addType('validUntil', 'integer');
 		$this->addType('sentAt', 'integer');
+		$this->addType('documentFileId', 'integer');
 		$this->addType('createdAt', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
@@ -63,6 +67,7 @@ class Quote extends Entity implements \JsonSerializable {
 			'validUntil' => $this->getValidUntil(),
 			'notes' => $this->getNotes(),
 			'sentAt' => $this->getSentAt(),
+			'documentFileId' => $this->getDocumentFileId(),
 		];
 	}
 }

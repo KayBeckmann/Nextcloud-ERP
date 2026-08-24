@@ -21,6 +21,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCancelsInvoice(bool $cancelsInvoice)
  * @method int|null getIssuedAt()
  * @method void setIssuedAt(?int $issuedAt)
+ * @method int|null getDocumentFileId()
+ * @method void setDocumentFileId(?int $documentFileId)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -38,6 +40,7 @@ class CreditNote extends Entity implements \JsonSerializable {
 	protected ?string $reason = null;
 	protected bool $cancelsInvoice = false;
 	protected ?int $issuedAt = null;
+	protected ?int $documentFileId = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -46,6 +49,7 @@ class CreditNote extends Entity implements \JsonSerializable {
 		$this->addType('invoiceId', 'integer');
 		$this->addType('cancelsInvoice', 'boolean');
 		$this->addType('issuedAt', 'integer');
+		$this->addType('documentFileId', 'integer');
 		$this->addType('createdAt', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
@@ -60,6 +64,7 @@ class CreditNote extends Entity implements \JsonSerializable {
 			'reason' => $this->getReason(),
 			'cancelsInvoice' => $this->getCancelsInvoice(),
 			'issuedAt' => $this->getIssuedAt(),
+			'documentFileId' => $this->getDocumentFileId(),
 		];
 	}
 }

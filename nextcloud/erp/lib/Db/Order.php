@@ -21,6 +21,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setAssignedUserId(?string $assignedUserId)
  * @method int|null getQuoteId()
  * @method void setQuoteId(?int $quoteId)
+ * @method int|null getDocumentFileId()
+ * @method void setDocumentFileId(?int $documentFileId)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -37,6 +39,7 @@ class Order extends Entity implements \JsonSerializable {
 	// Kalender-Zuweisung, bewusst getrennt.
 	protected ?string $assignedUserId = null;
 	protected ?int $quoteId = null;
+	protected ?int $documentFileId = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -44,6 +47,7 @@ class Order extends Entity implements \JsonSerializable {
 		$this->addType('id', 'integer');
 		$this->addType('projectId', 'integer');
 		$this->addType('quoteId', 'integer');
+		$this->addType('documentFileId', 'integer');
 		$this->addType('createdAt', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
@@ -58,6 +62,7 @@ class Order extends Entity implements \JsonSerializable {
 			'customerContactUid' => $this->getCustomerContactUid(),
 			'assignedUserId' => $this->getAssignedUserId(),
 			'quoteId' => $this->getQuoteId(),
+			'documentFileId' => $this->getDocumentFileId(),
 		];
 	}
 }

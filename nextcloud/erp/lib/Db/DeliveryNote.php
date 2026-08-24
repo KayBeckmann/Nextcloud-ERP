@@ -19,6 +19,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDeliveredAt(?int $deliveredAt)
  * @method string|null getNotes()
  * @method void setNotes(?string $notes)
+ * @method int|null getDocumentFileId()
+ * @method void setDocumentFileId(?int $documentFileId)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -33,6 +35,7 @@ class DeliveryNote extends Entity implements \JsonSerializable {
 	protected string $status = 'draft';
 	protected ?int $deliveredAt = null;
 	protected ?string $notes = null;
+	protected ?int $documentFileId = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -41,6 +44,7 @@ class DeliveryNote extends Entity implements \JsonSerializable {
 		$this->addType('projectId', 'integer');
 		$this->addType('orderId', 'integer');
 		$this->addType('deliveredAt', 'integer');
+		$this->addType('documentFileId', 'integer');
 		$this->addType('createdAt', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
@@ -54,6 +58,7 @@ class DeliveryNote extends Entity implements \JsonSerializable {
 			'status' => $this->getStatus(),
 			'deliveredAt' => $this->getDeliveredAt(),
 			'notes' => $this->getNotes(),
+			'documentFileId' => $this->getDocumentFileId(),
 		];
 	}
 }
