@@ -645,7 +645,7 @@ Kollision).
 - Verantwortlicher User (`responsibleUserId`) ist ein reines Freitextfeld
   ohne Validierung gegen echte Nextcloud-User — keine Auswahlliste im UI.
 - Frontend-Bundle ist noch nicht auf Komponentenebene tree-geshaked (Warnung beim
-  Build) — für den Skeleton-Stand nicht kritisch, sollte vor Phase 12
+  Build) — für den Skeleton-Stand nicht kritisch, sollte vor Phase 13
   (Web-Reifegrad) angegangen werden.
 - Alle offenen Punkte aus der Roadmap ("Offene Klärungen vor Implementierung")
   sind über ADRs entschieden, mit Ausnahme von Themen, die erst in späteren

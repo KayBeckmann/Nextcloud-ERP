@@ -22,6 +22,7 @@
 | [0018](0018-kosten-kalkulation.md) | Betriebliche Kosten und Kalkulation | accepted |
 | [0019](0019-auswertungen-dashboard-exporte.md) | Auswertungen, Dashboard, Exporte | accepted |
 | [0020](0020-mitarbeiter-zuweisung-kalender.md) | Mitarbeiter-Zuweisung für Termine + Kollisionserkennung + Auftrags-Zuweisung | accepted |
+| [0021](0021-beleg-pdf-export.md) | PDF-Export für Belege + Empfehlung zur unveränderlichen Ablage | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per

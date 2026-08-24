@@ -29,7 +29,8 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 9 — Fuhrpark
 - [x] Phase 10 — Betriebliche Kosten und Kalkulation
 - [x] Phase 11 — Auswertungen, Dashboard, Exporte
-- [ ] Phase 12–14 — noch nicht begonnen — **Phase 12 nächster Schritt**
+- [ ] Phase 12 — Beleg-PDF-Export und Dokumentenarchiv — **nächster Schritt**
+- [ ] Phase 13–15 — noch nicht begonnen
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
@@ -310,15 +311,23 @@ Ergebnisse: ERP-Dashboard, Projekt-Gewinn/Verlust, Soll/Ist-Vergleich, offene An
 
 Prüfkriterien: Dashboard zeigt handlungsrelevante Daten. Auswertungen berücksichtigen Rechte. Export ist reproduzierbar und dokumentiert.
 
-## Phase 12 — Web-Reifegrad und Stabilisierung
+## Phase 12 — Beleg-PDF-Export und Dokumentenarchiv
+
+Ziel: Aus Angeboten, Aufträgen, Lieferscheinen, Rechnungen und Gutschriften lassen sich echte PDF-Dokumente erzeugen, automatisch mit Zeitstempel im richtigen Projektordner abgelegt.
+
+Ergebnisse: `dompdf` als PDF-Bibliothek, gemeinsamer `DocumentPdfService`, PDF-Erzeugung beim Ausstellen/Senden/Bestätigen jedes der fünf Belegtypen (löst den bisherigen HTML-Export für Rechnungen aus ADR-0013 ab), Dateiname aus Belegnummer + Zeitstempel, ein Unterordner je Belegtyp im Projektordner, dokumentierte Admin-Anleitung für eine löschgeschützte Ablage über einen Nextcloud Group Folder (`Delete = verweigert`) — siehe ADR-0021.
+
+Prüfkriterien: Jeder der fünf Belegtypen erzeugt beim jeweiligen “Fixieren”-Schritt ein echtes PDF im Projektordner. Dateiname enthält Belegnummer und Zeitstempel. Bestehende Tests und der bisherige Rechnungs-HTML-Export laufen sauber auf PDF um, ohne alte Belege rückwirkend zu verändern. Die Löschschutz-Empfehlung ist in `docs/status.md` dokumentiert, nicht automatisiert (bewusst, siehe ADR-0021).
+
+## Phase 13 — Web-Reifegrad und Stabilisierung
 
 Ziel: Das Nextcloud-Add-on wird reif genug, bevor Flutter gebaut wird.
 
 Ergebnisse: Web-UI vollständig nutzbar für Kernprozesse, API stabil genug dokumentiert, Datenmodell migrationssicher, Docker-Testumgebung stabil, Tests auf mehreren Maschinen reproduzierbar, Rollen/Rechte getestet, Backup-/Restore-Verhalten geprüft, Sicherheitsreview, Lizenz-/Dependency-Review.
 
-Prüfkriterien für „fertig/reif genug für Flutter“: Web-ERP kann Kernprozesse ohne Flutter abbilden. API-Endpunkte für Flutter-MVP sind versioniert und getestet. Offline-/Sync-Regeln sind dokumentiert. Rechteprüfung funktioniert serverseitig. Es gibt Testdaten für Monteur-/Projektleiter-Szenarien. Docker-Setup läuft reproduzierbar auf mindestens zwei unterschiedlichen Maschinen.
+Prüfkriterien für „fertig/reif genug für Flutter”: Web-ERP kann Kernprozesse ohne Flutter abbilden. API-Endpunkte für Flutter-MVP sind versioniert und getestet. Offline-/Sync-Regeln sind dokumentiert. Rechteprüfung funktioniert serverseitig. Es gibt Testdaten für Monteur-/Projektleiter-Szenarien. Docker-Setup läuft reproduzierbar auf mindestens zwei unterschiedlichen Maschinen.
 
-## Phase 13 — Flutter-Vorbereitung
+## Phase 14 — Flutter-Vorbereitung
 
 Ziel: Flutter konkret bauen können, ohne Web-ERP umzubauen.
 
@@ -326,7 +335,7 @@ Ergebnisse: Flutter-MVP-Scope finalisieren, API-Endpunkte für Flutter-MVP einfr
 
 Prüfkriterien: Flutter kann gegen eine stabile Test-API entwickelt werden. Flutter muss keine Geschäftslogik duplizieren. Offline-Rechte sind serverseitig prüfbar.
 
-## Phase 14 — Flutter-MVP
+## Phase 15 — Flutter-MVP
 
 Ziel: Reduzierter Monteur-/Unterwegs-Client.
 
