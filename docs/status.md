@@ -689,6 +689,20 @@ in allen vier neuen Ansichten sowie als neue Spalte bei den Gutschriften,
 Link-Ziel (`/f/<fileId>`) stimmt mit der zuvor per curl erzeugten Datei
 überein, keine Konsolenfehler.
 
+**Nachbesserung (noch am selben Tag, direktes Nutzerfeedback):** Bei
+Angebot und Auftrag war die PDF-Erzeugung ursprünglich nur indirekt über
+den generischen Status-Dropdown + "Speichern" auslösbar — beim ersten
+eigenen Test fand Kay dafür keinen erkennbaren Button ("Wo ist der
+Button, damit ich das PDF erstellen kann?"). Rechnung/Lieferschein/
+Gutschrift hatten dagegen von Anfang an einen dedizierten
+"… ausstellen"-Button. Angebot und Auftrag bekamen nachträglich denselben
+Musterbutton, bewusst **"PDF erstellen"** benannt statt z. B. "Angebot
+versenden" — Kays Einwand: ein "versenden"-Button suggeriert fälschlich,
+dass die App die Zustellung an den Kunden übernimmt, dabei erzeugt er nur
+das Dokument; der Statuswechsel auf `sent`/`confirmed` passiert weiterhin
+serverseitig als Folge des Klicks, nicht als dessen Ursache. Per
+Playwright-Klicktest gegen Kays echte "Elektro"-Angebotsdaten bestätigt.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/

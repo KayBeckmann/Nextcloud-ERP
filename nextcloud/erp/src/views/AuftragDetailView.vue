@@ -72,6 +72,8 @@
 					<input v-model="newGroupTitle" placeholder="Neue Positionsgruppe" required>
 					<button type="submit">+ Gruppe</button>
 				</form>
+
+				<button v-if="order.status === 'draft'" class="erp-order-detail__issue" @click="generateDocument">PDF erstellen</button>
 			</section>
 
 			<section v-if="order.calculation" class="erp-order-detail__summary">
@@ -259,6 +261,14 @@ export default {
 			await removeOrderPosition(this.id, positionId)
 			await this.load()
 		},
+		async generateDocument() {
+			try {
+				await updateOrder(this.order.projectId, this.id, { ...this.edit, status: 'confirmed' })
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
 		toggleDeliveryNoteMode() {
 			this.deliveryNoteMode = !this.deliveryNoteMode
 			this.invoiceMode = false
@@ -380,5 +390,6 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-order-detail__convert-form { margin-top: 12px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 600px; }
 .erp-order-detail__convert-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .erp-order-detail__convert-note { color: var(--color-text-maxcontrast); font-size: 12px; }
+.erp-order-detail__issue { margin-top: 8px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 </style>

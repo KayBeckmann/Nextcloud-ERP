@@ -72,6 +72,8 @@
 					<input v-model="newGroupTitle" placeholder="Neue Positionsgruppe" required>
 					<button type="submit">+ Gruppe</button>
 				</form>
+
+				<button v-if="quote.status === 'draft'" class="erp-quote-detail__issue" @click="generateDocument">PDF erstellen</button>
 			</section>
 
 			<section v-if="quote.calculation" class="erp-quote-detail__summary">
@@ -194,6 +196,20 @@ export default {
 			await removePosition(this.id, id)
 			await this.load()
 		},
+		async generateDocument() {
+			try {
+				await updateQuote(this.id, {
+					title: this.edit.title,
+					status: 'sent',
+					projectId: this.quote.projectId,
+					customerContactUid: this.edit.customerContactUid || null,
+					notes: this.edit.notes || null,
+				})
+				await this.load()
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
 		async createOrder() {
 			try {
 				const order = await createOrderFromQuote({ quoteId: this.id })
@@ -229,5 +245,6 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-quote-detail__position-form, .erp-quote-detail__group-form { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .erp-quote-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-quote-detail__gross { font-size: 16px; }
+.erp-quote-detail__issue { margin-top: 8px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 </style>
