@@ -40,13 +40,29 @@
 				<table class="erp-delivery-notes__table">
 					<thead><tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th></th></tr></thead>
 					<tbody>
-						<tr v-for="p in g.positions" :key="p.id">
-							<td>{{ typeLabel(p.positionType) }}</td>
-							<td>{{ p.description }}</td>
-							<td>{{ p.quantity }}</td>
-							<td>{{ p.unit }}</td>
-							<td><button v-if="selected.status === 'draft'" @click="removePos(p.id)">✕</button></td>
-						</tr>
+						<template v-for="p in g.positions" :key="p.id">
+							<tr v-if="editingPositionId !== p.id">
+								<td>{{ typeLabel(p.positionType) }}</td>
+								<td>{{ p.description }}</td>
+								<td>{{ p.quantity }}</td>
+								<td>{{ p.unit }}</td>
+								<td v-if="selected.status === 'draft'">
+									<button @click="startEditPos(p)">✎</button>
+									<button @click="removePos(p.id)">✕</button>
+								</td>
+								<td v-else></td>
+							</tr>
+							<tr v-else class="erp-delivery-notes__edit-row">
+								<td>{{ typeLabel(p.positionType) }}</td>
+								<td><input v-model="editPosition.description"></td>
+								<td><input v-model.number="editPosition.quantity" type="number" step="0.01" style="max-width:70px"></td>
+								<td><input v-model="editPosition.unit" style="max-width:60px"></td>
+								<td>
+									<button @click="saveEditPos(p.id)">✓</button>
+									<button @click="cancelEditPos">✕</button>
+								</td>
+							</tr>
+						</template>
 					</tbody>
 				</table>
 			</div>
@@ -107,7 +123,7 @@
 <script>
 import {
 	fetchDeliveryNotes, createDeliveryNote, fetchDeliveryNote,
-	addDeliveryNoteGroup, addDeliveryNotePosition, removeDeliveryNotePosition, issueDeliveryNote,
+	addDeliveryNoteGroup, addDeliveryNotePosition, updateDeliveryNotePosition, removeDeliveryNotePosition, issueDeliveryNote,
 } from '../services/deliveryNotesApi.js'
 import { createInvoiceFromDeliveryNote } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
@@ -134,6 +150,8 @@ export default {
 			invoiceSelection: {},
 			invoiceForm: { title: '', type: 'invoice' },
 			convertError: null,
+			editingPositionId: null,
+			editPosition: {},
 		}
 	},
 	computed: {
@@ -213,6 +231,22 @@ export default {
 			await removeDeliveryNotePosition(this.selected.id, id)
 			this.selected = await fetchDeliveryNote(this.selected.id)
 		},
+		startEditPos(p) {
+			this.editingPositionId = p.id
+			this.editPosition = { description: p.description, quantity: p.quantity, unit: p.unit }
+		},
+		cancelEditPos() {
+			this.editingPositionId = null
+		},
+		async saveEditPos(id) {
+			try {
+				await updateDeliveryNotePosition(this.selected.id, id, this.editPosition)
+				this.editingPositionId = null
+				this.selected = await fetchDeliveryNote(this.selected.id)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
 		async doIssue() {
 			try {
 				await issueDeliveryNote(this.selected.id)
@@ -270,6 +304,7 @@ export default {
 .erp-delivery-notes__error { color: var(--color-error-text, #c00); }
 .erp-delivery-notes__table { border-collapse: collapse; width: 100%; max-width: 900px; margin-bottom: 10px; }
 .erp-delivery-notes__table th, .erp-delivery-notes__table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+.erp-delivery-notes__edit-row input { width: 100%; }
 .erp-delivery-notes__row { cursor: pointer; }
 .erp-delivery-notes__row:hover { background: var(--color-background-hover); }
 .erp-delivery-notes__document { margin: 8px 0 16px; }

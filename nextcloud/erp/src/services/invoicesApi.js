@@ -44,8 +44,18 @@ export async function addInvoicePosition(invoiceId, payload) {
 	return data.ocs.data
 }
 
+export async function updateInvoicePosition(invoiceId, id, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/invoices/{invoiceId}/positions/{id}', { invoiceId, id }), payload)
+	return data.ocs.data
+}
+
 export async function removeInvoicePosition(invoiceId, id) {
 	await axios.delete(generateOcsUrl('apps/erp/api/v1/invoices/{invoiceId}/positions/{id}', { invoiceId, id }))
+}
+
+export async function updateInvoiceDiscount(id, discountPercent) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/invoices/{id}/discount', { id }), { discountPercent })
+	return data.ocs.data
 }
 
 export async function issueInvoice(id) {
@@ -80,6 +90,11 @@ export async function createPartialCreditNote(invoiceId, reason) {
 
 export async function addCreditNotePosition(creditNoteId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/credit-notes/{creditNoteId}/positions', { creditNoteId }), payload)
+	return data.ocs.data
+}
+
+export async function updateCreditNotePosition(creditNoteId, id, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/credit-notes/{creditNoteId}/positions/{id}', { creditNoteId, id }), payload)
 	return data.ocs.data
 }
 

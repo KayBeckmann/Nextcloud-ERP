@@ -37,6 +37,11 @@ export async function addOrderPosition(orderId, payload) {
 	return data.ocs.data
 }
 
+export async function updateOrderPosition(orderId, id, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/orders/{orderId}/positions/{id}', { orderId, id }), payload)
+	return data.ocs.data
+}
+
 export async function removeOrderPosition(orderId, id) {
 	await axios.delete(generateOcsUrl('apps/erp/api/v1/orders/{orderId}/positions/{id}', { orderId, id }))
 }

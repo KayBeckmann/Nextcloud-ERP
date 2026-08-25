@@ -15,6 +15,13 @@
 				<p v-if="invoice.quoteId"><strong>Aus Angebot:</strong> #{{ invoice.quoteId }}</p>
 				<p><strong>Bezahlt:</strong> {{ formatMoney(invoice.paidAmount) }} / {{ invoice.calculation ? formatMoney(invoice.calculation.grossTotal) : '—' }}</p>
 				<p v-if="invoice.documentFileId"><a :href="openInFilesUrl(invoice.documentFileId)" target="_blank" rel="noopener">Rechnungsdokument öffnen</a></p>
+				<p v-if="invoice.status === 'draft'" class="erp-invoice-detail__discount">
+					<label>Rabatt auf gesamte Rechnung
+						<input v-model.number="discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:100px"> %
+					</label>
+					<button @click="saveDiscount">Speichern</button>
+				</p>
+				<p v-else-if="invoice.discountPercent > 0"><strong>Rabatt:</strong> {{ invoice.discountPercent }} %</p>
 			</section>
 
 			<section v-if="invoice.documentFileId" class="erp-invoice-detail__document">
@@ -26,19 +33,44 @@
 					<h3>{{ g.title }}</h3>
 					<table>
 						<thead>
-							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th><th></th></tr>
+							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>Rabatt</th><th>MwSt.</th><th>Gesamt netto</th><th></th></tr>
 						</thead>
 						<tbody>
-							<tr v-for="p in g.positions" :key="p.id">
-								<td>{{ typeLabel(p.positionType) }}</td>
-								<td>{{ p.description }}</td>
-								<td>{{ p.quantity }}</td>
-								<td>{{ p.unit }}</td>
-								<td>{{ formatMoney(p.unitPriceNet) }}</td>
-								<td>{{ p.vatRatePercent }}%</td>
-								<td>{{ formatMoney(p.netTotal) }}</td>
-								<td><button v-if="invoice.status === 'draft'" @click="removePos(p.id)">✕</button></td>
-							</tr>
+							<template v-for="p in g.positions" :key="p.id">
+								<tr v-if="editingPositionId !== p.id">
+									<td>{{ typeLabel(p.positionType) }}</td>
+									<td>{{ p.description }}</td>
+									<td>{{ p.quantity }}</td>
+									<td>{{ p.unit }}</td>
+									<td>{{ formatMoney(p.unitPriceNet) }}</td>
+									<td>{{ p.discountPercent > 0 ? p.discountPercent + ' %' : '—' }}</td>
+									<td>{{ p.vatRatePercent }}%</td>
+									<td>{{ formatMoney(p.netTotal) }}</td>
+									<td v-if="invoice.status === 'draft'">
+										<button @click="startEditPos(p)">✎</button>
+										<button @click="removePos(p.id)">✕</button>
+									</td>
+									<td v-else></td>
+								</tr>
+								<tr v-else class="erp-invoice-detail__edit-row">
+									<td>{{ typeLabel(p.positionType) }}</td>
+									<td><input v-model="editPosition.description"></td>
+									<td><input v-model.number="editPosition.quantity" type="number" step="0.01" style="max-width:70px"></td>
+									<td><input v-model="editPosition.unit" style="max-width:60px"></td>
+									<td><input v-model.number="editPosition.unitPriceNet" type="number" step="0.01" style="max-width:80px"></td>
+									<td><input v-model.number="editPosition.discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:60px"></td>
+									<td>
+										<select v-model.number="editPosition.vatRatePercent">
+											<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
+										</select>
+									</td>
+									<td>—</td>
+									<td>
+										<button @click="saveEditPos(p.id)">✓</button>
+										<button @click="cancelEditPos">✕</button>
+									</td>
+								</tr>
+							</template>
 						</tbody>
 					</table>
 				</div>
@@ -74,6 +106,10 @@
 
 			<section v-if="invoice.calculation" class="erp-invoice-detail__summary">
 				<h3>Abschlussblock</h3>
+				<p v-if="invoice.calculation.documentDiscountAmount > 0">
+					Zwischensumme netto: {{ formatMoney(invoice.calculation.netSubtotalBeforeDiscount) }}<br>
+					Rabatt: -{{ formatMoney(invoice.calculation.documentDiscountAmount) }}
+				</p>
 				<p>Netto-Zwischensumme: <strong>{{ formatMoney(invoice.calculation.netSubtotal) }}</strong></p>
 				<p v-for="v in invoice.calculation.vatBreakdown" :key="v.ratePercent">
 					+ MwSt. {{ v.ratePercent }}% auf {{ formatMoney(v.netBase) }}: {{ formatMoney(v.vatAmount) }}
@@ -142,8 +178,8 @@
 <script>
 import { generateUrl } from '@nextcloud/router'
 import {
-	fetchInvoice, addInvoiceGroup, addInvoicePosition, removeInvoicePosition, issueInvoice, recordInvoicePayment,
-	fetchCreditNotes, createFullCancellation, createPartialCreditNote, addCreditNotePosition, issueCreditNote,
+	fetchInvoice, addInvoiceGroup, addInvoicePosition, updateInvoicePosition, removeInvoicePosition, issueInvoice, recordInvoicePayment,
+	fetchCreditNotes, createFullCancellation, createPartialCreditNote, addCreditNotePosition, issueCreditNote, updateInvoiceDiscount,
 } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
 
@@ -165,6 +201,9 @@ export default {
 			newGroupTitle: '',
 			paymentAmount: null,
 			partialCreditNote: { reason: '', description: '', quantity: 1, unitPriceNet: 0 },
+			editingPositionId: null,
+			editPosition: {},
+			discountPercent: 0,
 		}
 	},
 	computed: {
@@ -220,6 +259,7 @@ export default {
 			try {
 				this.invoice = await fetchInvoice(this.id)
 				this.creditNotes = await fetchCreditNotes(this.id)
+				this.discountPercent = this.invoice.discountPercent ?? 0
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
 			}
@@ -245,6 +285,37 @@ export default {
 		async removePos(positionId) {
 			await removeInvoicePosition(this.id, positionId)
 			await this.load()
+		},
+		startEditPos(p) {
+			this.editingPositionId = p.id
+			this.editPosition = {
+				description: p.description,
+				quantity: p.quantity,
+				unit: p.unit,
+				unitPriceNet: p.unitPriceNet,
+				vatRatePercent: p.vatRatePercent,
+				discountPercent: p.discountPercent || 0,
+			}
+		},
+		cancelEditPos() {
+			this.editingPositionId = null
+		},
+		async saveEditPos(id) {
+			try {
+				await updateInvoicePosition(this.id, id, this.editPosition)
+				this.editingPositionId = null
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async saveDiscount() {
+			try {
+				await updateInvoiceDiscount(this.id, this.discountPercent || 0)
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
 		},
 		async doIssue() {
 			try {
@@ -308,6 +379,8 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__positions table, .erp-invoice-detail__credit-notes table { width: 100%; border-collapse: collapse; }
 .erp-invoice-detail__positions th, .erp-invoice-detail__positions td,
 .erp-invoice-detail__credit-notes th, .erp-invoice-detail__credit-notes td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.erp-invoice-detail__edit-row input, .erp-invoice-detail__edit-row select { width: 100%; }
+.erp-invoice-detail__discount label { display: inline-block; margin-right: 8px; }
 .erp-invoice-group { margin-bottom: 16px; }
 .erp-invoice-detail__position-form, .erp-invoice-detail__group-form, .erp-invoice-detail__payment-form, .erp-invoice-detail__credit-note-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
 .erp-invoice-detail__issue { margin-top: 8px; }

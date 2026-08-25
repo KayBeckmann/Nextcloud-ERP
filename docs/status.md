@@ -724,6 +724,54 @@ die kompilierte Routentabelle cacht; ein einfacher Container-Neustart
 (kein Code- oder Config-Fehler) hat den Cache geleert und die neue Route
 sofort greifen lassen.
 
+## 2026-08-25 — Phase 13 (Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte)
+
+Direktes Nutzerfeedback nach dem ersten eigenen Test von Phase 12: "Das
+Angebot ist so nicht zu gebrauchen" — Firmenname, Kundendaten, Datum,
+Bindefrist fehlten im PDF; Gruppen wurden nicht angezeigt; Positionen
+waren nur lösch-, nicht editierbar; kein Rabattkonzept. ADR-0022.
+
+**Erledigt:**
+
+- Firmenprofil (Name/Anschrift/USt-IdNr./Kontakt/Freitext-Fußzeile) als
+  neue Singleton-Tabelle `erp_company_profile`, verwaltet unter
+  Einstellungen (`CompanyProfileService`/-`Controller`).
+- `ContactsService::detailsFor()` liest jetzt auch die Kundenanschrift
+  aus dem vCard-`ADR`-Feld — keine eigene Adress-Datenhaltung im ERP.
+- Neuer gemeinsamer `DocumentHtmlBuilder` (Firmenkopf, Kundenblock,
+  gruppierte Positionstabelle, Summenblock mit Rabattzeile, Fußzeile) —
+  alle fünf `*Service::renderHtml()` nutzen dieselben Bausteine. Angebot
+  zeigt zusätzlich die Bindefrist.
+- `discountPercent` (float, 0–100) auf allen preisführenden Positionen
+  (Quote/Order/Invoice/CreditNote) sowie auf Quote/Order/Invoice selbst
+  (nicht auf CreditNote/DeliveryNote). `QuoteCalculationService` rechnet
+  Positionsrabatt vor der MwSt. und einen Belegrabatt anteilig je
+  MwSt.-Satz-Bucket ein, damit die Aufteilung bei gemischten Steuersätzen
+  korrekt bleibt.
+- Neuer `updatePosition()`-Endpunkt (PUT) für alle fünf Belegtypen —
+  Positionen sind jetzt editierbar statt nur lösch-/neu-anlegbar.
+  Invoice bekommt zusätzlich einen schmalen `updateDiscount()`-Endpunkt
+  (kein generisches `update()` vorhanden).
+- Frontend: Rabattfeld im Meta-Bereich (Angebot/Auftrag/Rechnung),
+  Rabatt-Spalte + Inline-Bearbeitung (✎/✓/✕ pro Zeile) in allen
+  Positionstabellen, Firmenprofil-Formular unter Einstellungen.
+- 6 Testklassen (5 Service-Tests + ReportingServiceTest) bekommen die
+  neue `DocumentHtmlBuilder`-Konstruktor-Dependency. **276 Tests.**
+
+**Verifiziert:** PDF-Bytes real dekomprimiert und Text extrahiert —
+Firmenname/-anschrift/USt-IdNr./Kontakt, echte Kundenanschrift aus einem
+Nextcloud-Kontakt, Datum, Bindefrist, Gruppentitel als Zwischen-
+überschrift, Rabattzeile mit korrekter Netto-/MwSt.-/Bruttoberechnung,
+Fußzeile — alles im gerenderten PDF bestätigt. Per Playwright gegen Kays
+echte "Elektro"-Angebotsdaten: Rabattfeld sichtbar, Rabatt-Spalte
+sichtbar, Inline-Bearbeitung einer Position funktioniert End-to-End
+(Testwert nach Verifikation wieder auf den Originalwert zurückgesetzt).
+
+**Bekannt, bewusst nicht behoben:** Editierbare Positionen bei
+Angebot/Auftrag sind serverseitig nicht auf `draft` beschränkt (dieselbe
+bereits vorher bestehende Lücke wie beim Löschen). Gutschrift-Positionen
+sind per API editierbar, aber ohne UI dafür.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
@@ -757,10 +805,22 @@ sofort greifen lassen.
 - Pausenregeln nach ArbZG (§4) sind nicht abgebildet — `breakMinutes` ist
   reine Erfassung ohne automatische Prüfung (ADR-0012).
 - Echter PDF-Export für alle fünf Belegtypen ist seit Phase 12 vorhanden
-  (ADR-0021). Weiterhin offen: kein XRechnung/ZUGFeRD, keine vollständige
-  § 14 UStG-Pflichtangaben-Prüfung (fehlende Firmenstammdaten-Entität) —
-  siehe ADR-0013. **Vor produktivem Rechnungsversand an Kunden zwingend
-  nachzuziehen.**
+  (ADR-0021), seit Phase 13 mit Firmenkopf, Kundenanschrift, Datum,
+  Bindefrist (Angebot), gruppierten Positionen und Rabattzeilen (ADR-0022).
+  Weiterhin offen: kein XRechnung/ZUGFeRD, keine vollständige § 14
+  UStG-Pflichtangaben-*Prüfung* (die Felder lassen sich zwar im
+  Firmenprofil pflegen, es gibt aber keine automatische Vollständigkeits-
+  kontrolle) — siehe ADR-0013. **Vor produktivem Rechnungsversand an
+  Kunden zwingend gegenzuprüfen.**
+- Gutschrift-Positionen sind zwar per API editierbar (`updatePosition`,
+  ADR-0022), aber ohne UI dafür — die Rechnungsansicht bietet für
+  Gutschriften bislang nur das Anlegen, kein Bearbeiten einzelner
+  Positionen.
+- Editierbare Positionen (Menge/Preis/Rabatt) sind bei Angebot/Auftrag
+  serverseitig nicht auf den Entwurfsstatus beschränkt (anders als bei
+  Rechnung/Lieferschein) — dieselbe bereits vorher bestehende
+  Inkonsistenz wie beim Löschen einzelner Positionen, durch ADR-0022
+  nicht neu eingeführt, aber auch nicht behoben.
 - Kein Zahlungsjournal mit Einzelbuchungen (Datum/Referenz je
   Teilzahlung, Mahnwesen) — nur ein laufender `paid_amount`-Betrag.
 - Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.

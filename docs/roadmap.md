@@ -30,7 +30,8 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 10 — Betriebliche Kosten und Kalkulation
 - [x] Phase 11 — Auswertungen, Dashboard, Exporte
 - [x] Phase 12 — Beleg-PDF-Export und Dokumentenarchiv
-- [ ] Phase 13–16 — noch nicht begonnen — **Phase 13 nächster Schritt**
+- [x] Phase 13 — Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte
+- [ ] Phase 14–16 — noch nicht begonnen — **Phase 14 nächster Schritt**
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 

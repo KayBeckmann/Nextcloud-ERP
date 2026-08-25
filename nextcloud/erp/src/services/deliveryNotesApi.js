@@ -32,6 +32,11 @@ export async function addDeliveryNotePosition(deliveryNoteId, payload) {
 	return data.ocs.data
 }
 
+export async function updateDeliveryNotePosition(deliveryNoteId, id, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/delivery-notes/{deliveryNoteId}/positions/{id}', { deliveryNoteId, id }), payload)
+	return data.ocs.data
+}
+
 export async function removeDeliveryNotePosition(deliveryNoteId, id) {
 	await axios.delete(generateOcsUrl('apps/erp/api/v1/delivery-notes/{deliveryNoteId}/positions/{id}', { deliveryNoteId, id }))
 }

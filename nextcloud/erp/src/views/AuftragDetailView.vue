@@ -23,6 +23,7 @@
 				<label>Kunde <ContactPicker v-model="edit.customerContactUid" placeholder="Kunde suchen …" /></label>
 				<label>Zugewiesener Mitarbeiter <UserPicker v-model="edit.assignedUserId" placeholder="Mitarbeiter suchen …" /></label>
 				<label>Beschreibung <textarea v-model="edit.description" rows="2"></textarea></label>
+				<label>Rabatt auf gesamten Auftrag <input v-model.number="edit.discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:100px"> %</label>
 				<button @click="save">Speichern</button>
 			</section>
 
@@ -31,20 +32,45 @@
 					<h3>{{ g.title }}</h3>
 					<table>
 						<thead>
-							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Berechnet</th><th>Geliefert</th><th></th></tr>
+							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>Rabatt</th><th>MwSt.</th><th>Berechnet</th><th>Geliefert</th><th></th></tr>
 						</thead>
 						<tbody>
-							<tr v-for="p in g.positions" :key="p.id">
-								<td>{{ typeLabel(p.positionType) }}</td>
-								<td>{{ p.description }}</td>
-								<td>{{ p.quantity }}</td>
-								<td>{{ p.unit }}</td>
-								<td>{{ formatMoney(p.unitPriceNet) }}</td>
-								<td>{{ p.vatRatePercent }}%</td>
-								<td>{{ p.invoicedQuantity }} / {{ p.quantity }}</td>
-								<td>{{ p.deliveredQuantity }} / {{ p.quantity }}</td>
-								<td><button @click="removePos(p.id)">✕</button></td>
-							</tr>
+							<template v-for="p in g.positions" :key="p.id">
+								<tr v-if="editingPositionId !== p.id">
+									<td>{{ typeLabel(p.positionType) }}</td>
+									<td>{{ p.description }}</td>
+									<td>{{ p.quantity }}</td>
+									<td>{{ p.unit }}</td>
+									<td>{{ formatMoney(p.unitPriceNet) }}</td>
+									<td>{{ p.discountPercent > 0 ? p.discountPercent + ' %' : '—' }}</td>
+									<td>{{ p.vatRatePercent }}%</td>
+									<td>{{ p.invoicedQuantity }} / {{ p.quantity }}</td>
+									<td>{{ p.deliveredQuantity }} / {{ p.quantity }}</td>
+									<td>
+										<button @click="startEditPos(p)">✎</button>
+										<button @click="removePos(p.id)">✕</button>
+									</td>
+								</tr>
+								<tr v-else class="erp-order-detail__edit-row">
+									<td>{{ typeLabel(p.positionType) }}</td>
+									<td><input v-model="editPosition.description"></td>
+									<td><input v-model.number="editPosition.quantity" type="number" step="0.01" style="max-width:70px"></td>
+									<td><input v-model="editPosition.unit" style="max-width:60px"></td>
+									<td><input v-model.number="editPosition.unitPriceNet" type="number" step="0.01" style="max-width:80px"></td>
+									<td><input v-model.number="editPosition.discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:60px"></td>
+									<td>
+										<select v-model.number="editPosition.vatRatePercent">
+											<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
+										</select>
+									</td>
+									<td>—</td>
+									<td>—</td>
+									<td>
+										<button @click="saveEditPos(p.id)">✓</button>
+										<button @click="cancelEditPos">✕</button>
+									</td>
+								</tr>
+							</template>
 						</tbody>
 					</table>
 				</div>
@@ -81,6 +107,10 @@
 
 			<section v-if="order.calculation" class="erp-order-detail__summary">
 				<h3>Abschlussblock</h3>
+				<p v-if="order.calculation.documentDiscountAmount > 0">
+					Zwischensumme netto: {{ formatMoney(order.calculation.netSubtotalBeforeDiscount) }}<br>
+					Rabatt: -{{ formatMoney(order.calculation.documentDiscountAmount) }}
+				</p>
 				<p>Netto-Zwischensumme: <strong>{{ formatMoney(order.calculation.netSubtotal) }}</strong></p>
 				<p class="erp-order-detail__gross">Brutto-Gesamt: <strong>{{ formatMoney(order.calculation.grossTotal) }}</strong></p>
 			</section>
@@ -136,7 +166,7 @@
 </template>
 
 <script>
-import { fetchOrder, updateOrder, addOrderGroup, addOrderPosition, removeOrderPosition } from '../services/ordersApi.js'
+import { fetchOrder, updateOrder, addOrderGroup, addOrderPosition, updateOrderPosition, removeOrderPosition } from '../services/ordersApi.js'
 import { createDeliveryNoteFromOrder } from '../services/deliveryNotesApi.js'
 import { createInvoice, createInvoiceFromOrder, addInvoicePosition } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
@@ -161,10 +191,12 @@ export default {
 			loadError: null,
 			convertError: null,
 			convertSuccess: null,
-			edit: { title: '', status: 'draft', customerContactUid: null, assignedUserId: null, description: '' },
+			edit: { title: '', status: 'draft', customerContactUid: null, assignedUserId: null, description: '', discountPercent: 0 },
 			statusOptions: Object.keys(STATUS_LABELS),
 			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
 			newGroupTitle: '',
+			editingPositionId: null,
+			editPosition: {},
 			deliveryNoteMode: false,
 			dnSelection: {},
 			dnNotes: '',
@@ -232,6 +264,7 @@ export default {
 					customerContactUid: this.order.customerContactUid ?? null,
 					assignedUserId: this.order.assignedUserId ?? null,
 					description: this.order.description ?? '',
+					discountPercent: this.order.discountPercent ?? 0,
 				}
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -266,6 +299,29 @@ export default {
 		async removePos(positionId) {
 			await removeOrderPosition(this.id, positionId)
 			await this.load()
+		},
+		startEditPos(p) {
+			this.editingPositionId = p.id
+			this.editPosition = {
+				description: p.description,
+				quantity: p.quantity,
+				unit: p.unit,
+				unitPriceNet: p.unitPriceNet,
+				vatRatePercent: p.vatRatePercent,
+				discountPercent: p.discountPercent || 0,
+			}
+		},
+		cancelEditPos() {
+			this.editingPositionId = null
+		},
+		async saveEditPos(id) {
+			try {
+				await updateOrderPosition(this.id, id, this.editPosition)
+				this.editingPositionId = null
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
 		},
 		async generateDocument() {
 			try {
@@ -387,6 +443,7 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-order-detail__meta input, .erp-order-detail__meta select, .erp-order-detail__meta textarea { width: 100%; max-width: 400px; }
 .erp-order-detail__positions table { width: 100%; border-collapse: collapse; }
 .erp-order-detail__positions th, .erp-order-detail__positions td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.erp-order-detail__edit-row input, .erp-order-detail__edit-row select { width: 100%; }
 .erp-order-group { margin-bottom: 16px; }
 .erp-order-detail__position-form, .erp-order-detail__group-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
 .erp-order-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }

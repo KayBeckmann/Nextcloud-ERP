@@ -23,6 +23,7 @@
 				</label>
 				<label>Kunde <ContactPicker v-model="edit.customerContactUid" placeholder="Kunde suchen …" /></label>
 				<label>Notizen <textarea v-model="edit.notes" rows="2"></textarea></label>
+				<label>Rabatt auf gesamtes Angebot <input v-model.number="edit.discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:100px"> %</label>
 				<button @click="save">Speichern</button>
 				<span v-if="quote.sentAt" class="erp-quote-detail__hint">Versendet am {{ formatDate(quote.sentAt) }} — Preise/Sätze sind ab Hinzufügen der jeweiligen Position festgeschrieben.</span>
 			</section>
@@ -32,19 +33,43 @@
 					<h3>{{ g.title }} <span class="erp-quote-group__total">{{ formatMoney(g.netTotal) }}</span></h3>
 					<table>
 						<thead>
-							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th><th></th></tr>
+							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>Rabatt</th><th>MwSt.</th><th>Gesamt netto</th><th></th></tr>
 						</thead>
 						<tbody>
-							<tr v-for="p in g.positions" :key="p.id">
-								<td>{{ typeLabel(p.positionType) }}</td>
-								<td>{{ p.description }}</td>
-								<td>{{ p.quantity }}</td>
-								<td>{{ p.unit }}</td>
-								<td>{{ formatMoney(p.unitPriceNet) }}</td>
-								<td>{{ p.vatRatePercent }}%</td>
-								<td>{{ formatMoney(p.netTotal) }}</td>
-								<td><button @click="removePos(p.id)">✕</button></td>
-							</tr>
+							<template v-for="p in g.positions" :key="p.id">
+								<tr v-if="editingPositionId !== p.id">
+									<td>{{ typeLabel(p.positionType) }}</td>
+									<td>{{ p.description }}</td>
+									<td>{{ p.quantity }}</td>
+									<td>{{ p.unit }}</td>
+									<td>{{ formatMoney(p.unitPriceNet) }}</td>
+									<td>{{ p.discountPercent > 0 ? p.discountPercent + ' %' : '—' }}</td>
+									<td>{{ p.vatRatePercent }}%</td>
+									<td>{{ formatMoney(p.netTotal) }}</td>
+									<td>
+										<button @click="startEditPos(p)">✎</button>
+										<button @click="removePos(p.id)">✕</button>
+									</td>
+								</tr>
+								<tr v-else class="erp-quote-detail__edit-row">
+									<td>{{ typeLabel(p.positionType) }}</td>
+									<td><input v-model="editPosition.description"></td>
+									<td><input v-model.number="editPosition.quantity" type="number" step="0.01" style="max-width:70px"></td>
+									<td><input v-model="editPosition.unit" style="max-width:60px"></td>
+									<td><input v-model.number="editPosition.unitPriceNet" type="number" step="0.01" style="max-width:80px"></td>
+									<td><input v-model.number="editPosition.discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:60px"></td>
+									<td>
+										<select v-model.number="editPosition.vatRatePercent">
+											<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
+										</select>
+									</td>
+									<td>—</td>
+									<td>
+										<button @click="saveEditPos(p.id)">✓</button>
+										<button @click="cancelEditPos">✕</button>
+									</td>
+								</tr>
+							</template>
 						</tbody>
 					</table>
 				</div>
@@ -81,6 +106,10 @@
 
 			<section v-if="quote.calculation" class="erp-quote-detail__summary">
 				<h3>Abschlussblock</h3>
+				<p v-if="quote.calculation.documentDiscountAmount > 0">
+					Zwischensumme netto: {{ formatMoney(quote.calculation.netSubtotalBeforeDiscount) }}<br>
+					Rabatt: -{{ formatMoney(quote.calculation.documentDiscountAmount) }}
+				</p>
 				<p>Netto-Zwischensumme: <strong>{{ formatMoney(quote.calculation.netSubtotal) }}</strong></p>
 				<p v-for="v in quote.calculation.vatBreakdown" :key="v.ratePercent">
 					+ MwSt. {{ v.ratePercent }}% auf {{ formatMoney(v.netBase) }}: {{ formatMoney(v.vatAmount) }}
@@ -92,7 +121,7 @@
 </template>
 
 <script>
-import { addGroup, addPosition, fetchQuote, removePosition, updateQuote } from '../services/quotesApi.js'
+import { addGroup, addPosition, fetchQuote, removePosition, updatePosition, updateQuote } from '../services/quotesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
 import { createInvoiceFromQuote } from '../services/invoicesApi.js'
 import { createOrderFromQuote } from '../services/ordersApi.js'
@@ -115,10 +144,12 @@ export default {
 			positions: [],
 			vatRates: [],
 			loadError: null,
-			edit: { title: '', status: 'draft', customerContactUid: null, notes: '' },
+			edit: { title: '', status: 'draft', customerContactUid: null, notes: '', discountPercent: 0 },
 			statusOptions: Object.keys(STATUS_LABELS),
 			newGroupTitle: '',
 			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			editingPositionId: null,
+			editPosition: {},
 		}
 	},
 	computed: {
@@ -173,6 +204,7 @@ export default {
 					status: full.status,
 					customerContactUid: full.customerContactUid ?? null,
 					notes: full.notes ?? '',
+					discountPercent: full.discountPercent ?? 0,
 				}
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
@@ -185,6 +217,7 @@ export default {
 				projectId: this.quote.projectId,
 				customerContactUid: this.edit.customerContactUid || null,
 				notes: this.edit.notes || null,
+				discountPercent: this.edit.discountPercent || 0,
 			})
 			await this.load()
 		},
@@ -202,6 +235,29 @@ export default {
 			await removePosition(this.id, id)
 			await this.load()
 		},
+		startEditPos(p) {
+			this.editingPositionId = p.id
+			this.editPosition = {
+				description: p.description,
+				quantity: p.quantity,
+				unit: p.unit,
+				unitPriceNet: p.unitPriceNet,
+				vatRatePercent: p.vatRatePercent,
+				discountPercent: p.discountPercent || 0,
+			}
+		},
+		cancelEditPos() {
+			this.editingPositionId = null
+		},
+		async saveEditPos(id) {
+			try {
+				await updatePosition(this.id, id, this.editPosition)
+				this.editingPositionId = null
+				await this.load()
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
 		async generateDocument() {
 			try {
 				await updateQuote(this.id, {
@@ -210,6 +266,7 @@ export default {
 					projectId: this.quote.projectId,
 					customerContactUid: this.edit.customerContactUid || null,
 					notes: this.edit.notes || null,
+					discountPercent: this.edit.discountPercent || 0,
 				})
 				await this.load()
 			} catch (e) {
@@ -248,6 +305,7 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-quote-group__total { font-weight: normal; color: var(--color-text-maxcontrast); font-size: 13px; }
 .erp-quote-group table { width: 100%; border-collapse: collapse; }
 .erp-quote-group th, .erp-quote-group td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.erp-quote-detail__edit-row input, .erp-quote-detail__edit-row select { width: 100%; }
 .erp-quote-detail__position-form, .erp-quote-detail__group-form { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .erp-quote-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-quote-detail__gross { font-size: 16px; }
