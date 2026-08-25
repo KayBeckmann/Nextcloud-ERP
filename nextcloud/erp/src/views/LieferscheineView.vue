@@ -30,7 +30,10 @@
 		<template v-else>
 			<button @click="selected = null">← Zurück zur Liste</button>
 			<h3>{{ selected.deliveryNoteNumber }} <span class="erp-status-badge" :class="`is-${selected.status}`">{{ selected.status === 'draft' ? 'Entwurf' : 'Ausgestellt' }}</span></h3>
-			<p v-if="selected.documentFileId"><a :href="openInFilesUrl(selected.documentFileId)" target="_blank" rel="noopener">Lieferschein-Dokument öffnen</a></p>
+			<div v-if="selected.documentFileId" class="erp-delivery-notes__document">
+				<p><a :href="openInFilesUrl(selected.documentFileId)" target="_blank" rel="noopener">Lieferschein-Dokument öffnen</a></p>
+				<iframe :src="documentPreviewUrl(selected.documentFileId)" class="erp-delivery-notes__pdf-frame" title="Lieferschein-Dokument"></iframe>
+			</div>
 
 			<div v-for="g in groupedPositions" :key="g.key" class="erp-delivery-note-group">
 				<h4>{{ g.title }}</h4>
@@ -158,6 +161,9 @@ export default {
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
 		},
+		documentPreviewUrl(fileId) {
+			return generateUrl(`/apps/erp/documents/${fileId}`)
+		},
 		errorMessage(e) {
 			return e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 		},
@@ -266,6 +272,8 @@ export default {
 .erp-delivery-notes__table th, .erp-delivery-notes__table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
 .erp-delivery-notes__row { cursor: pointer; }
 .erp-delivery-notes__row:hover { background: var(--color-background-hover); }
+.erp-delivery-notes__document { margin: 8px 0 16px; }
+.erp-delivery-notes__pdf-frame { width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--color-border); margin-top: 8px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 .erp-delivery-notes__convert { margin-top: 20px; }
 .erp-delivery-notes__convert-form { margin-top: 10px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 600px; display: flex; flex-direction: column; gap: 8px; }

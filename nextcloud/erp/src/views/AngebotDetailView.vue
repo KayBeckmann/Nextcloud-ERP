@@ -9,7 +9,10 @@
 				<button @click="createInvoice">Rechnung aus diesem Angebot erstellen</button>
 			</header>
 
-			<p v-if="quote.documentFileId"><a :href="openInFilesUrl(quote.documentFileId)" target="_blank" rel="noopener">Angebotsdokument öffnen</a></p>
+			<section v-if="quote.documentFileId" class="erp-quote-detail__document">
+				<p><a :href="openInFilesUrl(quote.documentFileId)" target="_blank" rel="noopener">Angebotsdokument öffnen</a></p>
+				<iframe :src="documentPreviewUrl(quote.documentFileId)" class="erp-quote-detail__pdf-frame" title="Angebotsdokument"></iframe>
+			</section>
 
 			<section class="erp-quote-detail__meta">
 				<label>Titel <input v-model="edit.title"></label>
@@ -147,6 +150,9 @@ export default {
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
 		},
+		documentPreviewUrl(fileId) {
+			return generateUrl(`/apps/erp/documents/${fileId}`)
+		},
 		typeLabel(type) {
 			return TYPE_LABELS[type] ?? type
 		},
@@ -246,5 +252,7 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-quote-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-quote-detail__gross { font-size: 16px; }
 .erp-quote-detail__issue { margin-top: 8px; }
+.erp-quote-detail__document { margin: 8px 0 16px; }
+.erp-quote-detail__pdf-frame { width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--color-border); margin-top: 8px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 </style>

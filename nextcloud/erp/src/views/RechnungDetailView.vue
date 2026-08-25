@@ -17,6 +17,10 @@
 				<p v-if="invoice.documentFileId"><a :href="openInFilesUrl(invoice.documentFileId)" target="_blank" rel="noopener">Rechnungsdokument öffnen</a></p>
 			</section>
 
+			<section v-if="invoice.documentFileId" class="erp-invoice-detail__document">
+				<iframe :src="documentPreviewUrl(invoice.documentFileId)" class="erp-invoice-detail__pdf-frame" title="Rechnungsdokument"></iframe>
+			</section>
+
 			<section class="erp-invoice-detail__positions">
 				<div v-for="g in groupedPositions" :key="g.key" class="erp-invoice-group">
 					<h3>{{ g.title }}</h3>
@@ -206,6 +210,9 @@ export default {
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
 		},
+		documentPreviewUrl(fileId) {
+			return generateUrl(`/apps/erp/documents/${fileId}`)
+		},
 		errorMessage(e) {
 			return e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 		},
@@ -304,6 +311,8 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-group { margin-bottom: 16px; }
 .erp-invoice-detail__position-form, .erp-invoice-detail__group-form, .erp-invoice-detail__payment-form, .erp-invoice-detail__credit-note-form { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
 .erp-invoice-detail__issue { margin-top: 8px; }
+.erp-invoice-detail__document { margin: 8px 0 16px; }
+.erp-invoice-detail__pdf-frame { width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--color-border); }
 .erp-invoice-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-invoice-detail__gross { font-size: 16px; }
 .erp-invoice-detail__payment, .erp-invoice-detail__credit-notes, .erp-invoice-detail__related { margin-top: 20px; }

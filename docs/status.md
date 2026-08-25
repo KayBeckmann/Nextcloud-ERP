@@ -703,6 +703,27 @@ das Dokument; der Statuswechsel auf `sent`/`confirmed` passiert weiterhin
 serverseitig als Folge des Klicks, nicht als dessen Ursache. Per
 Playwright-Klicktest gegen Kays echte "Elektro"-Angebotsdaten bestätigt.
 
+**Zweite Nachbesserung (noch am selben Tag):** Der bisherige "Dokument
+öffnen"-Link riss den Nutzer aus dem ERP-Screen in die Files-App. Neuer
+schlanker `DocumentsController` (kein OCS-Controller, wie
+`ReportExportController`) liefert ein per `fileId` referenziertes PDF via
+`FileDisplayResponse` mit `Content-Disposition: inline` aus — kein
+zusätzliches ERP-Rechte-Gate über das hinaus, was Nextclouds eigene
+Datei-Sichtbarkeit (`getUserFolder()->getById()`) ohnehin erzwingt,
+derselbe Vertrauenslevel wie der bisherige `/f/{fileId}`-Link. Alle vier
+Belegansichten mit eigenem Dokument (Angebot, Auftrag, Rechnung,
+Lieferschein) zeigen das PDF jetzt zusätzlich in einem eingebetteten
+`<iframe>` direkt auf der Seite; der externe Link bleibt als schnellerer
+Vollbild-/Druck-Zugriff bestehen. 3 neue Tests — Gesamtstand weiterhin
+**273 Tests**.
+
+Stolperstein bei der Verifikation: Die neue Route lieferte zunächst
+beharrlich die SPA-Hülle statt des PDFs aus, obwohl `routes.php` korrekt
+war — Ursache war Nextclouds `memcache.local => APCu`-Konfiguration, die
+die kompilierte Routentabelle cacht; ein einfacher Container-Neustart
+(kein Code- oder Config-Fehler) hat den Cache geleert und die neue Route
+sofort greifen lassen.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/

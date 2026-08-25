@@ -8,7 +8,10 @@
 				<span v-if="order.quoteId" class="erp-order-detail__hint">aus Angebot #{{ order.quoteId }}</span>
 			</header>
 
-			<p v-if="order.documentFileId"><a :href="openInFilesUrl(order.documentFileId)" target="_blank" rel="noopener">Auftragsdokument öffnen</a></p>
+			<section v-if="order.documentFileId" class="erp-order-detail__document">
+				<p><a :href="openInFilesUrl(order.documentFileId)" target="_blank" rel="noopener">Auftragsdokument öffnen</a></p>
+				<iframe :src="documentPreviewUrl(order.documentFileId)" class="erp-order-detail__pdf-frame" title="Auftragsdokument"></iframe>
+			</section>
 
 			<section class="erp-order-detail__meta">
 				<label>Titel <input v-model="edit.title"></label>
@@ -202,6 +205,9 @@ export default {
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
 		},
+		documentPreviewUrl(fileId) {
+			return generateUrl(`/apps/erp/documents/${fileId}`)
+		},
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
 		},
@@ -391,5 +397,7 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-order-detail__convert-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .erp-order-detail__convert-note { color: var(--color-text-maxcontrast); font-size: 12px; }
 .erp-order-detail__issue { margin-top: 8px; }
+.erp-order-detail__document { margin: 8px 0 16px; }
+.erp-order-detail__pdf-frame { width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--color-border); margin-top: 8px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 </style>

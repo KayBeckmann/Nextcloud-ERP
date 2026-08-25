@@ -14,6 +14,10 @@ return [
 		// nachfolgenden Pfad abfangen (Routen werden in
 		// Registrierungsreihenfolge geprüft).
 		['name' => 'reportExport#invoicesCsv', 'url' => '/export/invoices.csv', 'verb' => 'GET'],
+		// Inline-PDF-Anzeige für <iframe>-Einbettung in Beleg-Detailansichten
+		// (Nachtrag zu Phase 12, ADR-0021) — aus demselben Grund außerhalb
+		// des 'ocs'-Blocks wie reportExport#invoicesCsv.
+		['name' => 'documents#show', 'url' => '/documents/{fileId}', 'verb' => 'GET', 'requirements' => ['fileId' => '\d+']],
 		// Eine einzige Route mit optionalem Pfad (Default '') statt zweier
 		// gleichnamiger Routen — sonst schlägt die Navigations-URL-Generierung
 		// fehl, weil Symfony für 'erp.page.index' die zuletzt registrierte
