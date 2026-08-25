@@ -53,6 +53,65 @@ class ContactsService {
 		return $contactUid;
 	}
 
+	/**
+	 * Anzeigename + Anschrift für den Kundenblock im Beleg-PDF (ADR-0022).
+	 * Nutzt die im Kontakt bereits gepflegte Adresse (vCard-ADR-Feld) — keine
+	 * eigene Adress-Datenhaltung im ERP-Schema. `search()` mit `['UID']` als
+	 * Suchfeld liefert trotzdem den vollständigen vCard-Datensatz zurück
+	 * (die Suchfelder schränken nur ein, wonach gesucht wird, nicht was im
+	 * Ergebnis mitkommt) — dasselbe Muster wie displayNameFor().
+	 *
+	 * @return array{displayName: string, addressLines: list<string>}
+	 */
+	public function detailsFor(string $contactUid): array {
+		foreach ($this->contactsManager->search($contactUid, ['UID']) as $r) {
+			if (($r['UID'] ?? null) !== $contactUid) {
+				continue;
+			}
+			$adr = $r['ADR'] ?? [];
+			return [
+				'displayName' => $r['FN'] ?? $contactUid,
+				'addressLines' => $this->addressLinesFromVCardAdr(is_array($adr) ? $adr : [$adr]),
+			];
+		}
+		return ['displayName' => $contactUid, 'addressLines' => []];
+	}
+
+	/**
+	 * @param list<string> $adrValues Rohe vCard-ADR-Werte, je Eintrag
+	 *     "Postfach;Zusatz;Straße;Ort;Region;PLZ;Land" (vCard-3/4-Struktur)
+	 * @return list<string>
+	 */
+	private function addressLinesFromVCardAdr(array $adrValues): array {
+		if ($adrValues === []) {
+			return [];
+		}
+		// Nur die erste hinterlegte Adresse — ein Kontakt kann mehrere
+		// haben (privat/geschäftlich), das PDF zeigt nur eine.
+		$parts = explode(';', (string) $adrValues[0]);
+		$street = trim($parts[2] ?? '');
+		$city = trim($parts[3] ?? '');
+		$region = trim($parts[4] ?? '');
+		$postalCode = trim($parts[5] ?? '');
+		$country = trim($parts[6] ?? '');
+
+		$lines = [];
+		if ($street !== '') {
+			$lines[] = $street;
+		}
+		$cityLine = trim($postalCode . ' ' . $city);
+		if ($cityLine !== '') {
+			$lines[] = $cityLine;
+		}
+		if ($region !== '' && $region !== $city) {
+			$lines[] = $region;
+		}
+		if ($country !== '') {
+			$lines[] = $country;
+		}
+		return $lines;
+	}
+
 	/** Rolle eines bestehenden Links nachschlagen (für Rechte-Prüfung vor Update/Delete). */
 	public function getLinkRole(int $id): ?ContactRole {
 		$link = $this->mapper->findById($id);

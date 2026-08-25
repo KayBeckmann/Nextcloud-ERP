@@ -83,7 +83,9 @@ class OrderService {
 				'quantity' => $p->getQuantity(),
 				'unitPriceNet' => $p->getUnitPriceNet(),
 				'vatRatePercent' => $p->getVatRatePercent(),
+				'discountPercent' => $p->getDiscountPercent(),
 			], $positions),
+			$order->getDiscountPercent(),
 		);
 
 		return [
@@ -119,7 +121,7 @@ class OrderService {
 	}
 
 	/** @throws \OutOfBoundsException */
-	public function updateOrder(int $projectId, int $id, string $title, OrderStatus $status, ?string $description, ?string $customerContactUid = null, ?string $assignedUserId = null, ?IUser $issuer = null): Order {
+	public function updateOrder(int $projectId, int $id, string $title, OrderStatus $status, ?string $description, ?string $customerContactUid = null, ?string $assignedUserId = null, ?IUser $issuer = null, float $discountPercent = 0.0): Order {
 		$order = $this->mapper->findOne($projectId, $id);
 		if ($order === null) {
 			throw new \OutOfBoundsException("Order $id not found in project $projectId");
@@ -136,6 +138,7 @@ class OrderService {
 		$order->setDescription($description);
 		$order->setCustomerContactUid($customerContactUid);
 		$order->setAssignedUserId($assignedUserId);
+		$order->setDiscountPercent($discountPercent);
 		$order->setUpdatedAt(time());
 		$order = $this->mapper->update($order);
 
@@ -215,6 +218,7 @@ class OrderService {
 
 		$order = $this->createOrder($quote->getProjectId(), $title ?? $quote->getTitle(), null, $quote->getCustomerContactUid());
 		$order->setQuoteId($quoteId);
+		$order->setDiscountPercent($quote->getDiscountPercent());
 		$order = $this->mapper->update($order);
 
 		$groupIdMap = [];
@@ -238,6 +242,7 @@ class OrderService {
 			$position->setUnit($qp->getUnit());
 			$position->setUnitPriceNet($qp->getUnitPriceNet());
 			$position->setVatRatePercent($qp->getVatRatePercent());
+			$position->setDiscountPercent($qp->getDiscountPercent());
 			$position->setPositionOrder($qp->getPositionOrder());
 			$this->positionMapper->insert($position);
 		}
@@ -259,6 +264,7 @@ class OrderService {
 		string $unit,
 		float $unitPriceNet,
 		float $vatRatePercent,
+		float $discountPercent = 0.0,
 	): OrderPosition {
 		$this->getOrder($orderId);
 		if ($groupId !== null && $this->groupMapper->findOne($orderId, $groupId) === null) {
@@ -278,8 +284,37 @@ class OrderService {
 		$position->setUnit($unit !== '' ? $unit : 'Stk');
 		$position->setUnitPriceNet($unitPriceNet);
 		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
 		$position->setPositionOrder(count($this->positionMapper->findByOrder($orderId)));
 		return $this->positionMapper->insert($position);
+	}
+
+	/**
+	 * Bereits angelegte Position korrigieren (ADR-0022).
+	 *
+	 * @throws \OutOfBoundsException
+	 */
+	public function updatePosition(
+		int $orderId,
+		int $id,
+		string $description,
+		float $quantity,
+		string $unit,
+		float $unitPriceNet,
+		float $vatRatePercent,
+		float $discountPercent = 0.0,
+	): OrderPosition {
+		$position = $this->positionMapper->findOne($orderId, $id);
+		if ($position === null) {
+			throw new \OutOfBoundsException("Position $id not found in order $orderId");
+		}
+		$position->setDescription($description);
+		$position->setQuantity($quantity);
+		$position->setUnit($unit !== '' ? $unit : 'Stk');
+		$position->setUnitPriceNet($unitPriceNet);
+		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
+		return $this->positionMapper->update($position);
 	}
 
 	/** @throws \OutOfBoundsException */

@@ -35,6 +35,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setNotes(?string $notes)
  * @method int|null getDocumentFileId()
  * @method void setDocumentFileId(?int $documentFileId)
+ * @method float getDiscountPercent()
+ * @method void setDiscountPercent(float $discountPercent)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -61,6 +63,9 @@ class Invoice extends Entity implements \JsonSerializable {
 	protected float $paidAmount = 0.0;
 	protected ?string $notes = null;
 	protected ?int $documentFileId = null;
+	// Rabatt auf den gesamten Beleg (ADR-0022), wirkt zusaetzlich zum
+	// Rabatt je Position, anteilig je MwSt.-Satz-Bucket.
+	protected float $discountPercent = 0.0;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -73,6 +78,7 @@ class Invoice extends Entity implements \JsonSerializable {
 		$this->addType('issuedAt', 'integer');
 		$this->addType('paidAmount', 'float');
 		$this->addType('documentFileId', 'integer');
+		$this->addType('discountPercent', 'float');
 		$this->addType('createdAt', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
@@ -94,6 +100,7 @@ class Invoice extends Entity implements \JsonSerializable {
 			'paidAmount' => $this->getPaidAmount(),
 			'notes' => $this->getNotes(),
 			'documentFileId' => $this->getDocumentFileId(),
+			'discountPercent' => $this->getDiscountPercent(),
 		];
 	}
 }

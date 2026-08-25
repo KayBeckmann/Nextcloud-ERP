@@ -77,7 +77,7 @@ class InvoiceService {
 		$invoice = $this->getInvoice($id);
 		$positions = $this->positionMapper->findByInvoice($id);
 		$groups = $this->groupMapper->findByInvoice($id);
-		$calculation = $this->calculate($positions, $groups);
+		$calculation = $this->calculate($positions, $groups, $invoice->getDiscountPercent());
 
 		$relatedInvoices = [];
 		if ($invoice->getOrderId() !== null) {
@@ -85,7 +85,7 @@ class InvoiceService {
 				$relatedPositions = $this->positionMapper->findByInvoice($related->getId());
 				$relatedInvoices[] = [
 					...$related->jsonSerialize(),
-					'grossTotal' => $this->calculate($relatedPositions)['grossTotal'],
+					'grossTotal' => $this->calculate($relatedPositions, [], $related->getDiscountPercent())['grossTotal'],
 				];
 			}
 		}
@@ -111,7 +111,7 @@ class InvoiceService {
 	}
 
 	/** @param InvoiceGroup[] $groups */
-	private function calculate(array $positions, array $groups = []): array {
+	private function calculate(array $positions, array $groups = [], float $documentDiscountPercent = 0.0): array {
 		return QuoteCalculationService::calculate(
 			array_map(static fn (InvoiceGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups),
 			array_map(static fn (InvoicePosition $p) => [
@@ -120,7 +120,9 @@ class InvoiceService {
 				'quantity' => $p->getQuantity(),
 				'unitPriceNet' => $p->getUnitPriceNet(),
 				'vatRatePercent' => $p->getVatRatePercent(),
+				'discountPercent' => $p->getDiscountPercent(),
 			], $positions),
+			$documentDiscountPercent,
 		);
 	}
 
@@ -392,6 +394,7 @@ class InvoiceService {
 		string $unit,
 		float $unitPriceNet,
 		float $vatRatePercent,
+		float $discountPercent = 0.0,
 	): InvoicePosition {
 		$invoice = $this->getInvoice($invoiceId);
 		$this->requireDraft($invoice);
@@ -409,8 +412,42 @@ class InvoiceService {
 		$position->setUnit($unit !== '' ? $unit : 'Stk');
 		$position->setUnitPriceNet($unitPriceNet);
 		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
 		$position->setPositionOrder(count($this->positionMapper->findByInvoice($invoiceId)));
 		return $this->positionMapper->insert($position);
+	}
+
+	/**
+	 * Bereits angelegte Position korrigieren (ADR-0022) — wie addPosition()
+	 * nur solange die Rechnung im Entwurf ist.
+	 *
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn die Rechnung nicht mehr im Entwurf ist
+	 */
+	public function updatePosition(
+		int $invoiceId,
+		int $id,
+		string $description,
+		float $quantity,
+		string $unit,
+		float $unitPriceNet,
+		float $vatRatePercent,
+		float $discountPercent = 0.0,
+	): InvoicePosition {
+		$invoice = $this->getInvoice($invoiceId);
+		$this->requireDraft($invoice);
+
+		$position = $this->positionMapper->findOne($invoiceId, $id);
+		if ($position === null) {
+			throw new \OutOfBoundsException("Position $id not found in invoice $invoiceId");
+		}
+		$position->setDescription($description);
+		$position->setQuantity($quantity);
+		$position->setUnit($unit !== '' ? $unit : 'Stk');
+		$position->setUnitPriceNet($unitPriceNet);
+		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
+		return $this->positionMapper->update($position);
 	}
 
 	/**
@@ -426,6 +463,22 @@ class InvoiceService {
 			throw new \OutOfBoundsException("Position $id not found in invoice $invoiceId");
 		}
 		$this->positionMapper->delete($position);
+	}
+
+	/**
+	 * Rabatt auf den gesamten Beleg setzen (ADR-0022) — eigener, schmaler
+	 * Endpunkt statt eines generischen update(), weil Invoice (anders als
+	 * Quote/Order) sonst kein bearbeitbares Metadaten-Set hat.
+	 *
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn die Rechnung nicht mehr im Entwurf ist
+	 */
+	public function updateDiscount(int $id, float $discountPercent): Invoice {
+		$invoice = $this->getInvoice($id);
+		$this->requireDraft($invoice);
+		$invoice->setDiscountPercent($discountPercent);
+		$invoice->setUpdatedAt(time());
+		return $this->mapper->update($invoice);
 	}
 
 	private function requireDraft(Invoice $invoice): void {
@@ -483,7 +536,7 @@ class InvoiceService {
 	}
 
 	private function renderHtml(Invoice $invoice, array $positions): string {
-		$calc = $this->calculate($positions);
+		$calc = $this->calculate($positions, [], $invoice->getDiscountPercent());
 		$rows = '';
 		foreach ($positions as $p) {
 			$rows .= sprintf(
@@ -525,7 +578,7 @@ class InvoiceService {
 		}
 
 		$positions = $this->positionMapper->findByInvoice($id);
-		$grossTotal = $this->calculate($positions)['grossTotal'];
+		$grossTotal = $this->calculate($positions, [], $invoice->getDiscountPercent())['grossTotal'];
 
 		$invoice->setPaidAmount(round($invoice->getPaidAmount() + $amount, 2));
 		$invoice->setStatus($invoice->getPaidAmount() >= $grossTotal ? 'paid' : 'partially_paid');

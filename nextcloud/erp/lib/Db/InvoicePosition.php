@@ -27,6 +27,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setVatRatePercent(float $vatRatePercent)
  * @method int getPositionOrder()
  * @method void setPositionOrder(int $positionOrder)
+ * @method float getDiscountPercent()
+ * @method void setDiscountPercent(float $discountPercent)
  * @method int|null getOrderPositionId()
  * @method void setOrderPositionId(?int $orderPositionId)
  */
@@ -47,6 +49,8 @@ class InvoicePosition extends Entity implements \JsonSerializable {
 	protected float $unitPriceNet = 0.0;
 	protected float $vatRatePercent = 0.0;
 	protected int $positionOrder = 0;
+	// Rabatt auf diese Position (ADR-0022), wirkt vor der MwSt.-Berechnung.
+	protected float $discountPercent = 0.0;
 	// Verweis auf die Auftragsposition, aus der diese Rechnungsposition bei
 	// einer Umwandlung entstanden ist (ADR-0016) — null bei manuell
 	// hinzugefügten Positionen (z. B. Materialabschlag).
@@ -61,6 +65,7 @@ class InvoicePosition extends Entity implements \JsonSerializable {
 		$this->addType('unitPriceNet', 'float');
 		$this->addType('vatRatePercent', 'float');
 		$this->addType('positionOrder', 'integer');
+		$this->addType('discountPercent', 'float');
 		$this->addType('orderPositionId', 'integer');
 	}
 
@@ -77,8 +82,9 @@ class InvoicePosition extends Entity implements \JsonSerializable {
 			'unitPriceNet' => $this->getUnitPriceNet(),
 			'vatRatePercent' => $this->getVatRatePercent(),
 			'positionOrder' => $this->getPositionOrder(),
+			'discountPercent' => $this->getDiscountPercent(),
 			'orderPositionId' => $this->getOrderPositionId(),
-			'netTotal' => round($this->getQuantity() * $this->getUnitPriceNet(), 2),
+			'netTotal' => round($this->getQuantity() * $this->getUnitPriceNet() * (1 - $this->getDiscountPercent() / 100), 2),
 		];
 	}
 }

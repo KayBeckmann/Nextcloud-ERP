@@ -67,8 +67,11 @@ return [
 		['name' => 'order#createFromQuote', 'url' => '/api/v1/orders/from-quote', 'verb' => 'POST'],
 		['name' => 'order#addGroup', 'url' => '/api/v1/orders/{orderId}/groups', 'verb' => 'POST', 'requirements' => ['orderId' => '\d+']],
 		['name' => 'order#addPosition', 'url' => '/api/v1/orders/{orderId}/positions', 'verb' => 'POST', 'requirements' => ['orderId' => '\d+']],
+		['name' => 'order#updatePosition', 'url' => '/api/v1/orders/{orderId}/positions/{id}', 'verb' => 'PUT', 'requirements' => ['orderId' => '\d+', 'id' => '\d+']],
 		['name' => 'order#removePosition', 'url' => '/api/v1/orders/{orderId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['orderId' => '\d+', 'id' => '\d+']],
 		// Artikel/Produkte/Angebote (Roadmap Phase 5, ADR-0011).
+		['name' => 'company_profile#index', 'url' => '/api/v1/company-profile', 'verb' => 'GET'],
+		['name' => 'company_profile#update', 'url' => '/api/v1/company-profile', 'verb' => 'PUT'],
 		['name' => 'vat_rate#index', 'url' => '/api/v1/vat-rates', 'verb' => 'GET'],
 		['name' => 'vat_rate#create', 'url' => '/api/v1/vat-rates', 'verb' => 'POST'],
 		['name' => 'vat_rate#update', 'url' => '/api/v1/vat-rates/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
@@ -95,6 +98,7 @@ return [
 		['name' => 'quote#update', 'url' => '/api/v1/quotes/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'quote#addGroup', 'url' => '/api/v1/quotes/{quoteId}/groups', 'verb' => 'POST', 'requirements' => ['quoteId' => '\d+']],
 		['name' => 'quote#addPosition', 'url' => '/api/v1/quotes/{quoteId}/positions', 'verb' => 'POST', 'requirements' => ['quoteId' => '\d+']],
+		['name' => 'quote#updatePosition', 'url' => '/api/v1/quotes/{quoteId}/positions/{id}', 'verb' => 'PUT', 'requirements' => ['quoteId' => '\d+', 'id' => '\d+']],
 		['name' => 'quote#removePosition', 'url' => '/api/v1/quotes/{quoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['quoteId' => '\d+', 'id' => '\d+']],
 		// Zeitwirtschaft: Verrechnungssätze + Kundenverträge (Roadmap Phase 6, ADR-0012).
 		['name' => 'rate#index', 'url' => '/api/v1/rates/standard', 'verb' => 'GET'],
@@ -138,7 +142,9 @@ return [
 		['name' => 'invoice#show', 'url' => '/api/v1/invoices/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'invoice#addGroup', 'url' => '/api/v1/invoices/{invoiceId}/groups', 'verb' => 'POST', 'requirements' => ['invoiceId' => '\d+']],
 		['name' => 'invoice#addPosition', 'url' => '/api/v1/invoices/{invoiceId}/positions', 'verb' => 'POST', 'requirements' => ['invoiceId' => '\d+']],
+		['name' => 'invoice#updatePosition', 'url' => '/api/v1/invoices/{invoiceId}/positions/{id}', 'verb' => 'PUT', 'requirements' => ['invoiceId' => '\d+', 'id' => '\d+']],
 		['name' => 'invoice#removePosition', 'url' => '/api/v1/invoices/{invoiceId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['invoiceId' => '\d+', 'id' => '\d+']],
+		['name' => 'invoice#updateDiscount', 'url' => '/api/v1/invoices/{id}/discount', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'invoice#issue', 'url' => '/api/v1/invoices/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'invoice#recordPayment', 'url' => '/api/v1/invoices/{id}/payments', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		// Gutschriften (Roadmap Phase 7, ADR-0013).
@@ -147,6 +153,7 @@ return [
 		['name' => 'credit_note#createFullCancellation', 'url' => '/api/v1/credit-notes/full-cancellation', 'verb' => 'POST'],
 		['name' => 'credit_note#createPartial', 'url' => '/api/v1/credit-notes/partial', 'verb' => 'POST'],
 		['name' => 'credit_note#addPosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions', 'verb' => 'POST', 'requirements' => ['creditNoteId' => '\d+']],
+		['name' => 'credit_note#updatePosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions/{id}', 'verb' => 'PUT', 'requirements' => ['creditNoteId' => '\d+', 'id' => '\d+']],
 		['name' => 'credit_note#issue', 'url' => '/api/v1/credit-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		// Lieferscheine (ADR-0015).
 		['name' => 'delivery_note#index', 'url' => '/api/v1/delivery-notes', 'verb' => 'GET'],
@@ -155,6 +162,7 @@ return [
 		['name' => 'delivery_note#show', 'url' => '/api/v1/delivery-notes/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'delivery_note#addGroup', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/groups', 'verb' => 'POST', 'requirements' => ['deliveryNoteId' => '\d+']],
 		['name' => 'delivery_note#addPosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions', 'verb' => 'POST', 'requirements' => ['deliveryNoteId' => '\d+']],
+		['name' => 'delivery_note#updatePosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions/{id}', 'verb' => 'PUT', 'requirements' => ['deliveryNoteId' => '\d+', 'id' => '\d+']],
 		['name' => 'delivery_note#removePosition', 'url' => '/api/v1/delivery-notes/{deliveryNoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['deliveryNoteId' => '\d+', 'id' => '\d+']],
 		['name' => 'delivery_note#issue', 'url' => '/api/v1/delivery-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		// Lager (Roadmap Phase 8, ADR-0014).

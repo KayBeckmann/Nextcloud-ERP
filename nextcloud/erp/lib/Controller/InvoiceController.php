@@ -169,6 +169,7 @@ class InvoiceController extends AbstractResourceController {
 		?int $groupId = null,
 		?int $referenceId = null,
 		string $unit = 'Stk',
+		float $discountPercent = 0.0,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (!in_array($positionType, self::VALID_POSITION_TYPES, true)) {
@@ -178,9 +179,34 @@ class InvoiceController extends AbstractResourceController {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->invoiceService->addPosition($invoiceId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent));
+			return new DataResponse($this->invoiceService->addPosition($invoiceId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Invoice $invoiceId not found");
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
+	}
+
+	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
+	#[NoAdminRequired]
+	public function updatePosition(
+		int $invoiceId,
+		int $id,
+		string $description,
+		float $quantity,
+		float $unitPriceNet,
+		float $vatRatePercent,
+		string $unit = 'Stk',
+		float $discountPercent = 0.0,
+	): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($description) === '') {
+			throw new OCSBadRequestException('description must not be empty');
+		}
+		try {
+			return new DataResponse($this->invoiceService->updatePosition($invoiceId, $id, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Position $id not found in invoice $invoiceId");
 		} catch (\DomainException $e) {
 			throw new OCSPreconditionFailedException($e->getMessage());
 		}
@@ -198,6 +224,19 @@ class InvoiceController extends AbstractResourceController {
 			throw new OCSPreconditionFailedException($e->getMessage());
 		}
 		return new DataResponse([]);
+	}
+
+	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
+	#[NoAdminRequired]
+	public function updateDiscount(int $id, float $discountPercent): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		try {
+			return new DataResponse($this->invoiceService->updateDiscount($id, $discountPercent));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Invoice $id not found");
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
 	}
 
 	/** @throws OCSNotFoundException|OCSPreconditionFailedException */

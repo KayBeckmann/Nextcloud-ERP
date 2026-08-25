@@ -72,4 +72,43 @@ final class QuoteCalculationServiceTest extends TestCase {
 		$this->assertSame(0.0, $result['grossTotal']);
 		$this->assertSame([], $result['vatBreakdown']);
 	}
+
+	/** ADR-0022: Rabatt auf eine einzelne Position wirkt vor der MwSt. */
+	public function testPositionDiscountReducesNetTotalBeforeVat(): void {
+		$result = QuoteCalculationService::calculate([], [
+			['id' => 1, 'groupId' => null, 'quantity' => 2, 'unitPriceNet' => 10.0, 'vatRatePercent' => 19.0, 'discountPercent' => 10.0],
+		]);
+
+		// 2 * 10 = 20, minus 10% = 18 netto
+		$this->assertSame(18.0, $result['netSubtotal']);
+		$this->assertSame(3.42, $result['vatBreakdown'][0]['vatAmount']);
+		$this->assertSame(21.42, $result['grossTotal']);
+	}
+
+	/** ADR-0022: Belegrabatt wirkt zusätzlich zum Positionsrabatt, anteilig je MwSt.-Satz. */
+	public function testDocumentDiscountAppliesProportionallyPerVatRate(): void {
+		$positions = [
+			['id' => 1, 'groupId' => null, 'quantity' => 1, 'unitPriceNet' => 100.0, 'vatRatePercent' => 19.0],
+			['id' => 2, 'groupId' => null, 'quantity' => 1, 'unitPriceNet' => 100.0, 'vatRatePercent' => 7.0],
+		];
+
+		$result = QuoteCalculationService::calculate([], $positions, 10.0);
+
+		$this->assertSame(200.0, $result['netSubtotalBeforeDiscount']);
+		$this->assertSame(20.0, $result['documentDiscountAmount']);
+		$this->assertSame(180.0, $result['netSubtotal']);
+		foreach ($result['vatBreakdown'] as $v) {
+			$this->assertSame(90.0, $v['netBase']);
+		}
+	}
+
+	/** Ohne Rabatt müssen die neuen Felder das bisherige Verhalten exakt spiegeln. */
+	public function testNoDiscountKeepsNetSubtotalBeforeDiscountEqualToNetSubtotal(): void {
+		$result = QuoteCalculationService::calculate([], [
+			['id' => 1, 'groupId' => null, 'quantity' => 1, 'unitPriceNet' => 50.0, 'vatRatePercent' => 19.0],
+		]);
+
+		$this->assertSame($result['netSubtotal'], $result['netSubtotalBeforeDiscount']);
+		$this->assertSame(0.0, $result['documentDiscountAmount']);
+	}
 }

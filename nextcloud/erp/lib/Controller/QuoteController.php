@@ -74,6 +74,7 @@ class QuoteController extends AbstractResourceController {
 		?string $customerContactUid = null,
 		?int $validUntil = null,
 		?string $notes = null,
+		float $discountPercent = 0.0,
 	): DataResponse {
 		$user = $this->requireLevel(PermissionLevel::Write);
 		if (trim($title) === '') {
@@ -83,7 +84,7 @@ class QuoteController extends AbstractResourceController {
 			throw new OCSBadRequestException('Unknown status: ' . $status);
 		}
 		try {
-			return new DataResponse($this->quoteService->updateQuote($id, $title, $status, $projectId, $customerContactUid, $validUntil, $notes, $user));
+			return new DataResponse($this->quoteService->updateQuote($id, $title, $status, $projectId, $customerContactUid, $validUntil, $notes, $user, $discountPercent));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Quote $id not found");
 		} catch (\InvalidArgumentException $e) {
@@ -117,6 +118,7 @@ class QuoteController extends AbstractResourceController {
 		?int $groupId = null,
 		?int $referenceId = null,
 		string $unit = 'Stk',
+		float $discountPercent = 0.0,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (!in_array($positionType, self::VALID_POSITION_TYPES, true)) {
@@ -136,7 +138,31 @@ class QuoteController extends AbstractResourceController {
 				$unit,
 				$unitPriceNet,
 				$vatRatePercent,
+				$discountPercent,
 			));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+	}
+
+	/** @throws OCSBadRequestException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function updatePosition(
+		int $quoteId,
+		int $id,
+		string $description,
+		float $quantity,
+		float $unitPriceNet,
+		float $vatRatePercent,
+		string $unit = 'Stk',
+		float $discountPercent = 0.0,
+	): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($description) === '') {
+			throw new OCSBadRequestException('description must not be empty');
+		}
+		try {
+			return new DataResponse($this->quoteService->updatePosition($quoteId, $id, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
 		} catch (\OutOfBoundsException $e) {
 			throw new OCSNotFoundException($e->getMessage());
 		}

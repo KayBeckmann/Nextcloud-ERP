@@ -78,7 +78,7 @@ class OrderController extends OCSController {
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
 	#[NoAdminRequired]
-	public function update(int $projectId, int $id, string $title, string $status, ?string $description = null, ?string $customerContactUid = null, ?string $assignedUserId = null): DataResponse {
+	public function update(int $projectId, int $id, string $title, string $status, ?string $description = null, ?string $customerContactUid = null, ?string $assignedUserId = null, float $discountPercent = 0.0): DataResponse {
 		$user = $this->requireLevel(PermissionLevel::Write);
 		if (trim($title) === '') {
 			throw new OCSBadRequestException('title must not be empty');
@@ -88,7 +88,7 @@ class OrderController extends OCSController {
 			throw new OCSBadRequestException("Unknown status: $status");
 		}
 		try {
-			return new DataResponse($this->orderService->updateOrder($projectId, $id, $title, $parsedStatus, $description, $customerContactUid, $assignedUserId, $user));
+			return new DataResponse($this->orderService->updateOrder($projectId, $id, $title, $parsedStatus, $description, $customerContactUid, $assignedUserId, $user, $discountPercent));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Order $id not found");
 		}
@@ -136,17 +136,41 @@ class OrderController extends OCSController {
 		?int $groupId = null,
 		?int $referenceId = null,
 		string $unit = 'Stk',
+		float $discountPercent = 0.0,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($description) === '') {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->orderService->addPosition($orderId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent));
+			return new DataResponse($this->orderService->addPosition($orderId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Order $orderId not found");
 		} catch (\InvalidArgumentException $e) {
 			throw new OCSBadRequestException($e->getMessage());
+		}
+	}
+
+	/** @throws OCSBadRequestException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function updatePosition(
+		int $orderId,
+		int $id,
+		string $description,
+		float $quantity,
+		float $unitPriceNet,
+		float $vatRatePercent,
+		string $unit = 'Stk',
+		float $discountPercent = 0.0,
+	): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($description) === '') {
+			throw new OCSBadRequestException('description must not be empty');
+		}
+		try {
+			return new DataResponse($this->orderService->updatePosition($orderId, $id, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
 		}
 	}
 

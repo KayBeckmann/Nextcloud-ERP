@@ -1,6 +1,16 @@
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 
+export async function fetchCompanyProfile() {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/company-profile'))
+	return data.ocs.data
+}
+
+export async function updateCompanyProfile(payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/company-profile'), payload)
+	return data.ocs.data
+}
+
 export async function fetchVatRates() {
 	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/vat-rates'))
 	return data.ocs.data

@@ -57,7 +57,9 @@ class QuoteService {
 				'quantity' => $p->getQuantity(),
 				'unitPriceNet' => $p->getUnitPriceNet(),
 				'vatRatePercent' => $p->getVatRatePercent(),
+				'discountPercent' => $p->getDiscountPercent(),
 			], $positions),
+			$quote->getDiscountPercent(),
 		);
 
 		return [
@@ -101,6 +103,7 @@ class QuoteService {
 		?int $validUntil,
 		?string $notes,
 		?IUser $issuer = null,
+		float $discountPercent = 0.0,
 	): Quote {
 		if ($projectId <= 0) {
 			throw new \InvalidArgumentException('projectId is required');
@@ -112,6 +115,7 @@ class QuoteService {
 		$quote->setCustomerContactUid($customerContactUid);
 		$quote->setValidUntil($validUntil);
 		$quote->setNotes($notes);
+		$quote->setDiscountPercent($discountPercent);
 		$quote->setUpdatedAt(time());
 		$becomesSent = $status === 'sent' && $quote->getSentAt() === null;
 		if ($becomesSent) {
@@ -202,6 +206,7 @@ class QuoteService {
 		string $unit,
 		float $unitPriceNet,
 		float $vatRatePercent,
+		float $discountPercent = 0.0,
 	): QuotePosition {
 		$this->getQuote($quoteId);
 		if ($groupId !== null && $this->groupMapper->findOne($quoteId, $groupId) === null) {
@@ -218,8 +223,40 @@ class QuoteService {
 		$position->setUnit($unit !== '' ? $unit : 'Stk');
 		$position->setUnitPriceNet($unitPriceNet);
 		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
 		$position->setPositionOrder(count($this->positionMapper->findByQuote($quoteId)));
 		return $this->positionMapper->insert($position);
+	}
+
+	/**
+	 * Bereits angelegte Position korrigieren (ADR-0022) — bisher waren
+	 * Positionen nur lösch-, nicht editierbar. Bewusst ohne groupId/
+	 * positionType/referenceId: das sind strukturelle Zuordnungen, keine
+	 * Korrekturwerte.
+	 *
+	 * @throws \OutOfBoundsException
+	 */
+	public function updatePosition(
+		int $quoteId,
+		int $id,
+		string $description,
+		float $quantity,
+		string $unit,
+		float $unitPriceNet,
+		float $vatRatePercent,
+		float $discountPercent = 0.0,
+	): QuotePosition {
+		$position = $this->positionMapper->findOne($quoteId, $id);
+		if ($position === null) {
+			throw new \OutOfBoundsException("Position $id not found in quote $quoteId");
+		}
+		$position->setDescription($description);
+		$position->setQuantity($quantity);
+		$position->setUnit($unit !== '' ? $unit : 'Stk');
+		$position->setUnitPriceNet($unitPriceNet);
+		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
+		return $this->positionMapper->update($position);
 	}
 
 	/** @throws \OutOfBoundsException */

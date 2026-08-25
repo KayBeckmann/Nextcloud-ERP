@@ -206,6 +206,28 @@ class DeliveryNoteService {
 	}
 
 	/**
+	 * Bereits angelegte Position korrigieren (ADR-0022) — ohne Preis-/
+	 * Rabattfelder, weil Lieferscheine keine Preise führen.
+	 *
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn nicht mehr im Entwurf
+	 */
+	public function updatePosition(int $deliveryNoteId, int $id, string $description, float $quantity, string $unit): DeliveryNotePosition {
+		$deliveryNote = $this->get($deliveryNoteId);
+		if ($deliveryNote->getStatus() !== 'draft') {
+			throw new \DomainException("Delivery note $deliveryNoteId is not in status 'draft'");
+		}
+		$position = $this->positionMapper->findOne($deliveryNoteId, $id);
+		if ($position === null) {
+			throw new \OutOfBoundsException("Position $id not found in delivery note $deliveryNoteId");
+		}
+		$position->setDescription($description);
+		$position->setQuantity($quantity);
+		$position->setUnit($unit !== '' ? $unit : 'Stk');
+		return $this->positionMapper->update($position);
+	}
+
+	/**
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn nicht mehr im Entwurf
 	 */

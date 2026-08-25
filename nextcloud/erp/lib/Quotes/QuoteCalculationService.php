@@ -7,20 +7,24 @@ namespace OCA\ERP\Quotes;
 /**
  * Reine Netto-/MwSt.-Berechnung ohne DB-Abhängigkeit (ADR-0011) — analog zu
  * PermissionResolver (ADR-0008): schnell testbar ohne Server-Bootstrap.
- * QuoteService lädt die Rohdaten, diese Klasse rechnet.
+ * QuoteService lädt die Rohdaten, diese Klasse rechnet. Rabatte pro
+ * Position und pro Beleg (ADR-0022) kamen nachträglich dazu.
  */
 final class QuoteCalculationService {
 	/**
 	 * @param list<array{id: int, title: string}> $groups
-	 * @param list<array{id: int, groupId: ?int, quantity: float, unitPriceNet: float, vatRatePercent: float}> $positions
+	 * @param list<array{id: int, groupId: ?int, quantity: float, unitPriceNet: float, vatRatePercent: float, discountPercent?: float}> $positions
+	 * @param float $documentDiscountPercent Rabatt auf den gesamten Beleg (0–100), wirkt zusätzlich zum Positionsrabatt.
 	 * @return array{
 	 *     groups: list<array{groupId: ?int, title: ?string, netTotal: float}>,
+	 *     netSubtotalBeforeDiscount: float,
+	 *     documentDiscountAmount: float,
 	 *     netSubtotal: float,
 	 *     vatBreakdown: list<array{ratePercent: float, netBase: float, vatAmount: float}>,
 	 *     grossTotal: float
 	 * }
 	 */
-	public static function calculate(array $groups, array $positions): array {
+	public static function calculate(array $groups, array $positions, float $documentDiscountPercent = 0.0): array {
 		$groupTitles = [];
 		foreach ($groups as $g) {
 			$groupTitles[$g['id']] = $g['title'];
@@ -31,7 +35,9 @@ final class QuoteCalculationService {
 		$vatBase = [];
 
 		foreach ($positions as $p) {
-			$netTotal = round($p['quantity'] * $p['unitPriceNet'], 2);
+			// Positionsrabatt wirkt vor der MwSt.-Berechnung, direkt auf die Zeile.
+			$positionDiscount = $p['discountPercent'] ?? 0.0;
+			$netTotal = round($p['quantity'] * $p['unitPriceNet'] * (1 - $positionDiscount / 100), 2);
 			$groupKey = $p['groupId'] ?? 0;
 			$groupTotals[$groupKey] = ($groupTotals[$groupKey] ?? 0.0) + $netTotal;
 
@@ -48,19 +54,30 @@ final class QuoteCalculationService {
 			];
 		}
 
-		$netSubtotal = round(array_sum($groupTotals), 2);
+		$netSubtotalBeforeDiscount = round(array_sum($groupTotals), 2);
 
+		// Beleg-Rabatt wirkt anteilig je MwSt.-Satz-Bucket, nicht erst auf die
+		// fertige Bruttosumme — sonst würde die MwSt.-Aufteilung bei
+		// gemischten Steuersätzen nicht mehr zur tatsächlichen
+		// Bemessungsgrundlage passen (ADR-0022).
+		$discountFactor = 1 - $documentDiscountPercent / 100;
 		$vatBreakdown = [];
 		$vatTotal = 0.0;
+		$netSubtotal = 0.0;
 		foreach ($vatBase as $rateKey => $base) {
+			$discountedBase = round($base * $discountFactor, 2);
+			$netSubtotal += $discountedBase;
 			$rate = (float) $rateKey;
-			$amount = round($base * $rate / 100, 2);
+			$amount = round($discountedBase * $rate / 100, 2);
 			$vatTotal += $amount;
-			$vatBreakdown[] = ['ratePercent' => $rate, 'netBase' => round($base, 2), 'vatAmount' => $amount];
+			$vatBreakdown[] = ['ratePercent' => $rate, 'netBase' => $discountedBase, 'vatAmount' => $amount];
 		}
+		$netSubtotal = round($netSubtotal, 2);
 
 		return [
 			'groups' => $groupsOut,
+			'netSubtotalBeforeDiscount' => $netSubtotalBeforeDiscount,
+			'documentDiscountAmount' => round($netSubtotalBeforeDiscount - $netSubtotal, 2),
 			'netSubtotal' => $netSubtotal,
 			'vatBreakdown' => $vatBreakdown,
 			'grossTotal' => round($netSubtotal + $vatTotal, 2),

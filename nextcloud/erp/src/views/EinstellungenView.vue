@@ -3,6 +3,28 @@
 		<h2>Einstellungen</h2>
 
 		<section class="erp-settings__section">
+			<h3>Firmenprofil</h3>
+			<p class="erp-settings__hint">
+				Erscheint als Absender-Kopfblock in jedem erzeugten Beleg-PDF (ADR-0022).
+				<code>Fußzeile</code> ist ein freies Mehrzeilenfeld für alles, was hier nicht
+				als eigenes Feld modelliert ist (Bankverbindung, Handelsregister, Geschäftsführer, …).
+			</p>
+			<form class="erp-settings__company-form" @submit.prevent="submitCompanyProfile">
+				<label>Firmenname <input v-model="companyProfile.name" placeholder="Musterfirma GmbH"></label>
+				<label>Straße/Hausnummer <input v-model="companyProfile.addressLine"></label>
+				<label>PLZ <input v-model="companyProfile.postalCode" style="max-width:100px"></label>
+				<label>Ort <input v-model="companyProfile.city"></label>
+				<label>Land <input v-model="companyProfile.country"></label>
+				<label>USt-IdNr./Steuernummer <input v-model="companyProfile.taxId"></label>
+				<label>E-Mail <input v-model="companyProfile.email" type="email"></label>
+				<label>Telefon <input v-model="companyProfile.phone"></label>
+				<label>Fußzeile <textarea v-model="companyProfile.footerText" rows="3"></textarea></label>
+				<button type="submit">Firmenprofil speichern</button>
+				<span v-if="companyProfileSaved" class="erp-settings__success">Gespeichert.</span>
+			</form>
+		</section>
+
+		<section class="erp-settings__section">
 			<h3>Dateien &amp; Ordner</h3>
 			<p class="erp-settings__hint">
 				Legt die ERP-Ordnerstruktur in deinem persönlichen Nextcloud-Dateibereich an
@@ -66,7 +88,9 @@
 <script>
 import { generateUrl } from '@nextcloud/router'
 import { ensureErpFolder } from '../services/filesApi.js'
-import { createVatRate, createWorkType, fetchVatRates, fetchWorkTypes } from '../services/settingsApi.js'
+import {
+	createVatRate, createWorkType, fetchCompanyProfile, fetchVatRates, fetchWorkTypes, updateCompanyProfile,
+} from '../services/settingsApi.js'
 
 export default {
 	name: 'EinstellungenView',
@@ -79,13 +103,38 @@ export default {
 			workTypes: [],
 			newVatRate: { name: '', percentage: null, isDefault: false },
 			newWorkType: { name: '', hourlyRate: null },
+			companyProfile: {
+				name: '', addressLine: '', postalCode: '', city: '', country: '', taxId: '', email: '', phone: '', footerText: '',
+			},
+			companyProfileSaved: false,
 		}
 	},
 	async mounted() {
 		this.vatRates = await fetchVatRates()
 		this.workTypes = await fetchWorkTypes()
+		await this.loadCompanyProfile()
 	},
 	methods: {
+		async loadCompanyProfile() {
+			const p = await fetchCompanyProfile()
+			this.companyProfile = {
+				name: p.name ?? '',
+				addressLine: p.addressLine ?? '',
+				postalCode: p.postalCode ?? '',
+				city: p.city ?? '',
+				country: p.country ?? '',
+				taxId: p.taxId ?? '',
+				email: p.email ?? '',
+				phone: p.phone ?? '',
+				footerText: p.footerText ?? '',
+			}
+		},
+		async submitCompanyProfile() {
+			this.companyProfileSaved = false
+			await updateCompanyProfile(this.companyProfile)
+			await this.loadCompanyProfile()
+			this.companyProfileSaved = true
+		},
 		openInFilesUrl(fileId) {
 			// Nextclouds generischer "öffne per Datei-ID"-Redirect.
 			return generateUrl(`/f/${fileId}`)
@@ -160,5 +209,18 @@ export default {
 	gap: 8px;
 	align-items: center;
 	flex-wrap: wrap;
+}
+.erp-settings__company-form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 420px;
+}
+.erp-settings__company-form input,
+.erp-settings__company-form textarea {
+	width: 100%;
+}
+.erp-settings__success {
+	color: var(--color-success-text, #2a2);
 }
 </style>

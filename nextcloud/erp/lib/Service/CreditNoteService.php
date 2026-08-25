@@ -59,6 +59,7 @@ class CreditNoteService {
 			'quantity' => $p->getQuantity(),
 			'unitPriceNet' => $p->getUnitPriceNet(),
 			'vatRatePercent' => $p->getVatRatePercent(),
+			'discountPercent' => $p->getDiscountPercent(),
 		], $positions));
 
 		return [
@@ -85,6 +86,7 @@ class CreditNoteService {
 			$position->setUnit($ip->getUnit());
 			$position->setUnitPriceNet($ip->getUnitPriceNet());
 			$position->setVatRatePercent($ip->getVatRatePercent());
+			$position->setDiscountPercent($ip->getDiscountPercent());
 			$position->setPositionOrder($ip->getPositionOrder());
 			$this->positionMapper->insert($position);
 		}
@@ -114,7 +116,7 @@ class CreditNoteService {
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn nicht mehr im Entwurf
 	 */
-	public function addPosition(int $creditNoteId, string $description, float $quantity, string $unit, float $unitPriceNet, float $vatRatePercent): CreditNotePosition {
+	public function addPosition(int $creditNoteId, string $description, float $quantity, string $unit, float $unitPriceNet, float $vatRatePercent, float $discountPercent = 0.0): CreditNotePosition {
 		$creditNote = $this->get($creditNoteId);
 		if ($creditNote->getStatus() !== 'draft') {
 			throw new \DomainException("Credit note $creditNoteId is not in status 'draft'");
@@ -127,8 +129,34 @@ class CreditNoteService {
 		$position->setUnit($unit !== '' ? $unit : 'Stk');
 		$position->setUnitPriceNet($unitPriceNet);
 		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
 		$position->setPositionOrder(count($this->positionMapper->findByCreditNote($creditNoteId)));
 		return $this->positionMapper->insert($position);
+	}
+
+	/**
+	 * Bereits angelegte Position korrigieren (ADR-0022) — wie addPosition()
+	 * nur solange die Gutschrift im Entwurf ist.
+	 *
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn nicht mehr im Entwurf
+	 */
+	public function updatePosition(int $creditNoteId, int $id, string $description, float $quantity, string $unit, float $unitPriceNet, float $vatRatePercent, float $discountPercent = 0.0): CreditNotePosition {
+		$creditNote = $this->get($creditNoteId);
+		if ($creditNote->getStatus() !== 'draft') {
+			throw new \DomainException("Credit note $creditNoteId is not in status 'draft'");
+		}
+		$position = $this->positionMapper->findOne($creditNoteId, $id);
+		if ($position === null) {
+			throw new \OutOfBoundsException("Position $id not found in credit note $creditNoteId");
+		}
+		$position->setDescription($description);
+		$position->setQuantity($quantity);
+		$position->setUnit($unit !== '' ? $unit : 'Stk');
+		$position->setUnitPriceNet($unitPriceNet);
+		$position->setVatRatePercent($vatRatePercent);
+		$position->setDiscountPercent($discountPercent);
+		return $this->positionMapper->update($position);
 	}
 
 	/**
@@ -192,6 +220,7 @@ class CreditNoteService {
 			'quantity' => $p->getQuantity(),
 			'unitPriceNet' => $p->getUnitPriceNet(),
 			'vatRatePercent' => $p->getVatRatePercent(),
+			'discountPercent' => $p->getDiscountPercent(),
 		], $positions));
 
 		$rows = '';

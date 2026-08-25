@@ -113,6 +113,22 @@ class DeliveryNoteController extends AbstractResourceController {
 		}
 	}
 
+	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
+	#[NoAdminRequired]
+	public function updatePosition(int $deliveryNoteId, int $id, string $description, float $quantity, string $unit = 'Stk'): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		if (trim($description) === '') {
+			throw new OCSBadRequestException('description must not be empty');
+		}
+		try {
+			return new DataResponse($this->deliveryNoteService->updatePosition($deliveryNoteId, $id, $description, $quantity, $unit));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
+	}
+
 	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function removePosition(int $deliveryNoteId, int $id): DataResponse {
