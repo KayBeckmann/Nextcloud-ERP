@@ -629,12 +629,70 @@ UI als Fehlertext, keine Konsolenfehler durch die ERP-App selbst
 abgesehen vom erwarteten 412-Netzwerkfehler bei der bewusst provozierten
 Kollision).
 
+## 2026-08-25 — Phase 12 (Beleg-PDF-Export und Dokumentenarchiv)
+
+**Erledigt (ADR-0021, additive Migration — `document_file_id` auf
+`erp_quotes`/`erp_orders`/`erp_delivery_notes`/`erp_credit_notes`, neue
+Composer-Dependency `dompdf/dompdf`):**
+
+- Neuer, gemeinsamer `DocumentPdfService`: rendert HTML zu PDF und legt es
+  mit Zeitstempel im Dateinamen ab (`<Belegnummer>_<Y-m-d>T<H-i>.pdf`),
+  überschreibt nie eine bestehende Datei.
+- Alle fünf Belegtypen erzeugen jetzt beim jeweiligen "Fixieren"-Schritt
+  automatisch ein PDF im passenden Projektordner-Unterordner: Rechnung
+  (`issue()`, löst den bisherigen HTML-Export aus ADR-0013 ab), Gutschrift
+  (`issue()`), Lieferschein (`issue()`), Angebot (Statuswechsel auf
+  `sent`), Auftrag (Statuswechsel auf `confirmed`).
+- `ErpFolderService` um `ensureQuoteFolder()`/`ensureOrderFolder()`/
+  `ensureDeliveryNoteFolder()`/`ensureCreditNoteFolder()` erweitert
+  (`Angebote`/`Aufträge`/`Lieferscheine`/`Gutschriften` neben dem
+  bestehenden `Rechnungen`-Unterordner).
+- Web-UI: "Dokument öffnen"-Link in Angebot-/Auftrag-/Lieferschein-Detail
+  sowie eine neue Dokument-Spalte in der Gutschriften-Tabelle der
+  Rechnungsansicht (Rechnung hatte den Link bereits aus ADR-0013).
+- 4 neue Tests (je ein PDF-Erzeugungstest für Angebot/Auftrag/
+  Lieferschein/Gutschrift) — App-Gesamtstand: **270 Tests**.
+
+**Zwei Fehler, die erst die echte HTTP-Verifikation aufgedeckt hat (siehe
+ADR-0021 "Konsequenzen" für Details), von PHPUnit nicht erkennbar:**
+Nextclouds App-Loader lädt den Composer-Vendor-Autoloader einer App nicht
+automatisch (behoben in `Application::register()`); `OrderController`
+hatte eine lokal definierte `requireLevel()`, die `void` statt den
+angemeldeten `IUser` zurückgab, wodurch der Auftrags-PDF-Trigger den
+Issuer verlor, ohne dass ein Fehler sichtbar wurde.
+
+**Löschschutz-Empfehlung für Admins (manueller Einrichtungsschritt, siehe
+ADR-0021 — bewusst nicht automatisiert):**
+
+1. In den Nextcloud-Admin-Einstellungen die App "Group Folders" aktivieren
+   (falls noch nicht geschehen).
+2. Unter Einstellungen → Group Folders einen neuen Ordner "ERP-Archiv"
+   anlegen.
+3. Die Gruppe(n) hinzufügen, die auf die ERP-Projektordner zugreifen,
+   mit der Berechtigung **"Lesen" + "Schreiben"**, aber **ohne "Löschen"**.
+4. Den bestehenden `ERP/Projekte`-Inhalt aus dem Home-Verzeichnis der
+   bisherigen Nutzer in den neuen Group Folder verschieben (einmalig,
+   manuell über die Files-App).
+5. Ergebnis: Alle künftig dort abgelegten Belege (inkl. der PDFs aus
+   dieser Phase) können von normalen Nutzern nicht mehr gelöscht werden —
+   nur Admins mit Server-/DB-Zugriff könnten das umgehen (siehe
+   Einschränkung unten).
+
+**Verifiziert:** Alle 5 Belegtypen (Angebot/Auftrag/Lieferschein/Rechnung/
+Gutschrift) per curl gegen die echte Instanz ausgestellt bzw. in den
+jeweiligen Ziel-Status versetzt und geprüft, dass ein echtes, inhaltlich
+korrektes PDF (dekomprimierter Content-Stream enthält Belegnummer und
+Titel) im richtigen Projektordner-Unterordner mit Zeitstempel im
+Dateinamen landet und `documentFileId` gesetzt wird. Im Browser per
+Playwright durch die echte UI bestätigt: "Dokument öffnen"-Link erscheint
+in allen vier neuen Ansichten sowie als neue Spalte bei den Gutschriften,
+Link-Ziel (`/f/<fileId>`) stimmt mit der zuvor per curl erzeugten Datei
+überein, keine Konsolenfehler.
+
 ## Bekannte Einschränkungen dieses Stands
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
   Fuhrpark/Zeitwirtschaft/Kosten noch nicht (Phase 6+).
-- Kein Angebots-PDF-Export (bewusst nicht Teil von Phase 5, siehe ADR-0011)
-  — "Angebot versenden" ist aktuell nur eine Status-/Zeitstempeländerung.
 - Kein Live-Preisabgleich beim Auswählen eines Artikels/Produkts/Arbeitstyps
   in der Angebotsposition — der Web-UI-Nutzer trägt EP/MwSt. aktuell noch
   manuell ein, statt dass sie automatisch aus dem gewählten Artikel/Produkt
@@ -663,10 +721,10 @@ Kollision).
   Kontingents.
 - Pausenregeln nach ArbZG (§4) sind nicht abgebildet — `breakMinutes` ist
   reine Erfassung ohne automatische Prüfung (ADR-0012).
-- Kein echter PDF-Export für Rechnungen (nur HTML im Projektordner), kein
-  XRechnung/ZUGFeRD, keine vollständige § 14 UStG-Pflichtangaben-Prüfung
-  (fehlende Firmenstammdaten-Entität) — siehe ADR-0013, "Nicht Teil dieser
-  Phase". **Vor produktivem Rechnungsversand an Kunden zwingend
+- Echter PDF-Export für alle fünf Belegtypen ist seit Phase 12 vorhanden
+  (ADR-0021). Weiterhin offen: kein XRechnung/ZUGFeRD, keine vollständige
+  § 14 UStG-Pflichtangaben-Prüfung (fehlende Firmenstammdaten-Entität) —
+  siehe ADR-0013. **Vor produktivem Rechnungsversand an Kunden zwingend
   nachzuziehen.**
 - Kein Zahlungsjournal mit Einzelbuchungen (Datum/Referenz je
   Teilzahlung, Mahnwesen) — nur ein laufender `paid_amount`-Betrag.
@@ -677,8 +735,6 @@ Kollision).
   — `reserve()`/`release()` sind manuelle Aufrufe ohne Automatismus.
 - Keine eigene Bestellungs-/Einkaufs-Entität — Bestellvorschläge bleiben
   ein reiner, nie gespeicherter Bericht (ADR-0014).
-- Kein Lieferschein-PDF/-Dokument im Projektordner (anders als bei
-  Rechnungen) — kann bei Bedarf später nachgezogen werden (ADR-0015).
 - ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
   verbaut (Projekt, Angebot, Auftrag, Rechnung) — Lieferanten-Auswahl bei
   Artikelpreisen und Kundenverträge (Phase 6) nutzen weiterhin Freitext.
