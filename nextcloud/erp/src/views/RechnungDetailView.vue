@@ -88,13 +88,14 @@
 			<section v-if="['issued', 'partially_paid', 'paid'].includes(invoice.status)" class="erp-invoice-detail__credit-notes">
 				<h3>Gutschriften</h3>
 				<table v-if="creditNotes.length">
-					<thead><tr><th>Nr.</th><th>Grund</th><th>Vollstorno</th><th>Status</th></tr></thead>
+					<thead><tr><th>Nr.</th><th>Grund</th><th>Vollstorno</th><th>Status</th><th>Dokument</th></tr></thead>
 					<tbody>
 						<tr v-for="cn in creditNotes" :key="cn.id">
 							<td>{{ cn.creditNoteNumber || '(Entwurf)' }}</td>
 							<td>{{ cn.reason }}</td>
 							<td>{{ cn.cancelsInvoice ? 'ja' : 'nein' }}</td>
 							<td><span class="erp-status-badge" :class="`is-${cn.status}`">{{ cn.status }}</span></td>
+							<td><a v-if="cn.documentFileId" :href="openInFilesUrl(cn.documentFileId)" target="_blank" rel="noopener">öffnen</a></td>
 						</tr>
 					</tbody>
 				</table>

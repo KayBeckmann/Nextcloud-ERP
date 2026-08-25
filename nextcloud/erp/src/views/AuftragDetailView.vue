@@ -8,6 +8,8 @@
 				<span v-if="order.quoteId" class="erp-order-detail__hint">aus Angebot #{{ order.quoteId }}</span>
 			</header>
 
+			<p v-if="order.documentFileId"><a :href="openInFilesUrl(order.documentFileId)" target="_blank" rel="noopener">Auftragsdokument öffnen</a></p>
+
 			<section class="erp-order-detail__meta">
 				<label>Titel <input v-model="edit.title"></label>
 				<label>Status
@@ -135,6 +137,7 @@ import { createInvoice, createInvoiceFromOrder, addInvoicePosition } from '../se
 import { fetchVatRates } from '../services/settingsApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
 import UserPicker from '../components/UserPicker.vue'
+import { generateUrl } from '@nextcloud/router'
 
 const STATUS_LABELS = { draft: 'Entwurf', confirmed: 'Bestätigt', done: 'Abgeschlossen' }
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', labor: 'Arbeitsstunden', custom: 'Freitext' }
@@ -194,6 +197,9 @@ export default {
 		}
 	},
 	methods: {
+		openInFilesUrl(fileId) {
+			return generateUrl(`/f/${fileId}`)
+		},
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
 		},

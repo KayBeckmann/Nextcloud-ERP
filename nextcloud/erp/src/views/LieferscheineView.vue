@@ -30,6 +30,7 @@
 		<template v-else>
 			<button @click="selected = null">← Zurück zur Liste</button>
 			<h3>{{ selected.deliveryNoteNumber }} <span class="erp-status-badge" :class="`is-${selected.status}`">{{ selected.status === 'draft' ? 'Entwurf' : 'Ausgestellt' }}</span></h3>
+			<p v-if="selected.documentFileId"><a :href="openInFilesUrl(selected.documentFileId)" target="_blank" rel="noopener">Lieferschein-Dokument öffnen</a></p>
 
 			<div v-for="g in groupedPositions" :key="g.key" class="erp-delivery-note-group">
 				<h4>{{ g.title }}</h4>
@@ -107,6 +108,7 @@ import {
 } from '../services/deliveryNotesApi.js'
 import { createInvoiceFromDeliveryNote } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
+import { generateUrl } from '@nextcloud/router'
 
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', custom: 'Freitext' }
 
@@ -152,6 +154,9 @@ export default {
 	methods: {
 		typeLabel(type) {
 			return TYPE_LABELS[type] ?? type
+		},
+		openInFilesUrl(fileId) {
+			return generateUrl(`/f/${fileId}`)
 		},
 		errorMessage(e) {
 			return e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
