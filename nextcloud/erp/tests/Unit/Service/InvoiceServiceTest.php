@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\CompanyProfileMapper;
+use OCA\ERP\Db\ContactLinkMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -17,11 +19,15 @@ use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Service\CompanyProfileService;
+use OCA\ERP\Service\ContactsService;
+use OCA\ERP\Service\DocumentHtmlBuilder;
 use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\InvoiceService;
 use OCA\ERP\Service\ProjectService;
 use OCA\ERP\Service\QuoteService;
+use OCP\Contacts\IManager as IContactsManager;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
@@ -64,7 +70,11 @@ final class InvoiceServiceTest extends TestCase {
 		$this->projectMapper = new ProjectMapper($db);
 		$projectService = new ProjectService($this->projectMapper, $this->folderService);
 		$pdfService = new DocumentPdfService();
-		$this->quoteService = new QuoteService($quoteMapper, $quoteGroupMapper, $quotePositionMapper, $this->folderService, $projectService, $pdfService);
+		$htmlBuilder = new DocumentHtmlBuilder(
+			new CompanyProfileService(new CompanyProfileMapper($db)),
+			new ContactsService(new ContactLinkMapper($db), \OC::$server->get(IContactsManager::class)),
+		);
+		$this->quoteService = new QuoteService($quoteMapper, $quoteGroupMapper, $quotePositionMapper, $this->folderService, $projectService, $pdfService, $htmlBuilder);
 
 		$this->orderMapper = new OrderMapper($db);
 		$this->orderPositionMapper = new OrderPositionMapper($db);
@@ -90,6 +100,7 @@ final class InvoiceServiceTest extends TestCase {
 			$this->folderService,
 			$projectService,
 			$pdfService,
+			$htmlBuilder,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);

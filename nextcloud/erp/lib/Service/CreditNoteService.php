@@ -28,6 +28,7 @@ class CreditNoteService {
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
+		private DocumentHtmlBuilder $htmlBuilder,
 	) {
 	}
 
@@ -223,30 +224,16 @@ class CreditNoteService {
 			'discountPercent' => $p->getDiscountPercent(),
 		], $positions));
 
-		$rows = '';
-		foreach ($positions as $p) {
-			$rows .= sprintf(
-				"<tr><td>%s</td><td>%s %s</td><td>%s €</td><td>%s %%</td><td>%s €</td></tr>\n",
-				htmlspecialchars($p->getDescription()),
-				htmlspecialchars((string)$p->getQuantity()),
-				htmlspecialchars($p->getUnit()),
-				htmlspecialchars(number_format($p->getUnitPriceNet(), 2, ',', '.')),
-				htmlspecialchars((string)$p->getVatRatePercent()),
-				htmlspecialchars(number_format($p->getQuantity() * $p->getUnitPriceNet(), 2, ',', '.')),
-			);
-		}
+		// Gutschriften haben keinen eigenen Kunden — der kommt von der
+		// referenzierten Rechnung.
+		$customerContactUid = $this->invoiceService->getInvoice($creditNote->getInvoiceId())->getCustomerContactUid();
 
-		return sprintf(
-			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
-			"<h1>Gutschrift %s</h1>\n<p>%s</p>\n" .
-			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Menge</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n" .
-			"<p>Netto-Zwischensumme: %s €<br>Brutto-Gesamt: %s €</p>\n</body></html>\n",
-			htmlspecialchars((string)$creditNote->getCreditNoteNumber()),
-			htmlspecialchars((string)$creditNote->getCreditNoteNumber()),
-			htmlspecialchars((string)$creditNote->getReason()),
-			$rows,
-			number_format($calc['netSubtotal'], 2, ',', '.'),
-			number_format($calc['grossTotal'], 2, ',', '.'),
-		);
+		$creditNoteNumber = (string) $creditNote->getCreditNoteNumber();
+		$html = $this->htmlBuilder->header('Gutschrift', $creditNoteNumber, (string) $creditNote->getReason(), $creditNote->getCreatedAt(), null, $customerContactUid);
+		$html .= $this->htmlBuilder->positionsTable([], array_map(static fn (CreditNotePosition $p) => $p->jsonSerialize(), $positions), true);
+		$html .= $this->htmlBuilder->summary($calc);
+		$html .= $this->htmlBuilder->footer();
+
+		return $this->htmlBuilder->wrap($creditNoteNumber, $html);
 	}
 }

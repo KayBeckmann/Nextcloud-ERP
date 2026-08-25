@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\CompanyProfileMapper;
+use OCA\ERP\Db\ContactLinkMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -11,11 +13,15 @@ use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\ProjectMapper;
+use OCA\ERP\Service\CompanyProfileService;
+use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\DeliveryNoteService;
+use OCA\ERP\Service\DocumentHtmlBuilder;
 use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\OrderService;
 use OCA\ERP\Service\ProjectService;
+use OCP\Contacts\IManager as IContactsManager;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
@@ -51,6 +57,10 @@ final class DeliveryNoteServiceTest extends TestCase {
 		$this->projectMapper = new ProjectMapper($db);
 		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
 		$projectService = new ProjectService($this->projectMapper, $folderService);
+		$htmlBuilder = new DocumentHtmlBuilder(
+			new CompanyProfileService(new CompanyProfileMapper($db)),
+			new ContactsService(new ContactLinkMapper($db), \OC::$server->get(IContactsManager::class)),
+		);
 		$this->service = new DeliveryNoteService(
 			$this->mapper,
 			$this->positionMapper,
@@ -61,6 +71,7 @@ final class DeliveryNoteServiceTest extends TestCase {
 			$folderService,
 			$projectService,
 			new DocumentPdfService(),
+			$htmlBuilder,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);

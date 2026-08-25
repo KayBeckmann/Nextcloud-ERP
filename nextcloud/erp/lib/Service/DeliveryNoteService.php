@@ -38,6 +38,7 @@ class DeliveryNoteService {
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
+		private DocumentHtmlBuilder $htmlBuilder,
 	) {
 	}
 
@@ -286,24 +287,22 @@ class DeliveryNoteService {
 
 	/** @param DeliveryNotePosition[] $positions */
 	private function renderHtml(DeliveryNote $deliveryNote, array $positions): string {
-		$rows = '';
-		foreach ($positions as $p) {
-			$rows .= sprintf(
-				"<tr><td>%s</td><td>%s</td><td>%s %s</td></tr>\n",
-				htmlspecialchars($p->getDescription()),
-				htmlspecialchars($p->getPositionType()),
-				htmlspecialchars((string)$p->getQuantity()),
-				htmlspecialchars($p->getUnit()),
-			);
+		$groups = $this->groupMapper->findByDeliveryNote($deliveryNote->getId());
+		$groupsForCalc = array_map(static fn (DeliveryNoteGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups);
+
+		// Lieferscheine haben keinen eigenen Kunden — der kommt (falls
+		// vorhanden) vom referenzierten Auftrag.
+		$customerContactUid = null;
+		if ($deliveryNote->getOrderId() !== null) {
+			$order = $this->orderMapper->findById($deliveryNote->getOrderId());
+			$customerContactUid = $order?->getCustomerContactUid();
 		}
 
-		return sprintf(
-			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
-			"<h1>Lieferschein %s</h1>\n" .
-			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Typ</th><th>Menge</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n</body></html>\n",
-			htmlspecialchars((string)$deliveryNote->getDeliveryNoteNumber()),
-			htmlspecialchars((string)$deliveryNote->getDeliveryNoteNumber()),
-			$rows,
-		);
+		$deliveryNoteNumber = (string) $deliveryNote->getDeliveryNoteNumber();
+		$html = $this->htmlBuilder->header('Lieferschein', $deliveryNoteNumber, (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid);
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (DeliveryNotePosition $p) => $p->jsonSerialize(), $positions), false);
+		$html .= $this->htmlBuilder->footer();
+
+		return $this->htmlBuilder->wrap($deliveryNoteNumber, $html);
 	}
 }

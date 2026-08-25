@@ -26,6 +26,7 @@ class QuoteService {
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
+		private DocumentHtmlBuilder $htmlBuilder,
 	) {
 	}
 
@@ -149,40 +150,29 @@ class QuoteService {
 	}
 
 	private function renderHtml(Quote $quote): string {
+		$groups = $this->groupMapper->findByQuote($quote->getId());
 		$positions = $this->positionMapper->findByQuote($quote->getId());
-		$calc = QuoteCalculationService::calculate([], array_map(static fn (QuotePosition $p) => [
-			'id' => $p->getId(),
-			'groupId' => null,
-			'quantity' => $p->getQuantity(),
-			'unitPriceNet' => $p->getUnitPriceNet(),
-			'vatRatePercent' => $p->getVatRatePercent(),
-		], $positions));
-
-		$rows = '';
-		foreach ($positions as $p) {
-			$rows .= sprintf(
-				"<tr><td>%s</td><td>%s %s</td><td>%s €</td><td>%s %%</td><td>%s €</td></tr>\n",
-				htmlspecialchars($p->getDescription()),
-				htmlspecialchars((string)$p->getQuantity()),
-				htmlspecialchars($p->getUnit()),
-				htmlspecialchars(number_format($p->getUnitPriceNet(), 2, ',', '.')),
-				htmlspecialchars((string)$p->getVatRatePercent()),
-				htmlspecialchars(number_format($p->getQuantity() * $p->getUnitPriceNet(), 2, ',', '.')),
-			);
-		}
-
-		return sprintf(
-			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
-			"<h1>Angebot %s</h1>\n<p>%s</p>\n" .
-			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Menge</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n" .
-			"<p>Netto-Zwischensumme: %s €<br>Brutto-Gesamt: %s €</p>\n</body></html>\n",
-			htmlspecialchars((string)$quote->getQuoteNumber()),
-			htmlspecialchars((string)$quote->getQuoteNumber()),
-			htmlspecialchars($quote->getTitle()),
-			$rows,
-			number_format($calc['netSubtotal'], 2, ',', '.'),
-			number_format($calc['grossTotal'], 2, ',', '.'),
+		$groupsForCalc = array_map(static fn (QuoteGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups);
+		$calc = QuoteCalculationService::calculate(
+			$groupsForCalc,
+			array_map(static fn (QuotePosition $p) => [
+				'id' => $p->getId(),
+				'groupId' => $p->getGroupId(),
+				'quantity' => $p->getQuantity(),
+				'unitPriceNet' => $p->getUnitPriceNet(),
+				'vatRatePercent' => $p->getVatRatePercent(),
+				'discountPercent' => $p->getDiscountPercent(),
+			], $positions),
+			$quote->getDiscountPercent(),
 		);
+
+		$quoteNumber = (string) $quote->getQuoteNumber();
+		$html = $this->htmlBuilder->header('Angebot', $quoteNumber, $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid());
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (QuotePosition $p) => $p->jsonSerialize(), $positions), true);
+		$html .= $this->htmlBuilder->summary($calc);
+		$html .= $this->htmlBuilder->footer();
+
+		return $this->htmlBuilder->wrap($quoteNumber, $html);
 	}
 
 	/** @throws \OutOfBoundsException */

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\ArticleSupplierPriceMapper;
+use OCA\ERP\Db\CompanyProfileMapper;
+use OCA\ERP\Db\ContactLinkMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -29,7 +31,10 @@ use OCA\ERP\Db\WarehouseMapper;
 use OCA\ERP\Service\AbsenceRequestService;
 use OCA\ERP\Service\ArticleService;
 use OCA\ERP\Service\CalendarService;
+use OCA\ERP\Service\CompanyProfileService;
+use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\CostService;
+use OCA\ERP\Service\DocumentHtmlBuilder;
 use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\InvoiceService;
@@ -44,6 +49,7 @@ use OCA\ERP\Service\TimeAccountService;
 use OCA\ERP\Service\VehicleService;
 use OCA\ERP\Service\WorkScheduleService;
 use OCP\Calendar\IManager as ICalendarManager;
+use OCP\Contacts\IManager as IContactsManager;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
@@ -76,11 +82,15 @@ final class ReportingServiceTest extends TestCase {
 		$this->projectMapper = new ProjectMapper($db);
 		$this->projectService = new ProjectService($this->projectMapper, $folderService);
 		$pdfService = new DocumentPdfService();
+		$htmlBuilder = new DocumentHtmlBuilder(
+			new CompanyProfileService(new CompanyProfileMapper($db)),
+			new ContactsService(new ContactLinkMapper($db), \OC::$server->get(IContactsManager::class)),
+		);
 
 		$this->quoteMapper = new QuoteMapper($db);
 		$quotePositionMapper = new QuotePositionMapper($db);
 		$quoteGroupMapper = new QuoteGroupMapper($db);
-		$this->quoteService = new QuoteService($this->quoteMapper, $quoteGroupMapper, $quotePositionMapper, $folderService, $this->projectService, $pdfService);
+		$this->quoteService = new QuoteService($this->quoteMapper, $quoteGroupMapper, $quotePositionMapper, $folderService, $this->projectService, $pdfService, $htmlBuilder);
 
 		$orderMapper = new OrderMapper($db);
 		$orderPositionMapper = new OrderPositionMapper($db);
@@ -99,6 +109,7 @@ final class ReportingServiceTest extends TestCase {
 			$folderService,
 			$this->projectService,
 			$pdfService,
+			$htmlBuilder,
 		);
 
 		$this->invoiceMapper = new InvoiceMapper($db);
@@ -120,6 +131,7 @@ final class ReportingServiceTest extends TestCase {
 			$folderService,
 			$this->projectService,
 			$pdfService,
+			$htmlBuilder,
 		);
 
 		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));

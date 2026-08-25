@@ -48,6 +48,7 @@ class InvoiceService {
 		private ErpFolderService $folderService,
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
+		private DocumentHtmlBuilder $htmlBuilder,
 	) {
 	}
 
@@ -536,33 +537,25 @@ class InvoiceService {
 	}
 
 	private function renderHtml(Invoice $invoice, array $positions): string {
-		$calc = $this->calculate($positions, [], $invoice->getDiscountPercent());
-		$rows = '';
-		foreach ($positions as $p) {
-			$rows .= sprintf(
-				"<tr><td>%s</td><td>%s</td><td>%s %s</td><td>%s €</td><td>%s %%</td><td>%s €</td></tr>\n",
-				htmlspecialchars($p->getDescription()),
-				htmlspecialchars($p->getPositionType()),
-				htmlspecialchars((string)$p->getQuantity()),
-				htmlspecialchars($p->getUnit()),
-				htmlspecialchars(number_format($p->getUnitPriceNet(), 2, ',', '.')),
-				htmlspecialchars((string)$p->getVatRatePercent()),
-				htmlspecialchars(number_format($p->getQuantity() * $p->getUnitPriceNet(), 2, ',', '.')),
-			);
-		}
+		$groups = $this->groupMapper->findByInvoice($invoice->getId());
+		$groupsForCalc = array_map(static fn (InvoiceGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups);
+		$calc = $this->calculate($positions, $groups, $invoice->getDiscountPercent());
 
-		return sprintf(
-			"<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><title>%s</title></head><body>\n" .
-			"<h1>Rechnung %s</h1>\n<p>%s</p>\n" .
-			"<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n<thead><tr><th>Beschreibung</th><th>Typ</th><th>Menge</th><th>EP netto</th><th>MwSt.</th><th>Gesamt netto</th></tr></thead>\n<tbody>\n%s</tbody>\n</table>\n" .
-			"<p>Netto-Zwischensumme: %s €<br>Brutto-Gesamt: %s €</p>\n</body></html>\n",
-			htmlspecialchars((string)$invoice->getInvoiceNumber()),
-			htmlspecialchars((string)$invoice->getInvoiceNumber()),
-			htmlspecialchars($invoice->getTitle()),
-			$rows,
-			number_format($calc['netSubtotal'], 2, ',', '.'),
-			number_format($calc['grossTotal'], 2, ',', '.'),
-		);
+		$invoiceNumber = (string) $invoice->getInvoiceNumber();
+		$html = $this->htmlBuilder->header($this->typeLabel($invoice->getType()), $invoiceNumber, $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid());
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (InvoicePosition $p) => $p->jsonSerialize(), $positions), true);
+		$html .= $this->htmlBuilder->summary($calc);
+		$html .= $this->htmlBuilder->footer();
+
+		return $this->htmlBuilder->wrap($invoiceNumber, $html);
+	}
+
+	private function typeLabel(string $type): string {
+		return match ($type) {
+			'partial' => 'Teilrechnung',
+			'final' => 'Schlussrechnung',
+			default => 'Rechnung',
+		};
 	}
 
 	/**
