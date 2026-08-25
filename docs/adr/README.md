@@ -23,6 +23,7 @@
 | [0019](0019-auswertungen-dashboard-exporte.md) | Auswertungen, Dashboard, Exporte | accepted |
 | [0020](0020-mitarbeiter-zuweisung-kalender.md) | Mitarbeiter-Zuweisung für Termine + Kollisionserkennung + Auftrags-Zuweisung | accepted |
 | [0021](0021-beleg-pdf-export.md) | PDF-Export für Belege + Empfehlung zur unveränderlichen Ablage | accepted |
+| [0022](0022-belegqualitaet-firmenprofil-rabatte.md) | Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per

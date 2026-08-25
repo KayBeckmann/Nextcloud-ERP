@@ -30,7 +30,7 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 10 — Betriebliche Kosten und Kalkulation
 - [x] Phase 11 — Auswertungen, Dashboard, Exporte
 - [x] Phase 12 — Beleg-PDF-Export und Dokumentenarchiv
-- [ ] Phase 13–15 — noch nicht begonnen — **Phase 13 nächster Schritt**
+- [ ] Phase 13–16 — noch nicht begonnen — **Phase 13 nächster Schritt**
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
@@ -319,7 +319,15 @@ Ergebnisse: `dompdf` als PDF-Bibliothek, gemeinsamer `DocumentPdfService`, PDF-E
 
 Prüfkriterien: Jeder der fünf Belegtypen erzeugt beim jeweiligen “Fixieren”-Schritt ein echtes PDF im Projektordner. Dateiname enthält Belegnummer und Zeitstempel. Bestehende Tests und der bisherige Rechnungs-HTML-Export laufen sauber auf PDF um, ohne alte Belege rückwirkend zu verändern. Die Löschschutz-Empfehlung ist in `docs/status.md` dokumentiert, nicht automatisiert (bewusst, siehe ADR-0021).
 
-## Phase 13 — Web-Reifegrad und Stabilisierung
+## Phase 13 — Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte
+
+Ziel: Die in Phase 12 erzeugten PDF-Dokumente sind tatsächlich an Kunden verwendbar statt nur technischer Nachweis, dass die Erzeugung funktioniert.
+
+Ergebnisse: Firmenprofil (Name/Anschrift/USt-IdNr/Kontakt/Freitext-Fußzeile) unter Einstellungen, Kundenanschrift wird aus dem verknüpften Kontakt gezogen, Belegdatum und (nur Angebot) Bindefrist erscheinen im PDF, Positionsgruppen werden im PDF als Zwischenüberschriften dargestellt (nicht nur in der Web-Ansicht), Positionen (Menge/Preis/MwSt./Rabatt/Beschreibung) sind nach dem Anlegen noch änderbar statt nur löschbar, Rabatt pro Position sowie ein Gesamtrabatt je Beleg sind möglich (Angebot/Auftrag/Rechnung).
+
+Prüfkriterien: Ein erzeugtes Angebots-PDF enthält Firmenname, Kundenanschrift, Datum und Bindefrist. Gruppentitel erscheinen im PDF in derselben Struktur wie in der Web-Ansicht. Eine bereits angelegte Position lässt sich in Menge, Preis und Rabatt korrigieren, ohne sie zu löschen und neu anzulegen. Ein Rabatt auf eine einzelne Position und ein Rabatt auf den gesamten Beleg wirken sich korrekt auf Netto-/MwSt.-/Bruttosumme aus und erscheinen im PDF.
+
+## Phase 14 — Web-Reifegrad und Stabilisierung
 
 Ziel: Das Nextcloud-Add-on wird reif genug, bevor Flutter gebaut wird.
 
@@ -327,7 +335,7 @@ Ergebnisse: Web-UI vollständig nutzbar für Kernprozesse, API stabil genug doku
 
 Prüfkriterien für „fertig/reif genug für Flutter”: Web-ERP kann Kernprozesse ohne Flutter abbilden. API-Endpunkte für Flutter-MVP sind versioniert und getestet. Offline-/Sync-Regeln sind dokumentiert. Rechteprüfung funktioniert serverseitig. Es gibt Testdaten für Monteur-/Projektleiter-Szenarien. Docker-Setup läuft reproduzierbar auf mindestens zwei unterschiedlichen Maschinen.
 
-## Phase 14 — Flutter-Vorbereitung
+## Phase 15 — Flutter-Vorbereitung
 
 Ziel: Flutter konkret bauen können, ohne Web-ERP umzubauen.
 
@@ -335,7 +343,7 @@ Ergebnisse: Flutter-MVP-Scope finalisieren, API-Endpunkte für Flutter-MVP einfr
 
 Prüfkriterien: Flutter kann gegen eine stabile Test-API entwickelt werden. Flutter muss keine Geschäftslogik duplizieren. Offline-Rechte sind serverseitig prüfbar.
 
-## Phase 15 — Flutter-MVP
+## Phase 16 — Flutter-MVP
 
 Ziel: Reduzierter Monteur-/Unterwegs-Client.
 
