@@ -6,7 +6,7 @@
 	<summary>Branchenneutrales ERP-Add-on für Nextcloud</summary>
 	<description><![CDATA[Projekte, Angebote, Aufträge, Rechnungen, Artikel, Produkte, Arbeitsstunden, Lager, Fuhrpark und Zeitwirtschaft – gewerkeübergreifend nutzbar und nativ in Nextcloud integriert (Users/Groups, Contacts, Calendar, Files). Frühe Entwicklungsphase: aktuell App-Skeleton mit Navigation, noch ohne fachliche Module.]]></description>
 	<version>0.1.0</version>
-	<licence>mit</licence>
+	<licence>agpl</licence>
 	<author>Kay Beckmann</author>
 	<namespace>ERP</namespace>
 	<category>organization</category>

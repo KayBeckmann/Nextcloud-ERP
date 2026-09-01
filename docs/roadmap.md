@@ -13,7 +13,10 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - Die **API wird trotzdem von Anfang an vorbereitet und bereitgestellt**, damit Flutter später ohne großen Umbau andocken kann.
 - Nextcloud soll in **Docker** gehostet werden.
 - Tests und Entwicklungsumgebung sollen auf unterschiedlichen Maschinen reproduzierbar sein.
-- Das Repository steht unter **MIT-Lizenz**.
+- Das Repository steht unter **AGPL-3.0-or-later** (umgestellt von MIT am
+  2026-09-01, siehe [ADR-0023](adr/0023-agpl-lizenzwechsel.md) — das
+  Frontend-Bundle bindet AGPL-/GPL-lizenzierte `@nextcloud/*`-Pakete fest
+  ein).
 
 ## Status (Stand 2026-08-25)
 
@@ -115,7 +118,7 @@ Daraus folgt:
 
 ### Lizenz
 
-- Repository unter MIT-Lizenz.
+- Repository unter AGPL-3.0-or-later (siehe [ADR-0023](adr/0023-agpl-lizenzwechsel.md)).
 - `LICENSE`-Datei früh angelegt.
 - Drittanbieter-Abhängigkeiten prüfen, damit keine Lizenzkonflikte entstehen.
 - Keine proprietären Assets oder Kundendaten ins öffentliche Repo.
@@ -147,7 +150,7 @@ repo/
 ├── docker/                     # Docker/Compose/Testumgebung
 ├── tests/                      # übergreifende Tests / Fixtures
 ├── client/flutter/             # späterer Flutter-Client, zunächst Platzhalter/Docs
-├── LICENSE                     # MIT
+├── LICENSE                     # AGPL-3.0-or-later
 └── README.md
 ```
 

@@ -881,20 +881,11 @@ sind per API editierbar, aber ohne UI dafür.
   (als reine PHP-Library eingebunden, unproblematisch). `vue`/`vue-router`
   sind MIT.
 
-**Offener Entscheidungspunkt (an Kay):**
-
-- **`@nextcloud/axios`/`@nextcloud/router` sind GPL-3.0-or-later,
-  `@nextcloud/vue` ist AGPL-3.0-or-later** — alle drei werden per Webpack
-  fest in das eine JS-Bundle der App eingebaut, nicht separat
-  nachgeladen. Das eigene Repo steht unter MIT, aber das kompilierte
-  Frontend-Bundle enthält damit AGPL-3.0-Code. Das ist in der
-  Nextcloud-App-Welt üblich (fast jede App mit `@nextcloud/vue` steht vor
-  derselben Situation) und wird dort meist gelöst, indem entweder (a) nur
-  das Backend/die eigenen Vue-Komponenten als MIT deklariert werden und
-  das Frontend-Bundle explizit als AGPL-3.0 gekennzeichnet wird, oder (b)
-  das ganze Repo auf AGPL-3.0 wechselt. Bisher keine der beiden Optionen
-  im Repo umgesetzt — `LICENSE`/`README.md` sagen unqualifiziert "MIT".
-  **Nicht selbst entschieden, da Lizenzfrage mit Außenwirkung.**
+**Entschieden (2026-09-01):** Repository von MIT auf **AGPL-3.0-or-later**
+umgestellt — siehe [ADR-0023](adr/0023-agpl-lizenzwechsel.md) (ersetzt
+ADR-0007). `LICENSE` (vollständiger AGPL-3.0-Text),
+`composer.json`/`package.json` (`"license"`), `appinfo/info.xml`
+(`<licence>agpl</licence>`), `README.md` und `roadmap.md` angepasst.
 
 **Noch offen aus Phase 14:** Testdaten/Fixtures für Monteur-/
 Projektleiter-Testszenarien, Backup-/Restore-Verhalten dokumentiert und

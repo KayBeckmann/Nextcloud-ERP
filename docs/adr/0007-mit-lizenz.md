@@ -1,6 +1,6 @@
 # ADR-0007: MIT-Lizenz
 
-**Status:** accepted
+**Status:** superseded-by [ADR-0023](0023-agpl-lizenzwechsel.md)
 **Datum:** 2026-08-19
 
 ## Kontext

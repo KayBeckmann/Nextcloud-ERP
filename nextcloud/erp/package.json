@@ -2,7 +2,7 @@
   "name": "erp",
   "description": "Branchenneutrales ERP-Add-on fuer Nextcloud",
   "version": "0.1.0",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "scripts": {
     "build": "webpack --node-env production --config webpack.config.js",

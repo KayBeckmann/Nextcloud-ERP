@@ -8,7 +8,7 @@
 | [0004](0004-frontend-stack-vue.md) | Frontend-Stack — Vue.js mit `@nextcloud/vue` | accepted |
 | [0005](0005-docker-reproduzierbare-tests.md) | Docker-Hosting und reproduzierbare Tests | accepted |
 | [0006](0006-monorepo-struktur.md) | Monorepo-Struktur | accepted |
-| [0007](0007-mit-lizenz.md) | MIT-Lizenz | accepted |
+| [0007](0007-mit-lizenz.md) | MIT-Lizenz | superseded-by [0023](0023-agpl-lizenzwechsel.md) |
 | [0008](0008-rechte-modell.md) | ERP-Rechte-Modell | accepted |
 | [0009](0009-contacts-calendar-files-integration.md) | Contacts-/Calendar-/Files-Integration | accepted |
 | [0010](0010-projektkern-datenmodell.md) | Projektkern-Datenmodell | accepted |
@@ -24,6 +24,7 @@
 | [0020](0020-mitarbeiter-zuweisung-kalender.md) | Mitarbeiter-Zuweisung für Termine + Kollisionserkennung + Auftrags-Zuweisung | accepted |
 | [0021](0021-beleg-pdf-export.md) | PDF-Export für Belege + Empfehlung zur unveränderlichen Ablage | accepted |
 | [0022](0022-belegqualitaet-firmenprofil-rabatte.md) | Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte | accepted |
+| [0023](0023-agpl-lizenzwechsel.md) | Lizenzwechsel von MIT auf AGPL-3.0-or-later | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per

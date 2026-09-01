@@ -56,7 +56,7 @@ repo/
 ├── docker/             Docker/Compose-Testumgebung
 ├── tests/              übergreifende Tests / Fixtures
 ├── client/flutter/     späterer Flutter-Client (aktuell nur Doku/Platzhalter)
-├── LICENSE             MIT
+├── LICENSE             AGPL-3.0-or-later
 └── README.md
 ```
 
@@ -84,4 +84,7 @@ Aktueller Stand: Phase 0 (Projekt-/Architekturfundament) und Phase 1
 
 ## Lizenz
 
-MIT — siehe [`LICENSE`](LICENSE).
+AGPL-3.0-or-later — siehe [`LICENSE`](LICENSE). Umgestellt von MIT auf
+AGPL-3.0, siehe [ADR-0023](docs/adr/0023-agpl-lizenzwechsel.md): Das
+Frontend-Bundle bindet `@nextcloud/vue` (AGPL-3.0) und
+`@nextcloud/axios`/`@nextcloud/router` (GPL-3.0) fest ein.
