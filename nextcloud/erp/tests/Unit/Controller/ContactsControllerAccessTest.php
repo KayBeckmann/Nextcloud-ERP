@@ -79,4 +79,28 @@ final class ContactsControllerAccessTest extends TestCase {
 		$this->expectException(OCSBadRequestException::class);
 		$this->controller->links('not-a-role');
 	}
+
+	/**
+	 * Regressionstest für den Phase-14-Fund (ControllerRightsGateTest):
+	 * search() durchsucht ALLE Adressbücher unabhängig von ERP-Links und
+	 * braucht deshalb mindestens read auf kunden ODER lieferanten.
+	 */
+	public function testSearchRejectsWithoutAnyContactReadPermission(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::None);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->search('foo');
+	}
+
+	public function testSearchAllowsWithReadOnEitherRole(): void {
+		// Kunden=None, Lieferanten=Read reicht — die Suche ist laut
+		// Implementierung bewusst rollenunabhängig ("irgendeine Rolle").
+		$this->permissionService->method('getEffectivePermission')->willReturnCallback(
+			fn ($user, $resource) => $resource->value === 'lieferanten' ? PermissionLevel::Read : PermissionLevel::None
+		);
+		$this->contactsService->expects($this->once())->method('search')->with('foo')->willReturn([]);
+
+		$response = $this->controller->search('foo');
+
+		$this->assertSame([], $response->getData());
+	}
 }

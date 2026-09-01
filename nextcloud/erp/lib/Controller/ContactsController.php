@@ -62,8 +62,32 @@ class ContactsController extends OCSController {
 		return $parsed;
 	}
 
+	/**
+	 * Phase-14-Fix (ControllerRightsGateTest): `search()` durchsucht ALLE
+	 * Nextcloud-Adressbücher (Name/E-Mail), unabhängig von ERP-Links — ohne
+	 * Gate könnte jeder eingeloggte User damit die komplette Kontaktliste
+	 * durchsuchen, auch ohne jedes ERP-Recht auf `kunden`/`lieferanten`.
+	 * Reicht bewusst "read auf irgendeine der beiden Rollen" statt einer
+	 * bestimmten Rolle, da die Suche selbst rollenunabhängig ist.
+	 *
+	 * @throws OCSForbiddenException
+	 */
+	private function requireReadOnAnyContactResource(): void {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			throw new OCSForbiddenException('No active user session');
+		}
+		$hasKunden = $this->permissionService->getEffectivePermission($user, ResourceType::Kunden)->atLeast(PermissionLevel::Read);
+		$hasLieferanten = $this->permissionService->getEffectivePermission($user, ResourceType::Lieferanten)->atLeast(PermissionLevel::Read);
+		if (!$hasKunden && !$hasLieferanten) {
+			throw new OCSForbiddenException("Requires at least 'read' on 'kunden' or 'lieferanten'");
+		}
+	}
+
+	/** @throws OCSForbiddenException */
 	#[NoAdminRequired]
 	public function search(string $q = ''): DataResponse {
+		$this->requireReadOnAnyContactResource();
 		return new DataResponse($this->contactsService->search($q));
 	}
 
