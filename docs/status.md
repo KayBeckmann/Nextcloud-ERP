@@ -853,3 +853,54 @@ sind per API editierbar, aber ohne UI dafür.
   Termin; ein zugewiesener Auftrag legt keinen Kalender-Termin an
   (bleibt ein separater Schritt) — bewusst zurückgestellt (ADR-0020,
   "Nicht Teil dieser Phase").
+
+## 2026-09-01 — Phase 14 (Web-Reifegrad & Stabilisierung), erster Durchgang
+
+**Erledigt:**
+
+- **API-Dokumentation vervollständigt:** systematischer Abgleich aller 155
+  Routen aus `appinfo/routes.php` gegen `docs/api/v1.md`. Komplett
+  undokumentiert waren die gesamten Module Kosten & Kalkulation (Phase 10,
+  ADR-0018) und Auswertungen/Dashboard (Phase 11, ADR-0019), dazu der
+  CSV-Export, die PDF-Inline-Anzeige (`/documents/{fileId}`) und das
+  Firmenprofil (Phase 13, ADR-0022). Ergänzt außerdem `invoice#addGroup`,
+  `invoice#updateDiscount`, `credit_note#addPosition`/`updatePosition`
+  (inkl. Hinweis auf die bestehende Web-UI-Lücke) und
+  `delivery_note#addGroup`.
+- **Security-Review (grep-basiert):** keine rohe SQL-String-Konkatenation
+  gefunden (alle `executeQuery()`-Aufrufe laufen über Nextclouds
+  `IQueryBuilder`, parametrisiert), kein `v-html` im Frontend (kein XSS-
+  Vektor über Vue-Templates), keine `var_dump`/`error_log`-Debug-Reste,
+  keine hartkodierten Secrets im Code. Von 31 Controllern prüfen 29 aktiv
+  ein Rechte-Level; die zwei Ausnahmen (`ApiController::status()`,
+  `PageController::index()`) liefern nur statische Metadaten bzw. die
+  leere SPA-Hülle ohne Nutzdaten — beide bewusst ohne ERP-Rechte-Gate,
+  Nextclouds Login-Pflicht greift trotzdem.
+- **Lizenz-/Dependency-Review:** `composer.json`/`package.json` haben nur
+  5 direkte Produktions-Abhängigkeiten. `dompdf/dompdf` ist LGPL-2.1
+  (als reine PHP-Library eingebunden, unproblematisch). `vue`/`vue-router`
+  sind MIT.
+
+**Offener Entscheidungspunkt (an Kay):**
+
+- **`@nextcloud/axios`/`@nextcloud/router` sind GPL-3.0-or-later,
+  `@nextcloud/vue` ist AGPL-3.0-or-later** — alle drei werden per Webpack
+  fest in das eine JS-Bundle der App eingebaut, nicht separat
+  nachgeladen. Das eigene Repo steht unter MIT, aber das kompilierte
+  Frontend-Bundle enthält damit AGPL-3.0-Code. Das ist in der
+  Nextcloud-App-Welt üblich (fast jede App mit `@nextcloud/vue` steht vor
+  derselben Situation) und wird dort meist gelöst, indem entweder (a) nur
+  das Backend/die eigenen Vue-Komponenten als MIT deklariert werden und
+  das Frontend-Bundle explizit als AGPL-3.0 gekennzeichnet wird, oder (b)
+  das ganze Repo auf AGPL-3.0 wechselt. Bisher keine der beiden Optionen
+  im Repo umgesetzt — `LICENSE`/`README.md` sagen unqualifiziert "MIT".
+  **Nicht selbst entschieden, da Lizenzfrage mit Außenwirkung.**
+
+**Noch offen aus Phase 14:** Testdaten/Fixtures für Monteur-/
+Projektleiter-Testszenarien, Backup-/Restore-Verhalten dokumentiert und
+geprüft, Docker-Setup auf einer zweiten Maschine verifiziert (die
+bestehende GitHub-Actions-CI baut/testet bereits reproduzierbar auf
+frischer Umgebung — deckt einen Teil dieses Kriteriums ab, ersetzt aber
+keinen echten Zweitmaschinen-Test), Rollen-/Rechte-Testmatrix über alle
+31 Controller hinweg (bisher nur stichprobenartig/implizit über die
+Phasen-Tests abgedeckt, keine dedizierte Matrix).
