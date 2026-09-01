@@ -887,11 +887,34 @@ ADR-0007). `LICENSE` (vollständiger AGPL-3.0-Text),
 `composer.json`/`package.json` (`"license"`), `appinfo/info.xml`
 (`<licence>agpl</licence>`), `README.md` und `roadmap.md` angepasst.
 
-**Noch offen aus Phase 14:** Testdaten/Fixtures für Monteur-/
-Projektleiter-Testszenarien, Backup-/Restore-Verhalten dokumentiert und
-geprüft, Docker-Setup auf einer zweiten Maschine verifiziert (die
-bestehende GitHub-Actions-CI baut/testet bereits reproduzierbar auf
-frischer Umgebung — deckt einen Teil dieses Kriteriums ab, ersetzt aber
-keinen echten Zweitmaschinen-Test), Rollen-/Rechte-Testmatrix über alle
-31 Controller hinweg (bisher nur stichprobenartig/implizit über die
-Phasen-Tests abgedeckt, keine dedizierte Matrix).
+**Erledigt (Fortsetzung, 2026-09-01):**
+
+- **Rollen-/Rechte-Testmatrix:** neuer struktureller Test
+  (`ControllerRightsGateTest`) prüft über alle 31 Controller hinweg
+  systematisch, dass jede öffentliche `#[NoAdminRequired]`-Action einen
+  ERP-Rechte-Check hat (auch rekursiv über private Helper-Methoden) oder
+  als bewusste, begründete Ausnahme eingetragen ist. **Echter Fund dabei:**
+  `ContactsController::search()` durchsuchte ALLE Nextcloud-Adressbücher
+  ohne jedes ERP-Rechte-Gate, obwohl der Klassenkommentar das Gegenteil
+  behauptet — gefixt (mind. `read` auf `kunden` oder `lieferanten`
+  erforderlich), Regressionstest ergänzt. 279 Tests, 1242 Assertions, alle
+  grün.
+- **Testdaten/Fixtures:** [`tests/seed-monteur-projektleiter-szenario.sh`](../tests/seed-monteur-projektleiter-szenario.sh)
+  — curl-basiertes Skript gegen die laufende API v1, erzeugt eine
+  realistische Rechte-Trennung (Monteur: nur Stunden/Zeitkonto-Schreibrecht
+  + Projekte-Leserecht; Projektleiter: Schreibrecht auf Projekte/Angebote/
+  Aufträge/Kunden/Stunden), Firmenprofil, Arbeitsart, Projekt+Angebot und
+  eine Zeiterfassung. End-to-end gegen die Docker-Testumgebung verifiziert.
+- **Backup-/Restore-Verhalten:** dokumentiert und **tatsächlich getestet**
+  in [`docs/backup-restore.md`](backup-restore.md) — `pg_dump` der
+  laufenden Testdatenbank in einen frischen Wegwerf-Container restored,
+  alle 51 `oc_erp_*`-Tabellen sowie die Fixture-Testdaten (Projekt, Angebot,
+  Zeiterfassung) verlustfrei wiederhergestellt; zusätzlich
+  Dateiverzeichnis-Backup (Projektordner + `config.php`) per `tar`
+  verifiziert. Kein produktives System wurde für den Test verändert.
+
+**Noch offen aus Phase 14:** Docker-Setup auf einer zweiten physischen
+Maschine verifizieren (die bestehende GitHub-Actions-CI baut/testet bereits
+reproduzierbar auf frischer Umgebung bei jedem Push — deckt den Kern dieses
+Kriteriums ab, ersetzt aber keinen echten Test auf einer zweiten
+Entwickler-Maschine).

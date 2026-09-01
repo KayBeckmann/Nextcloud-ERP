@@ -34,7 +34,8 @@ Wichtige Grundentscheidung vom 2026-08-18:
 - [x] Phase 11 — Auswertungen, Dashboard, Exporte
 - [x] Phase 12 — Beleg-PDF-Export und Dokumentenarchiv
 - [x] Phase 13 — Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte
-- [ ] Phase 14–16 — noch nicht begonnen — **Phase 14 nächster Schritt**
+- [~] Phase 14 — in Arbeit (API-Doku, Security-/Lizenz-Review, Rollen-/Rechte-Testmatrix, Testdaten-Fixtures, Backup-/Restore alle erledigt — offen: Docker-Verifikation auf zweiter Maschine), siehe [`docs/status.md`](status.md)
+- [ ] Phase 15–16 — noch nicht begonnen
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
