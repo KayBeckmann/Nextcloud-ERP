@@ -82,13 +82,18 @@ jobs:
           extensions: pgsql, pdo_pgsql, gd, zip, xml, mbstring, curl, intl
           tools: composer:v2
 
-      - name: Link ERP app into server custom_apps
+      - name: Link ERP app into server apps
         run: |
-          mkdir -p server/custom_apps
-          cp -r erp-app/nextcloud/erp server/custom_apps/erp
+          # "apps/" statt "custom_apps/": Nextclouds apps_paths kennt "apps/"
+          # ohne weitere Konfiguration, "custom_apps/" nur beim offiziellen
+          # Docker-Image (dort per config.php vorkonfiguriert) — bei einem
+          # rohen Server-Checkout wie hier fehlt dieser Eintrag, wodurch
+          # "occ app:enable erp" die App nicht findet und stattdessen (erfolglos)
+          # im offiziellen App Store danach sucht.
+          cp -r erp-app/nextcloud/erp server/apps/erp
 
       - name: Install ERP app composer dependencies
-        working-directory: server/custom_apps/erp
+        working-directory: server/apps/erp
         run: composer install --no-interaction --no-progress
 
       - name: Install Nextcloud
@@ -113,10 +118,14 @@ jobs:
           php occ app:install groupfolders
           php occ group:add erp-projektleiter
           php occ group:add erp-monteure
-          FOLDER_ID=$(php occ groupfolders:create "ERP-Firma")
+          # "tail -1": ohne pcntl-Extension (auf dem CI-Runner nicht
+          # installiert, anders als im offiziellen Docker-Image) schreibt occ
+          # eine PCNTL-Warnung mit auf stdout vor die eigentliche Ausgabe —
+          # ungefiltert würde das die Folder-ID kaputt machen.
+          FOLDER_ID=$(php occ groupfolders:create "ERP-Firma" | tail -1)
           php occ groupfolders:group "$FOLDER_ID" erp-projektleiter read write share delete
           php occ groupfolders:group "$FOLDER_ID" erp-monteure read write
 
       - name: Run ERP PHPUnit suite
-        working-directory: server/custom_apps/erp
+        working-directory: server/apps/erp
         run: php vendor/bin/phpunit --configuration tests/phpunit.xml
