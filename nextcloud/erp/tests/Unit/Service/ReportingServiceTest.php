@@ -30,6 +30,7 @@ use OCA\ERP\Db\VehicleMapper;
 use OCA\ERP\Db\WarehouseMapper;
 use OCA\ERP\Service\AbsenceRequestService;
 use OCA\ERP\Service\ArticleService;
+use OCA\ERP\Service\CalendarProvisioningService;
 use OCA\ERP\Service\CalendarService;
 use OCA\ERP\Service\CompanyProfileService;
 use OCA\ERP\Service\ContactsService;
@@ -54,12 +55,15 @@ use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCA\ERP\Tests\Unit\Support\ErpTestGroupTrait;
 use Test\TestCase;
 
 /**
  * @group DB
  */
 final class ReportingServiceTest extends TestCase {
+	use ErpTestGroupTrait;
+
 	private const TEST_UID = 'phpunit-reporting-user';
 
 	private ReportingService $service;
@@ -151,7 +155,11 @@ final class ReportingServiceTest extends TestCase {
 		$this->timeEntryMapper = new TimeEntryMapper($db);
 		$timeAccountService = new TimeAccountService(new WorkScheduleService(new \OCA\ERP\Db\WorkScheduleMapper($db)), $this->timeEntryMapper);
 
-		$calendarService = new CalendarService(new \OCA\ERP\Db\CalendarLinkMapper($db), \OC::$server->get(ICalendarManager::class));
+		$calendarService = new CalendarService(
+			new \OCA\ERP\Db\CalendarLinkMapper($db),
+			\OC::$server->get(ICalendarManager::class),
+			\OC::$server->get(CalendarProvisioningService::class),
+		);
 		$absenceRequestService = new AbsenceRequestService(
 			new \OCA\ERP\Db\AbsenceRequestMapper($db),
 			new \OCA\ERP\Db\AbsenceTypeMapper($db),
@@ -182,6 +190,7 @@ final class ReportingServiceTest extends TestCase {
 			$userManager->get(self::TEST_UID)->delete();
 		}
 		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
+		$this->addToErpGroup($this->user);
 		self::loginAsUser(self::TEST_UID);
 	}
 
@@ -193,6 +202,7 @@ final class ReportingServiceTest extends TestCase {
 		}
 		$userManager = \OC::$server->get(IUserManager::class);
 		if ($userManager->userExists(self::TEST_UID)) {
+			$this->removeFromErpGroup($this->user);
 			$userManager->get(self::TEST_UID)->delete();
 		}
 		parent::tearDown();

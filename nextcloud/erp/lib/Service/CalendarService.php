@@ -18,12 +18,18 @@ use OCP\IUser;
  * noch keine Projekt-/Auftragsentität gibt — Phase 4 nutzt dieselbe Tabelle.
  * Seit ADR-0020 kann ein Termin stattdessen einem Mitarbeiter zugewiesen
  * werden — er landet dann in dessen eigenem Kalender, inkl.
- * Kollisionserkennung gegen bereits zugewiesene ERP-Termine.
+ * Kollisionserkennung gegen bereits zugewiesene ERP-Termine. Seit ADR-0024
+ * landen zugewiesene Termine gezielt im dedizierten, automatisch an
+ * `erp-projektleiter` freigegebenen "ERP"-Kalender des Zielusers
+ * ({@see CalendarProvisioningService}) statt im generischen "Personal"-
+ * Kalender — löst den in ADR-0009 offen gelassenen Punkt zur Sichtbarkeit
+ * fremder Terminkalender.
  */
 class CalendarService {
 	public function __construct(
 		private CalendarLinkMapper $mapper,
 		private ICalendarManager $calendarManager,
+		private CalendarProvisioningService $provisioning,
 	) {
 	}
 
@@ -41,31 +47,24 @@ class CalendarService {
 	}
 
 	/**
-	 * Standardkalender ('personal', von Nextcloud für jeden User automatisch
-	 * angelegt) des zugewiesenen Users, sonst der erste beschreibbare
-	 * Kalender (ADR-0020). Der anlegende User wählt hier bewusst keinen
-	 * Kalender aus — er kennt die Kalenderliste des Zielusers nicht.
+	 * Dedizierter "ERP"-Kalender des zugewiesenen Users (ADR-0024) — wird bei
+	 * Bedarf automatisch angelegt und an `erp-projektleiter` freigegeben
+	 * ({@see CalendarProvisioningService}), damit die Projektleitung auch
+	 * Termine sieht, die sie nicht selbst angelegt hat (Personalplanung,
+	 * ADR-0020). Der anlegende User wählt hier bewusst keinen Kalender aus
+	 * — er kennt die Kalenderliste des Zielusers nicht.
 	 *
-	 * @throws \OutOfBoundsException wenn der User keinen beschreibbaren Kalender hat
+	 * @throws \OutOfBoundsException wenn der frisch sichergestellte Kalender
+	 *         danach überraschend nicht auffindbar/beschreibbar ist
 	 */
 	private function findAssigneeCalendar(string $assignedUserId): ICreateFromString {
-		$personal = null;
-		$firstWritable = null;
+		$erpCalendarUri = $this->provisioning->ensureErpCalendarUri($assignedUserId);
 		foreach ($this->calendarManager->getCalendarsForPrincipal($this->principalUriForUserId($assignedUserId)) as $calendar) {
-			if (!$calendar instanceof ICreateFromString) {
-				continue;
-			}
-			$firstWritable ??= $calendar;
-			if ($calendar->getUri() === 'personal') {
-				$personal = $calendar;
-				break;
+			if ($calendar->getUri() === $erpCalendarUri && $calendar instanceof ICreateFromString) {
+				return $calendar;
 			}
 		}
-		$target = $personal ?? $firstWritable;
-		if ($target === null) {
-			throw new \OutOfBoundsException("No writable calendar found for user '$assignedUserId'");
-		}
-		return $target;
+		throw new \OutOfBoundsException("ERP calendar for user '$assignedUserId' not found after provisioning");
 	}
 
 	/**
@@ -89,8 +88,15 @@ class CalendarService {
 		));
 	}
 
-	/** @return list<array{uri: string, displayName: string, writable: bool}> */
+	/**
+	 * @return list<array{uri: string, displayName: string, writable: bool}>
+	 */
 	public function listCalendars(IUser $user): array {
+		// Stellt den eigenen "ERP"-Kalender sicher (ADR-0024), damit er auch
+		// dann in der Liste auftaucht, wenn der User zuvor noch nie selbst
+		// einen Termin angelegt hat (createEvent() ruft das sonst nur für
+		// den *zugewiesenen* User auf, nicht für den anlegenden).
+		$this->provisioning->ensureErpCalendarUri($user->getUID());
 		$calendars = $this->calendarManager->getCalendarsForPrincipal($this->principalUri($user));
 		return array_map(static fn ($calendar) => [
 			'uri' => $calendar->getUri(),

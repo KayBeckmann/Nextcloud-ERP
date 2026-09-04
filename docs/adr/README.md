@@ -25,6 +25,7 @@
 | [0021](0021-beleg-pdf-export.md) | PDF-Export für Belege + Empfehlung zur unveränderlichen Ablage | accepted |
 | [0022](0022-belegqualitaet-firmenprofil-rabatte.md) | Belegqualität: Firmenprofil, Gruppen im PDF, Positionspflege, Rabatte | accepted |
 | [0023](0023-agpl-lizenzwechsel.md) | Lizenzwechsel von MIT auf AGPL-3.0-or-later | accepted |
+| [0024](0024-gruppenbasierte-freigaben.md) | Gruppenbasierte Freigaben: Adressbuch, Kalender, Dateien | accepted |
 
 Format: siehe jede ADR-Datei selbst (Kontext / Entscheidung / Konsequenzen / Alternativen erwogen).
 Einmal `accepted` werden ADRs nicht mehr editiert; eine neue Entscheidung ersetzt eine alte per

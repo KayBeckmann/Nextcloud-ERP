@@ -9,6 +9,7 @@ use OCA\ERP\Db\AbsenceTypeMapper;
 use OCA\ERP\Db\CalendarLinkMapper;
 use OCA\ERP\Service\AbsenceRequestService;
 use OCA\ERP\Service\AbsenceTypeService;
+use OCA\ERP\Service\CalendarProvisioningService;
 use OCA\ERP\Service\CalendarService;
 use OCP\Calendar\IManager as ICalendarManager;
 use OCP\IDBConnection;
@@ -38,7 +39,11 @@ final class AbsenceRequestServiceTest extends TestCase {
 		$this->mapper = new AbsenceRequestMapper($db);
 		$this->absenceTypeMapper = new AbsenceTypeMapper($db);
 		$this->absenceTypeService = new AbsenceTypeService($this->absenceTypeMapper);
-		$calendarService = new CalendarService(new CalendarLinkMapper($db), \OC::$server->get(ICalendarManager::class));
+		$calendarService = new CalendarService(
+			new CalendarLinkMapper($db),
+			\OC::$server->get(ICalendarManager::class),
+			\OC::$server->get(CalendarProvisioningService::class),
+		);
 		$this->service = new AbsenceRequestService($this->mapper, $this->absenceTypeMapper, $calendarService, \OC::$server->get(IUserManager::class));
 
 		$this->absenceTypeId = $this->absenceTypeService->create('phpunit-absence-type', true)->getId();

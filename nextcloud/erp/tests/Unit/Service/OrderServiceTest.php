@@ -29,12 +29,15 @@ use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCA\ERP\Tests\Unit\Support\ErpTestGroupTrait;
 use Test\TestCase;
 
 /**
  * @group DB
  */
 final class OrderServiceTest extends TestCase {
+	use ErpTestGroupTrait;
+
 	private const TEST_UID = 'phpunit-order-user';
 	private const PROJECT_ID = 999999002;
 
@@ -86,6 +89,7 @@ final class OrderServiceTest extends TestCase {
 			$userManager->get(self::TEST_UID)->delete();
 		}
 		$this->user = $userManager->createUser(self::TEST_UID, 'Phpunit-Test-Pass-1!');
+		$this->addToErpGroup($this->user);
 		self::loginAsUser(self::TEST_UID);
 
 		$project = $projectService->createProject($this->user, 'phpunit-order-project', null, null, null);
@@ -121,6 +125,7 @@ final class OrderServiceTest extends TestCase {
 			$this->quoteMapper->delete($quote);
 		}
 		if (isset($this->user)) {
+			$this->removeFromErpGroup($this->user);
 			$this->user->delete();
 		}
 		parent::tearDown();

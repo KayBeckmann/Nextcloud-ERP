@@ -6,6 +6,7 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use DateTimeImmutable;
 use OCA\ERP\Db\CalendarLinkMapper;
+use OCA\ERP\Service\CalendarProvisioningService;
 use OCA\ERP\Service\CalendarService;
 use OCP\Calendar\ICalendarEventBuilder;
 use OCP\Calendar\ICreateFromString;
@@ -23,6 +24,7 @@ final class CalendarServiceTest extends TestCase {
 	private CalendarLinkMapper $mapper;
 	private IUser $user;
 	private ICalendarManager&MockObject $calendarManager;
+	private CalendarProvisioningService&MockObject $provisioning;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -33,7 +35,12 @@ final class CalendarServiceTest extends TestCase {
 		$this->user->method('getUID')->willReturn('phpunit-cal-user');
 
 		$this->calendarManager = $this->createMock(ICalendarManager::class);
-		$this->service = new CalendarService($this->mapper, $this->calendarManager);
+		$this->provisioning = $this->createMock(CalendarProvisioningService::class);
+		// Realitätsnaher Default (ADR-0024): die URI ist konstant 'erp',
+		// unabhängig davon, für welchen User provisioniert wird — einzelne
+		// Tests überschreiben das bei Bedarf mit einer abweichenden URI.
+		$this->provisioning->method('ensureErpCalendarUri')->willReturn('erp');
+		$this->service = new CalendarService($this->mapper, $this->calendarManager, $this->provisioning);
 	}
 
 	protected function tearDown(): void {
@@ -55,11 +62,15 @@ final class CalendarServiceTest extends TestCase {
 		return $calendar;
 	}
 
-	public function testListCalendarsReportsWritability(): void {
+	public function testListCalendarsEnsuresErpCalendarAndReportsWritability(): void {
 		$writable = $this->mockWritableCalendar('personal');
 		$this->calendarManager->method('getCalendarsForPrincipal')
 			->with('principals/users/phpunit-cal-user')
 			->willReturn([$writable]);
+
+		$this->provisioning->expects($this->once())
+			->method('ensureErpCalendarUri')
+			->with('phpunit-cal-user');
 
 		$result = $this->service->listCalendars($this->user);
 		$this->assertSame([['uri' => 'personal', 'displayName' => 'Personal', 'writable' => true]], $result);
@@ -116,12 +127,17 @@ final class CalendarServiceTest extends TestCase {
 		return $builder;
 	}
 
-	public function testCreateEventForAssignedUserUsesTheirPersonalCalendar(): void {
-		$assigneePersonal = $this->mockWritableCalendar('personal');
+	public function testCreateEventForAssignedUserUsesTheirProvisionedErpCalendar(): void {
+		$assigneeErpCalendar = $this->mockWritableCalendar('erp');
 		$this->calendarManager->method('getCalendarsForPrincipal')
 			->with('principals/users/mitarbeiter-x')
-			->willReturn([$assigneePersonal]);
+			->willReturn([$assigneeErpCalendar]);
 		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('assigned-event.ics'));
+
+		$this->provisioning->expects($this->once())
+			->method('ensureErpCalendarUri')
+			->with('mitarbeiter-x')
+			->willReturn('erp');
 
 		$link = $this->service->createEvent(
 			$this->user,
@@ -136,14 +152,19 @@ final class CalendarServiceTest extends TestCase {
 		);
 
 		$this->assertSame('mitarbeiter-x', $link->getAssignedUserId());
-		$this->assertSame('personal', $link->getCalendarUri());
+		$this->assertSame('erp', $link->getCalendarUri());
 	}
 
-	public function testCreateEventForAssignedUserFallsBackToFirstWritableCalendar(): void {
+	public function testCreateEventForAssignedUserPicksErpCalendarAmongOthers(): void {
+		// Der Zielkalender ist gezielt der per URI provisionierte "erp"-
+		// Kalender, nicht irgendein anderer beschreibbarer Kalender, den der
+		// User zufällig sonst noch hat (ADR-0024 — anders als das alte
+		// "erster beschreibbarer Kalender"-Fallback-Verhalten).
 		$other = $this->mockWritableCalendar('baustellen');
+		$erpCalendar = $this->mockWritableCalendar('erp');
 		$this->calendarManager->method('getCalendarsForPrincipal')
 			->with('principals/users/mitarbeiter-y')
-			->willReturn([$other]);
+			->willReturn([$other, $erpCalendar]);
 		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('fallback-event.ics'));
 
 		$link = $this->service->createEvent(
@@ -158,10 +179,12 @@ final class CalendarServiceTest extends TestCase {
 			'mitarbeiter-y',
 		);
 
-		$this->assertSame('baustellen', $link->getCalendarUri());
+		$this->assertSame('erp', $link->getCalendarUri());
 	}
 
-	public function testCreateEventForAssignedUserWithoutWritableCalendarThrows(): void {
+	public function testCreateEventForAssignedUserThrowsIfErpCalendarNotFoundAfterProvisioning(): void {
+		// Verteidigungs-Fall: ensureErpCalendarUri() lief durch, aber die
+		// URI taucht überraschend nicht in getCalendarsForPrincipal() auf.
 		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([]);
 		$this->expectException(\OutOfBoundsException::class);
 		$this->service->createEvent(
@@ -178,7 +201,7 @@ final class CalendarServiceTest extends TestCase {
 	}
 
 	public function testCreateEventRejectsOverlappingAssignmentForSameUser(): void {
-		$calendar = $this->mockWritableCalendar('personal');
+		$calendar = $this->mockWritableCalendar('erp');
 		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
 		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('first-event.ics'));
 
@@ -211,7 +234,7 @@ final class CalendarServiceTest extends TestCase {
 	}
 
 	public function testCreateEventAllowsAdjacentAssignmentsForSameUser(): void {
-		$calendar = $this->mockWritableCalendar('personal');
+		$calendar = $this->mockWritableCalendar('erp');
 		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
 		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('adjacent-event.ics'));
 

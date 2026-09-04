@@ -107,6 +107,16 @@ jobs:
         working-directory: server
         run: php occ app:enable erp
 
+      - name: Provision ERP-Gruppen und Group Folder (ADR-0024)
+        working-directory: server
+        run: |
+          php occ app:install groupfolders
+          php occ group:add erp-projektleiter
+          php occ group:add erp-monteure
+          FOLDER_ID=$(php occ groupfolders:create "ERP-Firma")
+          php occ groupfolders:group "$FOLDER_ID" erp-projektleiter read write share delete
+          php occ groupfolders:group "$FOLDER_ID" erp-monteure read write
+
       - name: Run ERP PHPUnit suite
         working-directory: server/custom_apps/erp
         run: php vendor/bin/phpunit --configuration tests/phpunit.xml
