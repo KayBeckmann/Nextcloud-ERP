@@ -114,6 +114,10 @@
 				</p>
 			</section>
 
+			<section v-else-if="tab === 'Aufmaß'" class="erp-project-detail__section">
+				<MeasurementWorkspace :project-id="id" />
+			</section>
+
 			<section v-else-if="tab === 'Dokumente'" class="erp-project-detail__section">
 				<p v-if="project.filesFolderId">
 					<a :href="openInFilesUrl(project.filesFolderId)" target="_blank" rel="noopener">Projektordner in Dateien öffnen</a>
@@ -140,6 +144,7 @@ import AuftraegeView from './AuftraegeView.vue'
 import RechnungenView from './RechnungenView.vue'
 import LieferscheineView from './LieferscheineView.vue'
 import ProjektWorkflowGuide from '../components/ProjektWorkflowGuide.vue'
+import MeasurementWorkspace from '../components/MeasurementWorkspace.vue'
 
 const STATUS_LABELS = {
 	draft: 'Entwurf',
@@ -152,7 +157,7 @@ const STATUS_LABELS = {
 
 export default {
 	name: 'ProjektDetailView',
-	components: { ContactPicker, UserPicker, AngeboteView, AuftraegeView, RechnungenView, LieferscheineView, ProjektWorkflowGuide },
+	components: { ContactPicker, UserPicker, AngeboteView, AuftraegeView, RechnungenView, LieferscheineView, ProjektWorkflowGuide, MeasurementWorkspace },
 	props: {
 		id: { type: [String, Number], required: true },
 	},
@@ -166,7 +171,7 @@ export default {
 			profitLoss: null,
 			loadError: null,
 			tab: 'Übersicht',
-			tabs: ['Ablauf', 'Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Auswertung', 'Termine', 'Dokumente'],
+			tabs: ['Ablauf', 'Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Auswertung', 'Termine', 'Aufmaß', 'Dokumente'],
 			statusOptions: Object.keys(STATUS_LABELS),
 			newTaskTitle: '',
 			newEventSummary: '',

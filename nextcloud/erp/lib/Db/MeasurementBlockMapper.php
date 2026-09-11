@@ -1,0 +1,5 @@
+<?php
+
+declare(strict_types=1);
+namespace OCA\ERP\Db; use OCP\AppFramework\Db\DoesNotExistException; use OCP\AppFramework\Db\QBMapper; use OCP\IDBConnection;
+/** @extends QBMapper<MeasurementBlock> */ class MeasurementBlockMapper extends QBMapper { public function __construct(IDBConnection $db){parent::__construct($db,'erp_measurement_blocks',MeasurementBlock::class);} public function findById(int $id):?MeasurementBlock{$qb=$this->db->getQueryBuilder();$qb->select('*')->from($this->getTableName())->where($qb->expr()->eq('id',$qb->createNamedParameter($id,\PDO::PARAM_INT)));try{return $this->findEntity($qb);}catch(DoesNotExistException){return null;}} /** @return list<MeasurementBlock> */ public function findByRecord(int $recordId):array{$qb=$this->db->getQueryBuilder();$qb->select('*')->from($this->getTableName())->where($qb->expr()->eq('measurement_record_id',$qb->createNamedParameter($recordId,\PDO::PARAM_INT)))->andWhere($qb->expr()->isNull('deleted_at'))->orderBy('position','ASC');return $this->findEntities($qb);}}

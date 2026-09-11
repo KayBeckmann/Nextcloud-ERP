@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+namespace OCA\ERP\Migration;
+use Closure;
+use OCP\DB\ISchemaWrapper;
+use OCP\DB\Types;
+use OCP\Migration\IOutput;
+use OCP\Migration\SimpleMigrationStep;
+class Version0019Date20260911170000 extends SimpleMigrationStep {
+	public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper { $schema=$schemaClosure(); if (!$schema->hasTable('erp_measurement_records')) { $t=$schema->createTable('erp_measurement_records'); $t->addColumn('id',Types::BIGINT,['autoincrement'=>true]); $t->addColumn('uuid',Types::STRING,['length'=>36]); $t->addColumn('project_id',Types::BIGINT); $t->addColumn('title',Types::STRING,['length'=>255]); $t->addColumn('status',Types::STRING,['length'=>16,'default'=>'draft']); $t->addColumn('version',Types::INTEGER,['default'=>1]); $t->addColumn('created_by',Types::STRING,['length'=>64]); $t->addColumn('created_at',Types::BIGINT); $t->addColumn('updated_at',Types::BIGINT); $t->addColumn('deleted_at',Types::BIGINT,['notnull'=>false]); $t->setPrimaryKey(['id']); $t->addUniqueIndex(['uuid'],'erp_measurement_record_uuid_uq'); $t->addIndex(['project_id','updated_at'],'erp_measurement_record_project_idx'); } if(!$schema->hasTable('erp_measurement_blocks')){$t=$schema->createTable('erp_measurement_blocks');$t->addColumn('id',Types::BIGINT,['autoincrement'=>true]);$t->addColumn('measurement_record_id',Types::BIGINT);$t->addColumn('uuid',Types::STRING,['length'=>36]);$t->addColumn('block_type',Types::STRING,['length'=>16]);$t->addColumn('payload',Types::TEXT);$t->addColumn('position',Types::INTEGER);$t->addColumn('version',Types::INTEGER,['default'=>1]);$t->addColumn('created_at',Types::BIGINT);$t->addColumn('updated_at',Types::BIGINT);$t->addColumn('deleted_at',Types::BIGINT,['notnull'=>false]);$t->setPrimaryKey(['id']);$t->addUniqueIndex(['uuid'],'erp_measurement_block_uuid_uq');$t->addIndex(['measurement_record_id','position'],'erp_measurement_block_record_idx');} if(!$schema->hasTable('erp_measurement_assets')){$t=$schema->createTable('erp_measurement_assets');$t->addColumn('id',Types::BIGINT,['autoincrement'=>true]);$t->addColumn('project_id',Types::BIGINT);$t->addColumn('file_id',Types::BIGINT);$t->addColumn('mime_type',Types::STRING,['length'=>64]);$t->addColumn('created_at',Types::BIGINT);$t->addColumn('deleted_at',Types::BIGINT,['notnull'=>false]);$t->setPrimaryKey(['id']);$t->addUniqueIndex(['project_id','file_id'],'erp_measurement_asset_project_file_uq');$t->addIndex(['project_id'],'erp_measurement_asset_project_idx');} return $schema; }
+}

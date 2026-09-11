@@ -187,6 +187,16 @@ return [
 		['name' => 'purchase_order#show', 'url' => '/api/v1/purchase-orders/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'purchase_order#transition', 'url' => '/api/v1/purchase-orders/{id}/status', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'purchase_order#receive', 'url' => '/api/v1/purchase-order-positions/{positionId}/receipts', 'verb' => 'POST', 'requirements' => ['positionId' => '\d+']],
+		// Project-scoped measurement workspace: Files assets are accepted only via this controlled endpoint.
+		['name' => 'measurement_record#index', 'url' => '/api/v1/projects/{projectId}/measurement-records', 'verb' => 'GET', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'measurement_record#create', 'url' => '/api/v1/projects/{projectId}/measurement-records', 'verb' => 'POST', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'measurement_record#uploadAsset', 'url' => '/api/v1/projects/{projectId}/measurement-assets', 'verb' => 'POST', 'requirements' => ['projectId' => '\d+']],
+		['name' => 'measurement_record#show', 'url' => '/api/v1/measurement-records/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'measurement_record#transition', 'url' => '/api/v1/measurement-records/{id}/status', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'measurement_record#addBlock', 'url' => '/api/v1/measurement-records/{id}/blocks', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'measurement_record#updateBlock', 'url' => '/api/v1/measurement-records/{recordId}/blocks/{id}', 'verb' => 'PUT', 'requirements' => ['recordId' => '\d+', 'id' => '\d+']],
+		['name' => 'measurement_record#deleteBlock', 'url' => '/api/v1/measurement-records/{recordId}/blocks/{id}', 'verb' => 'DELETE', 'requirements' => ['recordId' => '\d+', 'id' => '\d+']],
+		['name' => 'measurement_record#reorderBlocks', 'url' => '/api/v1/measurement-records/{id}/blocks/order', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		// Fuhrpark (Roadmap Phase 9, ADR-0017).
 		['name' => 'vehicle#index', 'url' => '/api/v1/vehicles', 'verb' => 'GET'],
 		['name' => 'vehicle#create', 'url' => '/api/v1/vehicles', 'verb' => 'POST'],

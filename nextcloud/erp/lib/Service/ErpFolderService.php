@@ -89,6 +89,11 @@ class ErpFolderService {
 		return $this->ensureFolder($projectFolder, 'Rechnungen');
 	}
 
+	/** Server-controlled storage for measurement assets; client names/URLs are never used. */
+	public function ensureMeasurementFolder(IUser $user, string $projectNumber): Folder {
+		return $this->ensureFolder($this->ensureProjectFolder($user, $projectNumber), 'Aufmasse');
+	}
+
 	/**
 	 * Je ein weiterer Unterordner pro Belegtyp im Projektordner für den
 	 * PDF-Export (ADR-0021) — analog zu ensureInvoiceFolder().
