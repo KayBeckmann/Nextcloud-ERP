@@ -44,6 +44,16 @@ class ContactsService {
 		return $contacts;
 	}
 
+	/** Prüft, ob der aktuelle Benutzer diesen Contact per UID sehen darf. */
+	public function exists(string $contactUid): bool {
+		foreach ($this->contactsManager->search($contactUid, ['UID']) as $contact) {
+			if (($contact['UID'] ?? null) === $contactUid) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public function displayNameFor(string $contactUid): string {
 		foreach ($this->contactsManager->search($contactUid, ['UID']) as $r) {
 			if (($r['UID'] ?? null) === $contactUid) {
@@ -139,6 +149,9 @@ class ContactsService {
 		?int $paymentTermsDays,
 		?string $notes,
 	): ContactLink {
+		if (trim($contactUid) === '' || !$this->exists($contactUid)) {
+			throw new \InvalidArgumentException("Contact $contactUid is not visible in Nextcloud Contacts");
+		}
 		if ($this->mapper->findOneByContactAndRole($contactUid, $role->value) !== null) {
 			throw new \InvalidArgumentException("Contact $contactUid is already linked as {$role->value}");
 		}

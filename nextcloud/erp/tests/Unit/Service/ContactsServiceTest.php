@@ -72,6 +72,11 @@ final class ContactsServiceTest extends TestCase {
 		$this->assertCount(1, $this->ownLinks(ContactRole::Supplier));
 	}
 
+	public function testUnknownContactCannotBeLinked(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->createLink('phpunit-contact-missing', ContactRole::Customer, null, null, null);
+	}
+
 	public function testDuplicateLinkForSameRoleIsRejected(): void {
 		$this->service->createLink(self::TEST_UID, ContactRole::Customer, null, null, null);
 		$this->expectException(\InvalidArgumentException::class);

@@ -13,6 +13,7 @@
 
 		<template v-else>
 			<section class="erp-contacts__search">
+				<p>Neue Stammdaten werden ausschließlich in Nextcloud Contacts gepflegt. <a :href="contactsUrl" target="_blank" rel="noopener">Contacts öffnen oder neuen Kontakt anlegen</a>, danach hier suchen und verknüpfen.</p>
 				<input v-model="query" type="text" :placeholder="`Contacts durchsuchen…`" @input="onSearch">
 				<ul v-if="searchResults.length" class="erp-contacts__results">
 					<li v-for="c in searchResults" :key="c.uid">
@@ -51,6 +52,7 @@
 </template>
 
 <script>
+import { generateUrl } from '@nextcloud/router'
 import { createContactLink, deleteContactLink, fetchContactLinks, searchContacts, updateContactLink } from '../services/contactsApi.js'
 
 export default {
@@ -68,6 +70,7 @@ export default {
 			isForbidden: false,
 			saving: false,
 			searchTimeout: null,
+			contactsUrl: generateUrl('/apps/contacts'),
 		}
 	},
 	async mounted() {
@@ -88,7 +91,12 @@ export default {
 		onSearch() {
 			clearTimeout(this.searchTimeout)
 			this.searchTimeout = setTimeout(async () => {
-				this.searchResults = this.query.length >= 1 ? await searchContacts(this.query) : []
+				try {
+					this.searchResults = this.query.length >= 1 ? await searchContacts(this.query) : []
+				} catch (e) {
+					this.searchResults = []
+					this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+				}
 			}, 250)
 		},
 		async link(contact) {

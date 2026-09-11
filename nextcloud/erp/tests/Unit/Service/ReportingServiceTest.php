@@ -140,7 +140,7 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 
 		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));
 		$articleSupplierPriceMapper = new ArticleSupplierPriceMapper($db);
-		$this->articleService = new ArticleService(new \OCA\ERP\Db\ArticleMapper($db), $articleSupplierPriceMapper);
+		$this->articleService = new ArticleService(new \OCA\ERP\Db\ArticleMapper($db), $articleSupplierPriceMapper, new \OCA\ERP\Db\ContactLinkMapper($db));
 		$purchaseSuggestionService = new PurchaseSuggestionService(
 			new StockLevelMapper($db),
 			new \OCA\ERP\Db\ArticleMapper($db),
@@ -198,6 +198,12 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 		foreach ($this->projectMapper->findAll() as $project) {
 			if (str_starts_with($project->getTitle(), 'phpunit-reporting-')) {
 				$this->projectMapper->delete($project);
+			}
+		}
+		$contactLinks = new \OCA\ERP\Db\ContactLinkMapper(\OC::$server->get(IDBConnection::class));
+		foreach ($contactLinks->findByRole('supplier') as $link) {
+			if (str_starts_with($link->getContactUid(), 'phpunit-reporting-supplier-')) {
+				$contactLinks->delete($link);
 			}
 		}
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -264,8 +270,13 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 	public function testProjectProfitLossComputesMaterialCostFromCheapestSupplierPrice(): void {
 		$projectId = $this->createProject('material-cost');
 		$article = $this->articleService->create('phpunit-reporting-article', null, null, 'Stk', null, null, null);
-		$this->articleService->addSupplierPrice($article->getId(), 'supplier-a', null, 30.0, 'EUR', null, null);
-		$this->articleService->addSupplierPrice($article->getId(), 'supplier-b', null, 20.0, 'EUR', null, null);
+		$contactLinks = new \OCA\ERP\Db\ContactLinkMapper(\OC::$server->get(IDBConnection::class));
+		foreach (['phpunit-reporting-supplier-a', 'phpunit-reporting-supplier-b'] as $uid) {
+			$link = new \OCA\ERP\Db\ContactLink(); $link->setContactUid($uid); $link->setRole('supplier'); $link->setCreatedAt(time()); $link->setUpdatedAt(time());
+			$contactLinks->insert($link);
+		}
+		$this->articleService->addSupplierPrice($article->getId(), 'phpunit-reporting-supplier-a', null, 30.0, 'EUR', null, null);
+		$this->articleService->addSupplierPrice($article->getId(), 'phpunit-reporting-supplier-b', null, 20.0, 'EUR', null, null);
 
 		$invoice = $this->invoiceService->createDraft('phpunit-reporting-material-invoice', 'invoice', $projectId, null, null, null, null);
 		$this->invoiceService->addPosition($invoice->getId(), null, 'article', $article->getId(), 'phpunit-reporting-article', 3.0, 'Stk', 40.0, 19.0);

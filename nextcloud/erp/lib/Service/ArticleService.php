@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Service;
 
+use OCA\ERP\Contacts\ContactRole;
 use OCA\ERP\Db\Article;
 use OCA\ERP\Db\ArticleMapper;
 use OCA\ERP\Db\ArticleSupplierPrice;
 use OCA\ERP\Db\ArticleSupplierPriceMapper;
+use OCA\ERP\Db\ContactLinkMapper;
 
 /** Artikelstamm + Lieferantenpreise (Roadmap Phase 5, ADR-0011). */
 class ArticleService {
 	public function __construct(
 		private ArticleMapper $mapper,
 		private ArticleSupplierPriceMapper $priceMapper,
+		private ContactLinkMapper $contactLinkMapper,
 	) {
 	}
 
@@ -105,6 +108,9 @@ class ArticleService {
 		?string $deliveryTime,
 	): ArticleSupplierPrice {
 		$this->get($articleId); // wirft OutOfBoundsException, falls Artikel nicht existiert
+		if ($this->contactLinkMapper->findOneByContactAndRole($supplierContactUid, ContactRole::Supplier->value) === null) {
+			throw new \InvalidArgumentException('supplierContactUid must be linked as ERP supplier');
+		}
 		$now = time();
 		$price = new ArticleSupplierPrice();
 		$price->setArticleId($articleId);
