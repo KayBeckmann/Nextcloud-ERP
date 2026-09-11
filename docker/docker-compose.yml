@@ -1,7 +1,11 @@
+# Ausschließlich lokale Entwicklungs-/Testinstanz. Es gibt bewusst keine
+# produktive Compose-Datei in diesem Repository.
+name: nextcloud-erp-dev
+
 services:
   db:
     image: postgres:16-alpine
-    restart: unless-stopped
+    restart: "no"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nextcloud}
       POSTGRES_USER: ${POSTGRES_USER:-nextcloud}
@@ -16,12 +20,14 @@ services:
 
   nextcloud:
     image: nextcloud:${NEXTCLOUD_VERSION:-34}-apache
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "${NEXTCLOUD_HTTP_PORT:-8080}:80"
+      # Nie an alle Interfaces binden: diese Instanz darf ausschließlich vom
+      # Entwicklungsrechner erreichbar sein, niemals über LAN/Internet.
+      - "127.0.0.1:${NEXTCLOUD_HTTP_PORT:-8080}:80"
     environment:
       POSTGRES_HOST: db
       POSTGRES_DB: ${POSTGRES_DB:-nextcloud}

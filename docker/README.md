@@ -1,6 +1,9 @@
 # Docker-Testumgebung
 
-Reproduzierbare lokale Nextcloud-Instanz mit der ERP-App und PostgreSQL.
+Reproduzierbare **ausschließlich lokale Entwicklungs-/Testinstanz** mit der
+ERP-App und PostgreSQL. Diese Compose-Dateien sind nicht für Staging oder
+Produktion vorgesehen und enthalten bewusst keinerlei Deployment- oder
+Reverse-Proxy-Konfiguration.
 Kein lokales PHP/Nextcloud nötig — alles läuft im Container. Composer wird
 einmalig im Container nachinstalliert (siehe unten), da das offizielle Image
 keinen Composer mitbringt.
@@ -37,8 +40,10 @@ docker compose up -d
 
 Die Erstinstallation läuft automatisch über die `NEXTCLOUD_ADMIN_*`/`POSTGRES_*`-
 Umgebungsvariablen des offiziellen Images (dauert beim ersten Start ca. 1 Minute).
-Nextcloud ist danach unter `http://localhost:8080` erreichbar
-(Standard-Login aus `.env`: `admin` / `admin`).
+Nextcloud ist danach ausschließlich unter `http://localhost:8080` erreichbar.
+Der Port wird fest an `127.0.0.1` gebunden, ist also weder im LAN noch im
+Internet erreichbar. Die Zugangsdaten stammen aus der lokalen, ignorierten
+`.env`; die Beispielwerte müssen vor dem ersten Start ersetzt werden.
 
 Die App liegt per Bind-Mount unter `/var/www/html/custom_apps/erp` im Container —
 PHP-Änderungen an `nextcloud/erp/` sind ohne Neustart sofort wirksam.
@@ -141,6 +146,9 @@ docker compose down -v       # Container + Volumes löschen (kompletter Reset)
 
 ## Reproduzierbarkeit
 
+- Port-Bindung ausschließlich auf `127.0.0.1`; kein LAN-/Internet-Exposure.
+- `restart: "no"`: Die Entwicklungscontainer starten nicht automatisch nach
+  einem Host-Neustart.
 - Keine hardcodierten Hostpfade oder Ports außerhalb von `.env`.
 - Keine Secrets im Repo — `.env` ist gitignored, `.env.example` enthält nur
   unkritische Entwicklungs-Defaults.

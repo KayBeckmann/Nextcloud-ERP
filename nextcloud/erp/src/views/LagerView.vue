@@ -154,6 +154,34 @@
 			</template>
 		</section>
 
+		<section v-else-if="tab === 'Bestellungen'" class="erp-warehouse__section">
+			<p>Bestellungen buchen erst beim bestätigten Wareneingang Bestand. Entwurf, Freigabe und Versand verändern den Bestand nicht.</p>
+			<button @click="loadPurchaseOrders">Aktualisieren</button>
+			<table v-if="purchaseOrders.length" class="erp-warehouse__table">
+				<thead><tr><th>ID</th><th>Lieferant</th><th>Status</th><th>Erstellt</th><th></th></tr></thead>
+				<tbody><tr v-for="order in purchaseOrders" :key="order.id">
+					<td>#{{ order.id }}</td><td>{{ order.supplierContactUid }}</td><td><span class="erp-status-badge">{{ order.status }}</span></td><td>{{ formatDate(order.createdAt) }}</td>
+					<td><button @click="openPurchaseOrder(order.id)">Öffnen</button></td>
+				</tr></tbody>
+			</table>
+			<p v-else>Noch keine Bestellungen.</p>
+
+			<section v-if="selectedPurchaseOrder" class="erp-warehouse__purchase-detail">
+				<h3>Bestellung #{{ selectedPurchaseOrder.order.id }} · {{ selectedPurchaseOrder.order.supplierContactUid }}</h3>
+				<p>Status: <strong>{{ selectedPurchaseOrder.order.status }}</strong></p>
+				<button v-if="selectedPurchaseOrder.order.status === 'draft'" @click="changePurchaseStatus('approved')">Freigeben</button>
+				<button v-if="selectedPurchaseOrder.order.status === 'approved'" @click="changePurchaseStatus('sent')">Als versendet markieren</button>
+				<table class="erp-warehouse__table"><thead><tr><th>Position</th><th>Bestellt</th><th>Erhalten</th><th>Lagerort</th><th>Wareneingang</th></tr></thead>
+					<tbody><tr v-for="position in selectedPurchaseOrder.positions" :key="position.id">
+						<td>{{ position.description }}</td><td>{{ position.quantityOrdered }} {{ position.unit }}</td><td>{{ position.quantityReceived }} {{ position.unit }}</td><td>{{ warehouseName(position.warehouseId) }}</td>
+						<td v-if="selectedPurchaseOrder.order.status === 'sent' || selectedPurchaseOrder.order.status === 'partially_received'">
+							<form class="erp-warehouse__form" @submit.prevent="submitReceipt(position)"><input v-model.number="receiptQuantities[position.id]" type="number" min="0.01" :max="position.quantityOrdered - position.quantityReceived" step="0.01" required><button type="submit">Eingang buchen</button></form>
+						</td><td v-else>—</td>
+					</tr></tbody>
+				</table>
+			</section>
+		</section>
+
 		<section v-else-if="tab === 'Bestellvorschläge'" class="erp-warehouse__section">
 			<label>Lagerort (optional, sonst alle)
 				<select v-model.number="selectedWarehouseId" @change="loadSuggestions">
@@ -162,10 +190,15 @@
 				</select>
 			</label>
 
+			<div v-if="suggestions.length" class="erp-warehouse__form">
+				<button :disabled="selectedSuggestionKeys.length === 0" @click="createOrdersFromSuggestions">Auswahl als Bestellentwürfe anlegen</button>
+				<span>{{ selectedSuggestionKeys.length }} Position(en) ausgewählt; getrennt je Lieferant.</span>
+			</div>
 			<table v-if="suggestions.length" class="erp-warehouse__table">
-				<thead><tr><th>Artikel</th><th>Lagerort</th><th>Ist</th><th>Mindestbestand</th><th>Vorschlag</th><th>Günstigster Lieferant</th></tr></thead>
+				<thead><tr><th><input type="checkbox" :checked="selectedSuggestionKeys.length === orderableSuggestions.length" @change="toggleAllSuggestions($event.target.checked)"></th><th>Artikel</th><th>Lagerort</th><th>Ist</th><th>Mindestbestand</th><th>Vorschlag</th><th>Günstigster Lieferant</th></tr></thead>
 				<tbody>
 					<tr v-for="s in suggestions" :key="`${s.articleId}-${s.warehouseId}`">
+						<td><input v-if="s.supplierOptions.length" v-model="selectedSuggestionKeys" type="checkbox" :value="suggestionKey(s)"></td>
 						<td>{{ s.articleName }}</td>
 						<td>{{ s.warehouseName }}</td>
 						<td>{{ s.quantityOnHand }}</td>
@@ -192,6 +225,7 @@ import {
 	fetchInventories, fetchInventory, startInventory, recordInventoryCount, closeInventory,
 	fetchPurchaseSuggestions,
 } from '../services/warehouseApi.js'
+import { fetchPurchaseOrders, fetchPurchaseOrder, createPurchaseOrder, transitionPurchaseOrder, receivePurchaseOrderPosition } from '../services/purchaseOrdersApi.js'
 import { fetchArticles } from '../services/articlesApi.js'
 
 const TYPE_LABELS = { central: 'Zentrallager', vehicle: 'Fahrzeuglager', site: 'Baustellenlager' }
@@ -201,7 +235,7 @@ export default {
 	data() {
 		return {
 			tab: 'Lagerorte',
-			tabs: ['Lagerorte', 'Bestand', 'Inventur', 'Bestellvorschläge'],
+			tabs: ['Lagerorte', 'Bestand', 'Inventur', 'Bestellungen', 'Bestellvorschläge'],
 			loadError: null,
 			warehouses: [],
 			articles: [],
@@ -216,10 +250,19 @@ export default {
 			selectedInventory: null,
 			newCount: { articleId: null, countedQuantity: 0 },
 			suggestions: [],
+			selectedSuggestionKeys: [],
+			purchaseOrders: [],
+			selectedPurchaseOrder: null,
+			receiptQuantities: {},
 		}
 	},
 	async mounted() {
 		await this.loadAll()
+	},
+	computed: {
+		orderableSuggestions() {
+			return this.suggestions.filter((suggestion) => suggestion.supplierOptions?.length)
+		},
 	},
 	methods: {
 		typeLabel(type) {
@@ -344,6 +387,54 @@ export default {
 				this.loadError = this.errorMessage(e)
 			}
 		},
+		warehouseName(id) {
+			return this.warehouses.find((warehouse) => warehouse.id === id)?.name ?? `#${id}`
+		},
+		suggestionKey(suggestion) {
+			return `${suggestion.articleId}-${suggestion.warehouseId}`
+		},
+		toggleAllSuggestions(checked) {
+			this.selectedSuggestionKeys = checked ? this.orderableSuggestions.map((suggestion) => this.suggestionKey(suggestion)) : []
+		},
+		async createOrdersFromSuggestions() {
+			try {
+				const selected = this.suggestions.filter((suggestion) => this.selectedSuggestionKeys.includes(this.suggestionKey(suggestion)))
+				const bySupplier = selected.reduce((groups, suggestion) => {
+					const supplier = suggestion.supplierOptions[0]
+					groups[supplier.supplierContactUid] ??= []
+					groups[supplier.supplierContactUid].push({ articleId: suggestion.articleId, description: suggestion.articleName, quantityOrdered: suggestion.suggestedQuantity, unit: this.articles.find((article) => article.id === suggestion.articleId)?.unit ?? 'Stk', supplierArticleNo: supplier.supplierArticleNo ?? null, unitPurchasePrice: supplier.purchasePrice, currency: supplier.currency, warehouseId: suggestion.warehouseId })
+					return groups
+				}, {})
+				await Promise.all(Object.entries(bySupplier).map(([supplierContactUid, positions]) => createPurchaseOrder({ supplierContactUid, positions })))
+				this.selectedSuggestionKeys = []
+				this.tab = 'Bestellungen'
+				await this.loadPurchaseOrders()
+			} catch (e) { this.loadError = this.errorMessage(e) }
+		},
+		async loadPurchaseOrders() {
+			try { this.purchaseOrders = await fetchPurchaseOrders() } catch (e) { this.loadError = this.errorMessage(e) }
+		},
+		async openPurchaseOrder(id) {
+			try {
+				this.selectedPurchaseOrder = await fetchPurchaseOrder(id)
+				this.receiptQuantities = Object.fromEntries(this.selectedPurchaseOrder.positions.map((position) => [position.id, position.quantityOrdered - position.quantityReceived]))
+			} catch (e) { this.loadError = this.errorMessage(e) }
+		},
+		async changePurchaseStatus(status) {
+			try {
+				await transitionPurchaseOrder(this.selectedPurchaseOrder.order.id, status)
+				await this.openPurchaseOrder(this.selectedPurchaseOrder.order.id)
+				await this.loadPurchaseOrders()
+			} catch (e) { this.loadError = this.errorMessage(e) }
+		},
+		async submitReceipt(position) {
+			try {
+				await receivePurchaseOrderPosition(position.id, { quantity: this.receiptQuantities[position.id], warehouseId: position.warehouseId })
+				await this.openPurchaseOrder(this.selectedPurchaseOrder.order.id)
+				await this.loadPurchaseOrders()
+				if (this.selectedWarehouseId === position.warehouseId) await this.loadStock()
+			} catch (e) { this.loadError = this.errorMessage(e) }
+		},
 		async loadSuggestions() {
 			try {
 				this.suggestions = await fetchPurchaseSuggestions(this.selectedWarehouseId)
@@ -354,6 +445,9 @@ export default {
 	},
 	watch: {
 		async tab(newTab) {
+			if (newTab === 'Bestellungen') {
+				await this.loadPurchaseOrders()
+			}
 			if (newTab === 'Bestellvorschläge') {
 				await this.loadSuggestions()
 			}

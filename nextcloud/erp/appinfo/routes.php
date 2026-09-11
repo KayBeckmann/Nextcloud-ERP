@@ -178,6 +178,12 @@ return [
 		['name' => 'stock#reserve', 'url' => '/api/v1/stock/reserve', 'verb' => 'POST'],
 		['name' => 'stock#release', 'url' => '/api/v1/stock/release', 'verb' => 'POST'],
 		['name' => 'stock#purchaseSuggestions', 'url' => '/api/v1/stock/purchase-suggestions', 'verb' => 'GET'],
+		// Lieferantenbestellungen und bewusster Wareneingang (Roadmap P1).
+		['name' => 'purchase_order#index', 'url' => '/api/v1/purchase-orders', 'verb' => 'GET'],
+		['name' => 'purchase_order#create', 'url' => '/api/v1/purchase-orders', 'verb' => 'POST'],
+		['name' => 'purchase_order#show', 'url' => '/api/v1/purchase-orders/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'purchase_order#transition', 'url' => '/api/v1/purchase-orders/{id}/status', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'purchase_order#receive', 'url' => '/api/v1/purchase-order-positions/{positionId}/receipts', 'verb' => 'POST', 'requirements' => ['positionId' => '\d+']],
 		// Fuhrpark (Roadmap Phase 9, ADR-0017).
 		['name' => 'vehicle#index', 'url' => '/api/v1/vehicles', 'verb' => 'GET'],
 		['name' => 'vehicle#create', 'url' => '/api/v1/vehicles', 'verb' => 'POST'],
