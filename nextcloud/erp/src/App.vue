@@ -10,7 +10,7 @@
 					:exact="item.to === '/'" />
 			</template>
 		</NcAppNavigation>
-		<NcAppContent>
+		<NcAppContent class="erp-app-content">
 			<router-view />
 		</NcAppContent>
 	</NcContent>
@@ -42,3 +42,17 @@ export default {
 	},
 }
 </script>
+
+<style>
+/*
+ * NcContent hält den App-Rahmen auf Viewport-Höhe. Ohne einen expliziten
+ * Flex-Scrollcontainer kann ein hoher Router-Inhalt hinter dem sichtbaren
+ * Frame verschwinden, statt innerhalb der ERP-App scrollbar zu sein.
+ */
+.erp-app-content {
+	min-width: 0;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+</style>

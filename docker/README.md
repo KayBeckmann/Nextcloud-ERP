@@ -85,16 +85,18 @@ docker compose exec -u root nextcloud bash -c \
 Produktiv-Images und enthalten **kein** `tests/`-Verzeichnis — der volle
 Server-Testbootstrap (`Test\TestCase`, DB-Testhelfer) fehlt deshalb standardmäßig.
 Für lokale PHPUnit-Läufe wird er einmalig per Sparse-Checkout aus
-`nextcloud/server` (passend zur Zielversion, `stable34`) nachgezogen und
-read-only in den Container gemountet (`docker-compose.yml`,
-Volume `./.nc-server-tests/src/tests`):
+`nextcloud/server` (passend zur Zielversion, `stable34`) nachgezogen. Der
+Testbootstrap wird **nur** über die separate Compose-Override-Datei eingebunden,
+damit ein noch nicht angelegter Host-Pfad die reguläre Nextcloud-Initialisierung
+nicht blockiert:
 
 ```bash
 mkdir -p docker/.nc-server-tests
 git clone --depth 1 --branch stable34 --filter=blob:none --sparse \
   https://github.com/nextcloud/server.git docker/.nc-server-tests/src
 git -C docker/.nc-server-tests/src sparse-checkout set tests
-docker compose up -d   # Container mit dem neuen Mount neu erstellen
+docker compose -f docker-compose.yml -f docker-compose.tests.yml up -d
+# Container wird mit dem zusätzlichen read-only Test-Mount neu erstellt.
 ```
 
 Danach Tests ausführen:

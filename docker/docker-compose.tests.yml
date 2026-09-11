@@ -1,0 +1,9 @@
+# Optionaler lokaler PHPUnit-Testbootstrap.
+# Erst nach dem in docker/README.md beschriebenen Sparse-Checkout verwenden.
+services:
+  nextcloud:
+    volumes:
+      - ./.nc-server-tests/src/tests:/var/www/html/tests:ro
+      # groupfolders ist eine externe Laufzeitabhängigkeit des ERP-
+      # Testfixtures (ADR-0024), nicht Teil des schlanken Standard-Images.
+      - ./.nc-apps/groupfolders:/var/www/html/custom_apps/groupfolders:ro

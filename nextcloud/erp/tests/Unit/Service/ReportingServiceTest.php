@@ -56,12 +56,12 @@ use OCP\IDBConnection;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCA\ERP\Tests\Unit\Support\ErpTestGroupTrait;
-use Test\TestCase;
+use OCA\ERP\Tests\Unit\Support\ErpIntegrationTestCase;
 
 /**
  * @group DB
  */
-final class ReportingServiceTest extends TestCase {
+final class ReportingServiceTest extends ErpIntegrationTestCase {
 	use ErpTestGroupTrait;
 
 	private const TEST_UID = 'phpunit-reporting-user';
@@ -282,6 +282,13 @@ final class ReportingServiceTest extends TestCase {
 
 	public function testProjectProfitLossComputesLaborCostFromTimeEntries(): void {
 		$projectId = $this->createProject('labor-cost');
+		$year = (int)date('Y');
+		$costService = new CostService(
+			new \OCA\ERP\Db\CostEntryMapper(\OC::$server->get(IDBConnection::class)),
+			new \OCA\ERP\Db\CostSettingsMapper(\OC::$server->get(IDBConnection::class)),
+		);
+		$costEntry = $costService->createEntry('rent', 'phpunit-reporting-labor-cost', 4000.0, $year, 1, null);
+		$costService->updateSettings($year, 200.0, 0.0, 0.0);
 		$entry = new TimeEntry();
 		$entry->setUserId(self::TEST_UID);
 		$entry->setProjectId($projectId);
@@ -301,6 +308,11 @@ final class ReportingServiceTest extends TestCase {
 		$this->assertGreaterThan(0.0, $result['laborCost']);
 
 		$this->timeEntryMapper->delete($entry);
+		$costService->removeEntry($costEntry->getId());
+		$settings = (new \OCA\ERP\Db\CostSettingsMapper(\OC::$server->get(IDBConnection::class)))->findByYear($year);
+		if ($settings !== null) {
+			(new \OCA\ERP\Db\CostSettingsMapper(\OC::$server->get(IDBConnection::class)))->delete($settings);
+		}
 	}
 
 	public function testExportInvoicesCsvContainsIssuedInvoiceButNotDraft(): void {

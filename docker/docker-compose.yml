@@ -33,10 +33,12 @@ services:
     volumes:
       - nextcloud_data:/var/www/html
       - ../nextcloud/erp:/var/www/html/custom_apps/erp
-      # Offizielle Images enthalten kein tests/-Verzeichnis (Prod-Image).
-      # Für lokale PHPUnit-Integrationstests wird der Server-Testbootstrap
-      # per Sparse-Checkout nachgezogen, siehe docker/README.md.
-      - ./.nc-server-tests/src/tests:/var/www/html/tests:ro
+      # Der optionale Server-Testbootstrap liegt bewusst NICHT in diesem
+      # Standard-Compose: ein nicht vorhandener Bind-Mount würde von Docker
+      # als leeres Host-Verzeichnis angelegt und blockiert anschließend beim
+      # Image-Init /var/www/html/tests. Für PHPUnit ist die separate
+      # docker-compose.tests.yml nach dem dokumentierten Sparse-Checkout
+      # zu verwenden.
 
 volumes:
   db_data:

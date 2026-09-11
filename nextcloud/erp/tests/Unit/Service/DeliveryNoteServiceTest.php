@@ -27,12 +27,12 @@ use OCP\IDBConnection;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCA\ERP\Tests\Unit\Support\ErpTestGroupTrait;
-use Test\TestCase;
+use OCA\ERP\Tests\Unit\Support\ErpIntegrationTestCase;
 
 /**
  * @group DB
  */
-final class DeliveryNoteServiceTest extends TestCase {
+final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 	use ErpTestGroupTrait;
 
 	private const TEST_UID = 'phpunit-dn-user';

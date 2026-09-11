@@ -21,6 +21,8 @@ trait ErpTestGroupTrait {
 		$groupManager = \OC::$server->get(IGroupManager::class);
 		$erpGroup = $groupManager->get($group) ?? $groupManager->createGroup($group);
 		$erpGroup?->addUser($user);
+		\OC\Files\Filesystem::tearDown();
+		\OC\Files\Filesystem::init($user->getUID(), '/' . $user->getUID() . '/files');
 	}
 
 	private function removeFromErpGroup(IUser $user, string $group = 'erp-projektleiter'): void {

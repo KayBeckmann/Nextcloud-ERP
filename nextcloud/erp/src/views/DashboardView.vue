@@ -115,14 +115,20 @@ export default {
 
 <style scoped>
 .erp-dashboard {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
 	padding: 20px;
+	padding-bottom: 48px;
 }
 .erp-dashboard__error {
 	color: var(--color-error-text, #c00);
 }
 .erp-dashboard__grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	/* min() verhindert, dass die 240px-Mindestbreite auf schmalen Frames
+	 * den gesamten NcAppContent seitlich überzieht. */
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
 	gap: 12px;
 }
 .erp-tile {

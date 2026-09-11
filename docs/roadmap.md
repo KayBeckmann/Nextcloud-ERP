@@ -39,6 +39,8 @@ Wichtige Grundentscheidung vom 2026-08-18:
 
 Details zum aktuellen Baufortschritt: [`docs/status.md`](status.md).
 
+Praxispriorisierte Ergänzung nach dem Workflow-Durchlauf: [`roadmap-workflow-polish.md`](roadmap-workflow-polish.md).
+
 ## Zielbild
 
 ### Web / Nextcloud-App

@@ -9,7 +9,7 @@ use OCP\Files\IRootFolder;
 use OCP\IGroupManager;
 use OCP\IUser;
 use OCP\IUserManager;
-use Test\TestCase;
+use OCA\ERP\Tests\Unit\Support\ErpIntegrationTestCase;
 
 /**
  * Integrationstest gegen die echte Files-API mit einem eigens angelegten,
@@ -23,7 +23,7 @@ use Test\TestCase;
  *
  * @group DB
  */
-final class ErpFolderServiceTest extends TestCase {
+final class ErpFolderServiceTest extends ErpIntegrationTestCase {
 	private const TEST_UID = 'phpunit-erp-folder-user';
 	private const TEST_GROUP = 'erp-projektleiter';
 
@@ -42,6 +42,7 @@ final class ErpFolderServiceTest extends TestCase {
 		$this->groupManager = \OC::$server->get(IGroupManager::class);
 		$group = $this->groupManager->get(self::TEST_GROUP) ?? $this->groupManager->createGroup(self::TEST_GROUP);
 		$group->addUser($this->user);
+		\OC\Files\Filesystem::initMountPoints(self::TEST_UID);
 
 		if (!$this->groupManager->get(self::TEST_GROUP)?->inGroup($this->user)) {
 			self::markTestSkipped(
@@ -51,6 +52,8 @@ final class ErpFolderServiceTest extends TestCase {
 		}
 
 		self::loginAsUser(self::TEST_UID);
+		\OC\Files\Filesystem::tearDown();
+		\OC\Files\Filesystem::init(self::TEST_UID, '/' . self::TEST_UID . '/files');
 
 		$this->service = new ErpFolderService(\OC::$server->get(IRootFolder::class));
 	}
