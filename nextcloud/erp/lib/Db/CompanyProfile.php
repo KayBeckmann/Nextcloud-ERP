@@ -28,8 +28,28 @@ use OCP\AppFramework\Db\Entity;
  * @method void setEmail(?string $email)
  * @method string|null getPhone()
  * @method void setPhone(?string $phone)
+ * @method string|null getHeaderText()
+ * @method void setHeaderText(?string $headerText)
+ * @method string|null getLegalForm()
+ * @method void setLegalForm(?string $legalForm)
+ * @method string|null getManagingDirector()
+ * @method void setManagingDirector(?string $managingDirector)
+ * @method string|null getCommercialRegister()
+ * @method void setCommercialRegister(?string $commercialRegister)
+ * @method string|null getVatId()
+ * @method void setVatId(?string $vatId)
+ * @method string|null getTaxNumber()
+ * @method void setTaxNumber(?string $taxNumber)
+ * @method string|null getBankName()
+ * @method void setBankName(?string $bankName)
+ * @method string|null getIban()
+ * @method void setIban(?string $iban)
+ * @method string|null getBic()
+ * @method void setBic(?string $bic)
  * @method string|null getFooterText()
  * @method void setFooterText(?string $footerText)
+ * @method int|null getLogoFileId()
+ * @method void setLogoFileId(?int $logoFileId)
  * @method int getUpdatedAt()
  * @method void setUpdatedAt(int $updatedAt)
  */
@@ -42,11 +62,22 @@ class CompanyProfile extends Entity implements \JsonSerializable {
 	protected ?string $taxId = null;
 	protected ?string $email = null;
 	protected ?string $phone = null;
+	protected ?string $headerText = null;
+	protected ?string $legalForm = null;
+	protected ?string $managingDirector = null;
+	protected ?string $commercialRegister = null;
+	protected ?string $vatId = null;
+	protected ?string $taxNumber = null;
+	protected ?string $bankName = null;
+	protected ?string $iban = null;
+	protected ?string $bic = null;
 	protected ?string $footerText = null;
+	protected ?int $logoFileId = null;
 	protected int $updatedAt = 0;
 
 	public function __construct() {
 		$this->addType('id', 'integer');
+		$this->addType('logoFileId', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
 
@@ -61,7 +92,12 @@ class CompanyProfile extends Entity implements \JsonSerializable {
 			'taxId' => $this->getTaxId(),
 			'email' => $this->getEmail(),
 			'phone' => $this->getPhone(),
+			'headerText' => $this->getHeaderText(), 'legalForm' => $this->getLegalForm(),
+			'managingDirector' => $this->getManagingDirector(), 'commercialRegister' => $this->getCommercialRegister(),
+			'vatId' => $this->getVatId(), 'taxNumber' => $this->getTaxNumber(),
+			'bankName' => $this->getBankName(), 'iban' => $this->getIban(), 'bic' => $this->getBic(),
 			'footerText' => $this->getFooterText(),
+			'logoFileId' => $this->getLogoFileId(),
 		];
 	}
 }

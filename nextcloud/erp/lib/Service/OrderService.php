@@ -141,6 +141,9 @@ class OrderService {
 		$order->setAssignedUserId($assignedUserId);
 		$order->setDiscountPercent($discountPercent);
 		$order->setUpdatedAt(time());
+		if ($becomesConfirmed) {
+			$order->setLayoutSnapshot($this->htmlBuilder->snapshot('order', sprintf('AU-%05d', $order->getId()), $order->getTitle(), $order->getCreatedAt(), null, $order->getCustomerContactUid()));
+		}
 		$order = $this->mapper->update($order);
 
 		if ($becomesConfirmed && $issuer !== null) {
@@ -182,10 +185,10 @@ class OrderService {
 		);
 
 		$orderNumber = sprintf('AU-%05d', $order->getId());
-		$html = $this->htmlBuilder->header('Auftrag', $orderNumber, $order->getTitle(), $order->getCreatedAt(), null, $order->getCustomerContactUid());
-		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (OrderPosition $p) => $p->jsonSerialize(), $positions), true);
+		$html = $this->htmlBuilder->header('Auftrag', $orderNumber, $order->getTitle(), $order->getCreatedAt(), null, $order->getCustomerContactUid(), 'order', null, $order->getLayoutSnapshot());
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (OrderPosition $p) => $p->jsonSerialize(), $positions), true, 'order', $order->getLayoutSnapshot());
 		$html .= $this->htmlBuilder->summary($calc);
-		$html .= $this->htmlBuilder->footer();
+		$html .= $this->htmlBuilder->footer('order', $orderNumber, $order->getTitle(), $order->getCreatedAt(), null, $order->getCustomerContactUid(), null, $order->getLayoutSnapshot());
 
 		return $this->htmlBuilder->wrap($orderNumber, $html);
 	}

@@ -21,6 +21,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setNotes(?string $notes)
  * @method int|null getDocumentFileId()
  * @method void setDocumentFileId(?int $documentFileId)
+ * @method string|null getLayoutSnapshot()
+ * @method void setLayoutSnapshot(?string $layoutSnapshot)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -36,6 +38,7 @@ class DeliveryNote extends Entity implements \JsonSerializable {
 	protected ?int $deliveredAt = null;
 	protected ?string $notes = null;
 	protected ?int $documentFileId = null;
+	protected ?string $layoutSnapshot = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -59,6 +62,7 @@ class DeliveryNote extends Entity implements \JsonSerializable {
 			'deliveredAt' => $this->getDeliveredAt(),
 			'notes' => $this->getNotes(),
 			'documentFileId' => $this->getDocumentFileId(),
+			'layoutSnapshot' => $this->getLayoutSnapshot(),
 		];
 	}
 }

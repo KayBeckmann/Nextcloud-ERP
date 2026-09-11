@@ -183,6 +183,8 @@ class CreditNoteService {
 		$creditNote->setStatus('issued');
 		$creditNote->setIssuedAt(time());
 		$creditNote->setUpdatedAt(time());
+		$customerContactUid = $this->invoiceService->getInvoice($creditNote->getInvoiceId())->getCustomerContactUid();
+		$creditNote->setLayoutSnapshot($this->htmlBuilder->snapshot('credit_note', (string) $creditNote->getCreditNoteNumber(), (string) ($creditNote->getReason() ?? ''), $creditNote->getCreatedAt(), null, $customerContactUid));
 		$creditNote = $this->mapper->update($creditNote);
 
 		if ($creditNote->getCancelsInvoice()) {
@@ -229,10 +231,10 @@ class CreditNoteService {
 		$customerContactUid = $this->invoiceService->getInvoice($creditNote->getInvoiceId())->getCustomerContactUid();
 
 		$creditNoteNumber = (string) $creditNote->getCreditNoteNumber();
-		$html = $this->htmlBuilder->header('Gutschrift', $creditNoteNumber, (string) $creditNote->getReason(), $creditNote->getCreatedAt(), null, $customerContactUid);
-		$html .= $this->htmlBuilder->positionsTable([], array_map(static fn (CreditNotePosition $p) => $p->jsonSerialize(), $positions), true);
+		$html = $this->htmlBuilder->header('Gutschrift', $creditNoteNumber, (string) $creditNote->getReason(), $creditNote->getCreatedAt(), null, $customerContactUid, 'credit_note', null, $creditNote->getLayoutSnapshot());
+		$html .= $this->htmlBuilder->positionsTable([], array_map(static fn (CreditNotePosition $p) => $p->jsonSerialize(), $positions), true, 'credit_note', $creditNote->getLayoutSnapshot());
 		$html .= $this->htmlBuilder->summary($calc);
-		$html .= $this->htmlBuilder->footer();
+		$html .= $this->htmlBuilder->footer('credit_note', $creditNoteNumber, (string) $creditNote->getReason(), $creditNote->getCreatedAt(), null, $customerContactUid, null, $creditNote->getLayoutSnapshot());
 
 		return $this->htmlBuilder->wrap($creditNoteNumber, $html);
 	}

@@ -11,6 +11,21 @@ export async function updateCompanyProfile(payload) {
 	return data.ocs.data
 }
 
+export async function uploadCompanyLogo(content) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/company-profile/logo'), { content })
+	return data.ocs.data
+}
+
+export async function fetchDocumentLayouts() {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/document-layouts'))
+	return data.ocs.data
+}
+
+export async function updateDocumentLayout(documentType, layout) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/document-layouts/{documentType}', { documentType }), { layout })
+	return data.ocs.data
+}
+
 export async function fetchVatRates() {
 	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/vat-rates'))
 	return data.ocs.data

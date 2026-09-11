@@ -121,6 +121,7 @@ class QuoteService {
 		$becomesSent = $status === 'sent' && $quote->getSentAt() === null;
 		if ($becomesSent) {
 			$quote->setSentAt(time());
+			$quote->setLayoutSnapshot($this->htmlBuilder->snapshot('quote', (string) $quote->getQuoteNumber(), $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid()));
 		}
 		$quote = $this->mapper->update($quote);
 
@@ -167,10 +168,10 @@ class QuoteService {
 		);
 
 		$quoteNumber = (string) $quote->getQuoteNumber();
-		$html = $this->htmlBuilder->header('Angebot', $quoteNumber, $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid());
-		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (QuotePosition $p) => $p->jsonSerialize(), $positions), true);
+		$html = $this->htmlBuilder->header('Angebot', $quoteNumber, $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid(), 'quote', null, $quote->getLayoutSnapshot());
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (QuotePosition $p) => $p->jsonSerialize(), $positions), true, 'quote', $quote->getLayoutSnapshot());
 		$html .= $this->htmlBuilder->summary($calc);
-		$html .= $this->htmlBuilder->footer();
+		$html .= $this->htmlBuilder->footer('quote', $quoteNumber, $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid(), null, $quote->getLayoutSnapshot());
 
 		return $this->htmlBuilder->wrap($quoteNumber, $html);
 	}

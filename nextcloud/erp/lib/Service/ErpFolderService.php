@@ -124,6 +124,12 @@ class ErpFolderService {
 		return $this->ensureFolder($vehicleFolder, 'Tankbelege');
 	}
 
+	/** Dedicated, server-controlled directory for the singleton company logo. */
+	public function ensureCompanyLogoFolder(IUser $user): Folder {
+		$erpFolder = $this->ensureFolder($this->erpRoot($user), self::ROOT);
+		return $this->ensureFolder($this->ensureFolder($erpFolder, 'Vorlagen'), 'Logos');
+	}
+
 	/**
 	 * Wurzel für die gesamte ERP-Ordnerstruktur (ADR-0024): der gemeinsame
 	 * Group Folder statt des persönlichen Home-Verzeichnisses.

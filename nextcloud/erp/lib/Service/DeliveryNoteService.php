@@ -261,6 +261,8 @@ class DeliveryNoteService {
 		$deliveryNote->setStatus('issued');
 		$deliveryNote->setDeliveredAt(time());
 		$deliveryNote->setUpdatedAt(time());
+		$customerContactUid = $deliveryNote->getOrderId() === null ? null : $this->orderMapper->findById($deliveryNote->getOrderId())?->getCustomerContactUid();
+		$deliveryNote->setLayoutSnapshot($this->htmlBuilder->snapshot('delivery_note', (string) $deliveryNote->getDeliveryNoteNumber(), (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid));
 		$deliveryNote = $this->mapper->update($deliveryNote);
 
 		if ($issuer !== null) {
@@ -299,9 +301,9 @@ class DeliveryNoteService {
 		}
 
 		$deliveryNoteNumber = (string) $deliveryNote->getDeliveryNoteNumber();
-		$html = $this->htmlBuilder->header('Lieferschein', $deliveryNoteNumber, (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid);
-		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (DeliveryNotePosition $p) => $p->jsonSerialize(), $positions), false);
-		$html .= $this->htmlBuilder->footer();
+		$html = $this->htmlBuilder->header('Lieferschein', $deliveryNoteNumber, (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid, 'delivery_note', null, $deliveryNote->getLayoutSnapshot());
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (DeliveryNotePosition $p) => $p->jsonSerialize(), $positions), false, 'delivery_note', $deliveryNote->getLayoutSnapshot());
+		$html .= $this->htmlBuilder->footer('delivery_note', $deliveryNoteNumber, (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid, null, $deliveryNote->getLayoutSnapshot());
 
 		return $this->htmlBuilder->wrap($deliveryNoteNumber, $html);
 	}

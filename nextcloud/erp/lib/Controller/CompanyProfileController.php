@@ -36,6 +36,12 @@ class CompanyProfileController extends AbstractResourceController {
 	}
 
 	#[NoAdminRequired]
+	public function uploadLogo(string $content): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Write);
+		return new DataResponse($this->companyProfileService->uploadLogo($user, $content));
+	}
+
+	#[NoAdminRequired]
 	public function update(
 		?string $name = null,
 		?string $addressLine = null,
@@ -46,6 +52,15 @@ class CompanyProfileController extends AbstractResourceController {
 		?string $email = null,
 		?string $phone = null,
 		?string $footerText = null,
+		?string $headerText = null,
+		?string $legalForm = null,
+		?string $managingDirector = null,
+		?string $commercialRegister = null,
+		?string $vatId = null,
+		?string $taxNumber = null,
+		?string $bankName = null,
+		?string $iban = null,
+		?string $bic = null,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		return new DataResponse($this->companyProfileService->update(
@@ -58,6 +73,15 @@ class CompanyProfileController extends AbstractResourceController {
 			$email,
 			$phone,
 			$footerText,
+			$headerText,
+			$legalForm,
+			$managingDirector,
+			$commercialRegister,
+			$vatId,
+			$taxNumber,
+			$bankName,
+			$iban,
+			$bic,
 		));
 	}
 }

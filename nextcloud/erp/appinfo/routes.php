@@ -72,6 +72,9 @@ return [
 		// Artikel/Produkte/Angebote (Roadmap Phase 5, ADR-0011).
 		['name' => 'company_profile#index', 'url' => '/api/v1/company-profile', 'verb' => 'GET'],
 		['name' => 'company_profile#update', 'url' => '/api/v1/company-profile', 'verb' => 'PUT'],
+		['name' => 'company_profile#uploadLogo', 'url' => '/api/v1/company-profile/logo', 'verb' => 'POST'],
+		['name' => 'document_layout#index', 'url' => '/api/v1/document-layouts', 'verb' => 'GET'],
+		['name' => 'document_layout#update', 'url' => '/api/v1/document-layouts/{documentType}', 'verb' => 'PUT', 'requirements' => ['documentType' => 'quote|order|delivery_note|invoice|credit_note']],
 		['name' => 'vat_rate#index', 'url' => '/api/v1/vat-rates', 'verb' => 'GET'],
 		['name' => 'vat_rate#create', 'url' => '/api/v1/vat-rates', 'verb' => 'POST'],
 		['name' => 'vat_rate#update', 'url' => '/api/v1/vat-rates/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],

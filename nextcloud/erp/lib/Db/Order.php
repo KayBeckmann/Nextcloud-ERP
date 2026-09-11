@@ -25,6 +25,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDocumentFileId(?int $documentFileId)
  * @method float getDiscountPercent()
  * @method void setDiscountPercent(float $discountPercent)
+ * @method string|null getLayoutSnapshot()
+ * @method void setLayoutSnapshot(?string $layoutSnapshot)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getUpdatedAt()
@@ -45,6 +47,7 @@ class Order extends Entity implements \JsonSerializable {
 	// Rabatt auf den gesamten Beleg (ADR-0022), wirkt zusaetzlich zum
 	// Rabatt je Position, anteilig je MwSt.-Satz-Bucket.
 	protected float $discountPercent = 0.0;
+	protected ?string $layoutSnapshot = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
 
@@ -69,6 +72,7 @@ class Order extends Entity implements \JsonSerializable {
 			'assignedUserId' => $this->getAssignedUserId(),
 			'quoteId' => $this->getQuoteId(),
 			'documentFileId' => $this->getDocumentFileId(),
+			'layoutSnapshot' => $this->getLayoutSnapshot(),
 			'discountPercent' => $this->getDiscountPercent(),
 		];
 	}

@@ -514,6 +514,7 @@ class InvoiceService {
 		$invoice->setStatus('issued');
 		$invoice->setIssuedAt(time());
 		$invoice->setUpdatedAt(time());
+		$invoice->setLayoutSnapshot($this->htmlBuilder->snapshot('invoice', (string) $invoice->getInvoiceNumber(), $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), $invoice->getDueDate()));
 		$invoice = $this->mapper->update($invoice);
 
 		$this->tryWriteDocument($invoice, $positions, $issuer);
@@ -542,10 +543,10 @@ class InvoiceService {
 		$calc = $this->calculate($positions, $groups, $invoice->getDiscountPercent());
 
 		$invoiceNumber = (string) $invoice->getInvoiceNumber();
-		$html = $this->htmlBuilder->header($this->typeLabel($invoice->getType()), $invoiceNumber, $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid());
-		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (InvoicePosition $p) => $p->jsonSerialize(), $positions), true);
+		$html = $this->htmlBuilder->header($this->typeLabel($invoice->getType()), $invoiceNumber, $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), 'invoice', $invoice->getDueDate(), $invoice->getLayoutSnapshot());
+		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (InvoicePosition $p) => $p->jsonSerialize(), $positions), true, 'invoice', $invoice->getLayoutSnapshot());
 		$html .= $this->htmlBuilder->summary($calc);
-		$html .= $this->htmlBuilder->footer();
+		$html .= $this->htmlBuilder->footer('invoice', $invoiceNumber, $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), $invoice->getDueDate(), $invoice->getLayoutSnapshot());
 
 		return $this->htmlBuilder->wrap($invoiceNumber, $html);
 	}
