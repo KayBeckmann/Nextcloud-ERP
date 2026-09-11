@@ -11,7 +11,11 @@
 				<button v-for="t in tabs" :key="t" :class="{ 'is-active': tab === t }" @click="tab = t">{{ t }}</button>
 			</nav>
 
-			<section v-if="tab === 'Übersicht'" class="erp-project-detail__section">
+			<section v-if="tab === 'Ablauf'" class="erp-project-detail__section">
+				<ProjektWorkflowGuide :project="project" :project-id="id" @select-tab="tab = $event" />
+			</section>
+
+			<section v-else-if="tab === 'Übersicht'" class="erp-project-detail__section">
 				<label>Titel <input v-model="edit.title"></label>
 				<label>Status
 					<select v-model="edit.status">
@@ -135,6 +139,7 @@ import AngeboteView from './AngeboteView.vue'
 import AuftraegeView from './AuftraegeView.vue'
 import RechnungenView from './RechnungenView.vue'
 import LieferscheineView from './LieferscheineView.vue'
+import ProjektWorkflowGuide from '../components/ProjektWorkflowGuide.vue'
 
 const STATUS_LABELS = {
 	draft: 'Entwurf',
@@ -147,7 +152,7 @@ const STATUS_LABELS = {
 
 export default {
 	name: 'ProjektDetailView',
-	components: { ContactPicker, UserPicker, AngeboteView, AuftraegeView, RechnungenView, LieferscheineView },
+	components: { ContactPicker, UserPicker, AngeboteView, AuftraegeView, RechnungenView, LieferscheineView, ProjektWorkflowGuide },
 	props: {
 		id: { type: [String, Number], required: true },
 	},
@@ -161,7 +166,7 @@ export default {
 			profitLoss: null,
 			loadError: null,
 			tab: 'Übersicht',
-			tabs: ['Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Auswertung', 'Termine', 'Dokumente'],
+			tabs: ['Ablauf', 'Übersicht', 'Aufgaben', 'Angebote', 'Aufträge', 'Rechnungen', 'Lieferscheine', 'Gutschriften', 'Auswertung', 'Termine', 'Dokumente'],
 			statusOptions: Object.keys(STATUS_LABELS),
 			newTaskTitle: '',
 			newEventSummary: '',

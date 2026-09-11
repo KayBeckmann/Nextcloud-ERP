@@ -7,7 +7,8 @@
   "scripts": {
     "build": "webpack --node-env production --config webpack.config.js",
     "dev": "webpack --node-env development --config webpack.config.js",
-    "watch": "webpack --node-env development --progress --watch --config webpack.config.js"
+    "watch": "webpack --node-env development --progress --watch --config webpack.config.js",
+    "test:workflow": "node --test src/services/workflowProgress.test.mjs"
   },
   "browserslist": [
     "extends @nextcloud/browserslist-config"
