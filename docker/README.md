@@ -95,13 +95,40 @@ Testbootstrap wird **nur** über die separate Compose-Override-Datei eingebunden
 damit ein noch nicht angelegter Host-Pfad die reguläre Nextcloud-Initialisierung
 nicht blockiert:
 
+**Schritt 1 — Server-Testbootstrap (Sparse-Checkout):**
+
 ```bash
 mkdir -p docker/.nc-server-tests
 git clone --depth 1 --branch stable34 --filter=blob:none --sparse \
   https://github.com/nextcloud/server.git docker/.nc-server-tests/src
 git -C docker/.nc-server-tests/src sparse-checkout set tests
+```
+
+**Schritt 2 — `groupfolders` bereitstellen:**
+
+Die Teamfolder-App (`groupfolders`) ist eine Laufzeitabhängigkeit von ADR-0024
+und **nicht** im schlanken offiziellen Image enthalten. `docker-compose.tests.yml`
+mountet sie aus `docker/.nc-apps/`; dieser Pfad ist in `.gitignore` und muss
+einmalig lokal befüllt werden. Nextcloud verteilt Apps nicht als GitHub-Release,
+sondern signiert über die `nextcloud-releases`-Organisation:
+
+```bash
+mkdir -p docker/.nc-apps
+curl -sL -o /tmp/groupfolders.tar.gz \
+  https://github.com/nextcloud-releases/groupfolders/releases/download/v22.0.6/groupfolders-v22.0.6.tar.gz
+tar xzf /tmp/groupfolders.tar.gz -C docker/.nc-apps/
+rm /tmp/groupfolders.tar.gz
+```
+
+> Version bewusst gepinnt. Sie muss zur Nextcloud-Zielversion passen
+> (`stable34` → groupfolders 22.x). Passende Version notfalls über
+> `https://apps.nextcloud.com/apps/groupfolders` ermitteln.
+
+**Schritt 3 — Stack mit Test-Override starten:**
+
+```bash
 docker compose -f docker-compose.yml -f docker-compose.tests.yml up -d
-# Container wird mit dem zusätzlichen read-only Test-Mount neu erstellt.
+# Container wird mit den zusätzlichen read-only Mounts neu erstellt.
 ```
 
 Danach Tests ausführen:
@@ -111,7 +138,47 @@ docker compose exec -u www-data nextcloud bash -c \
   "cd /var/www/html/custom_apps/erp && php vendor/bin/phpunit --configuration tests/phpunit.xml"
 ```
 
-Erwartung: alle Tests grün (Stand 2026-08-19: 4 Tests, 8 Assertions).
+Erwartung: alle Tests grün (Stand 2026-09-11: 279 Tests, 1244 Assertions).
+
+### Nach jedem Testlauf: Teamfolder neu provisionieren
+
+`Test\TestCase` des Servers löscht nach **jeder** Testklasse alle Storage- und
+Filecache-Einträge. `ErpIntegrationTestCase` legt den Teamfolder `ERP-Firma`
+deshalb vor jeder betroffenen Testklasse neu an — das hält die *Tests* grün.
+
+Am Ende des Laufs bleibt die Umgebung trotzdem kaputt zurück: Nur 8 der 24
+Service-Testklassen erben von `ErpIntegrationTestCase`. Läuft eine der übrigen
+zuletzt, räumt deren Teardown ab, ohne den Ordner wiederherzustellen. In
+`oc_group_folders` steht danach eine Konfigzeile ohne Storage; `occ
+groupfolders:list` meldet „No folders configured", und im Browser fehlt der
+Ordner.
+
+Wer die Umgebung nach einem Testlauf **manuell weiterbenutzt** (Klicktest,
+curl), muss den Teamfolder daher neu anlegen. Die verwaiste Zeile blockiert
+dabei `createFolder()` und muss zuerst weg:
+
+```bash
+docker compose exec -T db psql -U oc_admin -d nextcloud -q -c "
+DELETE FROM oc_group_folders_groups WHERE folder_id IN (
+  SELECT folder_id FROM oc_group_folders WHERE mount_point='ERP-Firma');
+DELETE FROM oc_group_folders WHERE mount_point='ERP-Firma';"
+
+FID=$(docker compose exec -T -u www-data nextcloud php occ groupfolders:create "ERP-Firma" 2>/dev/null | tail -1 | tr -d '\r')
+docker compose exec -T -u www-data nextcloud php occ groupfolders:group "$FID" erp-projektleiter read write share delete
+docker compose exec -T -u www-data nextcloud php occ groupfolders:group "$FID" erp-monteure read write
+```
+
+> `tail -1` ist nötig, weil `occ` ohne die `pcntl`-Extension eine Warnung auf
+> stdout ausgibt, die sonst in `$FID` landet — dieselbe Ursache wie beim
+> entsprechenden Schritt in `.github/workflows/ci.yml`.
+
+Gegenprobe per echtem WebDAV (nicht nur `occ`, da der Mount erst im
+Request-Kontext aufgelöst wird):
+
+```bash
+curl -s -u <user>:<pass> -X PROPFIND -H "Depth: 1" \
+  http://localhost:8080/remote.php/dav/files/<user>/ | grep -o "ERP-Firma"
+```
 
 In CI (`.github/workflows/ci.yml`) läuft derselbe Testlauf ohnehin gegen einen
 vollständigen `nextcloud/server`-Checkout, unabhängig von dieser lokalen
