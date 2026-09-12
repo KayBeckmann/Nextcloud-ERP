@@ -59,6 +59,7 @@ class PurchaseSuggestionService {
 			// erste Eintrag ist der günstigste.
 			'supplierOptions' => array_map(static fn ($p) => [
 				'supplierContactUid' => $p->getSupplierContactUid(),
+				'supplierArticleNo' => $p->getSupplierArticleNo(),
 				'purchasePrice' => $p->getPurchasePrice(),
 				'currency' => $p->getCurrency(),
 				'minOrderQuantity' => $p->getMinOrderQuantity(),

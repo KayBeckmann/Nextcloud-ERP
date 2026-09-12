@@ -69,6 +69,17 @@ class PurchaseOrderController extends AbstractResourceController {
 		}
 	}
 
+	/** @param list<array<string,mixed>> $selections @throws OCSBadRequestException */
+	#[NoAdminRequired]
+	public function createFromSuggestions(array $selections): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Write);
+		try {
+			return new DataResponse($this->purchaseOrderService->createDraftsFromSuggestions($selections, $user->getUID()));
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+	}
+
 	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function transition(int $id, string $status, ?string $notes = null): DataResponse {

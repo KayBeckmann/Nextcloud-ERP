@@ -189,6 +189,7 @@ return [
 		// Lieferantenbestellungen und bewusster Wareneingang (Roadmap P1).
 		['name' => 'purchase_order#index', 'url' => '/api/v1/purchase-orders', 'verb' => 'GET'],
 		['name' => 'purchase_order#create', 'url' => '/api/v1/purchase-orders', 'verb' => 'POST'],
+		['name' => 'purchase_order#createFromSuggestions', 'url' => '/api/v1/purchase-orders/from-suggestions', 'verb' => 'POST'],
 		['name' => 'purchase_order#show', 'url' => '/api/v1/purchase-orders/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'purchase_order#prepareDocument', 'url' => '/api/v1/purchase-orders/{id}/document', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'purchase_order#transition', 'url' => '/api/v1/purchase-orders/{id}/status', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],

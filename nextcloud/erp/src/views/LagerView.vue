@@ -223,7 +223,7 @@
 				<span>{{ selectedSuggestionKeys.length }} Position(en) ausgewählt; getrennt je Lieferant.</span>
 			</div>
 			<table v-if="suggestions.length" class="erp-warehouse__table">
-				<thead><tr><th><input type="checkbox" :checked="selectedSuggestionKeys.length === orderableSuggestions.length" @change="toggleAllSuggestions($event.target.checked)"></th><th>Artikel</th><th>Lagerort</th><th>Ist</th><th>Mindestbestand</th><th>Vorschlag</th><th>Günstigster Lieferant</th></tr></thead>
+				<thead><tr><th><input type="checkbox" :checked="selectedSuggestionKeys.length === orderableSuggestions.length" @change="toggleAllSuggestions($event.target.checked)"></th><th>Artikel</th><th>Lagerort</th><th>Ist</th><th>Mindestbestand</th><th>Vorschlag</th><th>Lieferant</th></tr></thead>
 				<tbody>
 					<tr v-for="s in suggestions" :key="`${s.articleId}-${s.warehouseId}`">
 						<td><input v-if="s.supplierOptions.length" v-model="selectedSuggestionKeys" type="checkbox" :value="suggestionKey(s)"></td>
@@ -234,7 +234,9 @@
 						<td>{{ s.suggestedQuantity }}</td>
 						<td>
 							<template v-if="s.supplierOptions.length">
-								{{ s.supplierOptions[0].supplierContactUid }} ({{ s.supplierOptions[0].purchasePrice }} €)
+							<select v-model="selectedSupplierBySuggestionKey[suggestionKey(s)]">
+								<option v-for="supplier in s.supplierOptions" :key="supplier.supplierContactUid" :value="supplier.supplierContactUid">{{ supplier.supplierContactUid }} ({{ supplier.purchasePrice }} {{ supplier.currency }}{{ supplier.supplierArticleNo ? ` · ${supplier.supplierArticleNo}` : '' }})</option>
+							</select>
 							</template>
 							<template v-else>—</template>
 						</td>
@@ -253,7 +255,8 @@ import {
 	fetchInventories, fetchInventory, startInventory, recordInventoryCount, closeInventory,
 	fetchPurchaseSuggestions,
 } from '../services/warehouseApi.js'
-import { fetchPurchaseOrders, fetchPurchaseOrder, createPurchaseOrder, transitionPurchaseOrder, receivePurchaseOrderPosition, preparePurchaseOrderDocument, purchaseOrderDocumentUrl } from '../services/purchaseOrdersApi.js'
+import { fetchPurchaseOrders, fetchPurchaseOrder, createPurchaseOrdersFromSuggestions, transitionPurchaseOrder, receivePurchaseOrderPosition, preparePurchaseOrderDocument, purchaseOrderDocumentUrl } from '../services/purchaseOrdersApi.js'
+import { selectedPurchaseSuggestionPayload } from '../services/purchaseSuggestionSelections.js'
 import { fetchArticles } from '../services/articlesApi.js'
 import { fetchProjects } from '../services/projectsApi.js'
 import { activeProjects, projectLabel } from '../services/warehouseProjectPicker.js'
@@ -284,6 +287,7 @@ export default {
 			newCount: { articleId: null, countedQuantity: 0 },
 			suggestions: [],
 			selectedSuggestionKeys: [],
+			selectedSupplierBySuggestionKey: {},
 			purchaseOrders: [],
 			selectedPurchaseOrder: null,
 			receiptQuantities: {},
@@ -463,14 +467,7 @@ export default {
 		},
 		async createOrdersFromSuggestions() {
 			try {
-				const selected = this.suggestions.filter((suggestion) => this.selectedSuggestionKeys.includes(this.suggestionKey(suggestion)))
-				const bySupplier = selected.reduce((groups, suggestion) => {
-					const supplier = suggestion.supplierOptions[0]
-					groups[supplier.supplierContactUid] ??= []
-					groups[supplier.supplierContactUid].push({ articleId: suggestion.articleId, description: suggestion.articleName, quantityOrdered: suggestion.suggestedQuantity, unit: this.articles.find((article) => article.id === suggestion.articleId)?.unit ?? 'Stk', supplierArticleNo: supplier.supplierArticleNo ?? null, unitPurchasePrice: supplier.purchasePrice, currency: supplier.currency, warehouseId: suggestion.warehouseId })
-					return groups
-				}, {})
-				await Promise.all(Object.entries(bySupplier).map(([supplierContactUid, positions]) => createPurchaseOrder({ supplierContactUid, positions })))
+				await createPurchaseOrdersFromSuggestions({ selections: selectedPurchaseSuggestionPayload(this.suggestions, this.selectedSuggestionKeys, this.selectedSupplierBySuggestionKey) })
 				this.selectedSuggestionKeys = []
 				this.tab = 'Bestellungen'
 				await this.loadPurchaseOrders()
@@ -510,6 +507,9 @@ export default {
 		async loadSuggestions() {
 			try {
 				this.suggestions = await fetchPurchaseSuggestions(this.selectedWarehouseId)
+				this.selectedSupplierBySuggestionKey = Object.fromEntries(this.suggestions
+					.filter((suggestion) => suggestion.supplierOptions?.length)
+					.map((suggestion) => [this.suggestionKey(suggestion), suggestion.supplierOptions[0].supplierContactUid]))
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
 			}

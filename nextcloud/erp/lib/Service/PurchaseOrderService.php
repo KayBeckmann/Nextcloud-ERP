@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Service;
 
+use OCA\ERP\Db\ArticleMapper;
+use OCA\ERP\Db\ArticleSupplierPriceMapper;
 use OCA\ERP\Db\PurchaseOrder;
 use OCA\ERP\Db\PurchaseOrderMapper;
 use OCA\ERP\Db\PurchaseOrderPosition;
@@ -12,6 +14,9 @@ use OCA\ERP\Db\PurchaseOrderReceipt;
 use OCA\ERP\Db\PurchaseOrderReceiptMapper;
 use OCA\ERP\Db\PurchaseOrderStatusChange;
 use OCA\ERP\Db\PurchaseOrderStatusChangeMapper;
+use OCA\ERP\Db\StockLevelMapper;
+use OCA\ERP\Warehouse\PurchaseSuggestionCalculator;
+use OCA\ERP\Warehouse\StockCalculator;
 
 /**
  * Lieferantenbestellungen: ein Entwurf verändert niemals Lagerbestände.
@@ -25,6 +30,9 @@ class PurchaseOrderService {
 		private PurchaseOrderStatusChangeMapper $statusMapper,
 		private PurchaseOrderReceiptMapper $receiptMapper,
 		private StockService $stockService,
+		private ArticleMapper $articleMapper,
+		private ArticleSupplierPriceMapper $supplierPriceMapper,
+		private StockLevelMapper $levelMapper,
 	) {
 	}
 
@@ -68,6 +76,65 @@ class PurchaseOrderService {
 		}
 		$this->recordStatus($order->getId(), null, 'draft', $userId, 'Bestellentwurf angelegt');
 		return $order;
+	}
+
+	/**
+	 * Creates one draft per selected supplier from live reorder suggestions.
+	 * Client input is only an article/warehouse/supplier selection; pricing and
+	 * supplier article numbers are always resolved from the server-side association.
+	 *
+	 * @param list<array{articleId:int,warehouseId:int,supplierContactUid:string}> $selections
+	 * @return PurchaseOrder[]
+	 */
+	public function createDraftsFromSuggestions(array $selections, string $userId): array {
+		if ($selections === []) {
+			throw new \InvalidArgumentException('At least one purchase suggestion must be selected');
+		}
+		$positionsBySupplier = [];
+		$seenSelections = [];
+		foreach ($selections as $selection) {
+			$articleId = $selection['articleId'] ?? null;
+			$warehouseId = $selection['warehouseId'] ?? null;
+			$supplierContactUid = $selection['supplierContactUid'] ?? null;
+			if (!is_int($articleId) || !is_int($warehouseId) || !is_string($supplierContactUid) || trim($supplierContactUid) === '') {
+				throw new \InvalidArgumentException('Each suggestion needs an article, warehouse and supplier');
+			}
+			$key = $articleId . ':' . $warehouseId;
+			if (isset($seenSelections[$key])) {
+				throw new \InvalidArgumentException('A purchase suggestion may only be selected once');
+			}
+			$seenSelections[$key] = true;
+			$article = $this->articleMapper->findById($articleId);
+			$level = $this->levelMapper->findOne($articleId, $warehouseId);
+			if ($article === null || $level === null || !StockCalculator::needsReorder($level->getQuantityOnHand(), $level->getQuantityReserved(), $level->getMinQuantity())) {
+				throw new \InvalidArgumentException('Selected purchase suggestion is no longer available');
+			}
+			$price = null;
+			foreach ($this->supplierPriceMapper->findByArticle($articleId) as $candidate) {
+				if ($candidate->getSupplierContactUid() === $supplierContactUid) {
+					$price = $candidate;
+					break;
+				}
+			}
+			if ($price === null) {
+				throw new \InvalidArgumentException('Selected supplier is not associated with this article');
+			}
+			$positionsBySupplier[$supplierContactUid][] = [
+				'articleId' => $articleId,
+				'description' => $article->getName(),
+				'quantityOrdered' => PurchaseSuggestionCalculator::suggestedQuantity($level->getQuantityOnHand(), $level->getMinQuantity()),
+				'unit' => $article->getUnit(),
+				'supplierArticleNo' => $price->getSupplierArticleNo(),
+				'unitPurchasePrice' => $price->getPurchasePrice(),
+				'currency' => $price->getCurrency(),
+				'warehouseId' => $warehouseId,
+			];
+		}
+		$orders = [];
+		foreach ($positionsBySupplier as $supplierContactUid => $positions) {
+			$orders[] = $this->createDraft($supplierContactUid, $positions, $userId);
+		}
+		return $orders;
 	}
 
 	/** @param array{articleId?: ?int,description:string,quantityOrdered:float,unit:string,supplierArticleNo?: ?string,unitPurchasePrice?: float,currency?: string,projectId?: ?int,warehouseId?: ?int} $input */

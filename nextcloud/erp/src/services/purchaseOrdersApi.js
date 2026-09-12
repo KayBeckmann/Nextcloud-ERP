@@ -16,6 +16,11 @@ export async function createPurchaseOrder(payload) {
 	return data.ocs.data
 }
 
+export async function createPurchaseOrdersFromSuggestions(payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/purchase-orders/from-suggestions'), payload)
+	return data.ocs.data
+}
+
 export async function transitionPurchaseOrder(id, status, notes = null) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/purchase-orders/{id}/status', { id }), { status, notes })
 	return data.ocs.data

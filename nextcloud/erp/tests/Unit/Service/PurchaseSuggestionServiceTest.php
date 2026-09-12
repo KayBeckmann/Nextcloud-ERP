@@ -64,6 +64,7 @@ final class PurchaseSuggestionServiceTest extends TestCase {
 		$cheap->setArticleId($this->articleId);
 		$cheap->setSupplierContactUid('supplier-cheap');
 		$cheap->setPurchasePrice(3.0);
+		$cheap->setSupplierArticleNo('CHEAP-42');
 		$cheap->setCreatedAt(time());
 		$cheap->setUpdatedAt(time());
 		$this->supplierPriceMapper->insert($cheap);
@@ -91,6 +92,7 @@ final class PurchaseSuggestionServiceTest extends TestCase {
 		$this->assertSame($this->articleId, $suggestions[0]['articleId']);
 		$this->assertSame(3.0, $suggestions[0]['suggestedQuantity']);
 		$this->assertSame('supplier-cheap', $suggestions[0]['supplierOptions'][0]['supplierContactUid']);
+		$this->assertSame('CHEAP-42', $suggestions[0]['supplierOptions'][0]['supplierArticleNo']);
 	}
 
 	public function testArticleAboveMinimumIsNotSuggested(): void {

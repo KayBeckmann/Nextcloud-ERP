@@ -6,6 +6,8 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\Article;
 use OCA\ERP\Db\ArticleMapper;
+use OCA\ERP\Db\ArticleSupplierPrice;
+use OCA\ERP\Db\ArticleSupplierPriceMapper;
 use OCA\ERP\Db\PurchaseOrderMapper;
 use OCA\ERP\Db\PurchaseOrderPositionMapper;
 use OCA\ERP\Db\PurchaseOrderReceiptMapper;
@@ -30,9 +32,12 @@ final class PurchaseOrderServiceTest extends TestCase {
 	private PurchaseOrderStatusChangeMapper $statusMapper;
 	private StockMovementMapper $movementMapper;
 	private ArticleMapper $articleMapper;
+	private ArticleSupplierPriceMapper $supplierPriceMapper;
 	private WarehouseMapper $warehouseMapper;
 	private int $articleId;
 	private int $warehouseId;
+	private int $secondWarehouseId;
+	private int $thirdWarehouseId;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -42,6 +47,7 @@ final class PurchaseOrderServiceTest extends TestCase {
 		$this->statusMapper = new PurchaseOrderStatusChangeMapper($db);
 		$this->movementMapper = new StockMovementMapper($db);
 		$this->articleMapper = new ArticleMapper($db);
+		$this->supplierPriceMapper = new ArticleSupplierPriceMapper($db);
 		$this->warehouseMapper = new WarehouseMapper($db);
 		$this->service = new PurchaseOrderService(
 			$this->orderMapper,
@@ -49,8 +55,13 @@ final class PurchaseOrderServiceTest extends TestCase {
 			$this->statusMapper,
 			new PurchaseOrderReceiptMapper($db),
 			new StockService(new StockLevelMapper($db), $this->movementMapper),
+			$this->articleMapper,
+			$this->supplierPriceMapper,
+			new StockLevelMapper($db),
 		);
 		$this->warehouseId = (new WarehouseService($this->warehouseMapper, new ProjectMapper($db)))->create('phpunit-po-warehouse', 'central', null, null)->getId();
+		$this->secondWarehouseId = (new WarehouseService($this->warehouseMapper, new ProjectMapper($db)))->create('phpunit-po-second-warehouse', 'central', null, null)->getId();
+		$this->thirdWarehouseId = (new WarehouseService($this->warehouseMapper, new ProjectMapper($db)))->create('phpunit-po-third-warehouse', 'central', null, null)->getId();
 		$article = new Article();
 		$article->setName('phpunit-po-article');
 		$article->setUnit('Stk');
@@ -72,8 +83,13 @@ final class PurchaseOrderServiceTest extends TestCase {
 			}
 			$this->orderMapper->delete($order);
 		}
+		foreach ($this->supplierPriceMapper->findByArticle($this->articleId) as $supplierPrice) {
+			$this->supplierPriceMapper->delete($supplierPrice);
+		}
 		$this->articleMapper->delete($this->articleMapper->findById($this->articleId));
 		$this->warehouseMapper->delete($this->warehouseMapper->findById($this->warehouseId));
+		$this->warehouseMapper->delete($this->warehouseMapper->findById($this->secondWarehouseId));
+		$this->warehouseMapper->delete($this->warehouseMapper->findById($this->thirdWarehouseId));
 		parent::tearDown();
 	}
 
@@ -99,6 +115,47 @@ final class PurchaseOrderServiceTest extends TestCase {
 		self::assertSame('NYM-325', $positions[0]->getSupplierArticleNo());
 		self::assertSame([], $this->movementMapper->findByArticleAndWarehouse($this->articleId, $this->warehouseId));
 		self::assertCount(1, $this->statusMapper->findByPurchaseOrder($order->getId()));
+	}
+
+	public function testCreatesExactlyOneDraftPerSupplierAndSnapshotsSupplierArticleNumbers(): void {
+		$stock = new StockService(new StockLevelMapper(\OC::$server->get(IDBConnection::class)), $this->movementMapper);
+		$stock->setMinQuantity($this->articleId, $this->warehouseId, 4.0);
+		$stock->setMinQuantity($this->articleId, $this->secondWarehouseId, 4.0);
+		foreach ([['supplier-a', 'A-ARTICLE', 2.0], ['supplier-b', 'B-ARTICLE', 3.0]] as [$supplier, $supplierArticleNo, $purchasePrice]) {
+			$price = new ArticleSupplierPrice();
+			$price->setArticleId($this->articleId);
+			$price->setSupplierContactUid($supplier);
+			$price->setSupplierArticleNo($supplierArticleNo);
+			$price->setPurchasePrice($purchasePrice);
+			$price->setCreatedAt(time());
+			$price->setUpdatedAt(time());
+			$this->supplierPriceMapper->insert($price);
+		}
+
+		$orders = $this->service->createDraftsFromSuggestions([
+			['articleId' => $this->articleId, 'warehouseId' => $this->warehouseId, 'supplierContactUid' => 'supplier-a'],
+			['articleId' => $this->articleId, 'warehouseId' => $this->secondWarehouseId, 'supplierContactUid' => 'supplier-b'],
+		], 'phpunit-po-user');
+
+		self::assertCount(2, $orders);
+		$positionsBySupplier = [];
+		foreach ($orders as $order) {
+			$positionsBySupplier[$order->getSupplierContactUid()] = $this->positionMapper->findByPurchaseOrder($order->getId());
+		}
+		self::assertCount(1, $positionsBySupplier['supplier-a']);
+		self::assertCount(1, $positionsBySupplier['supplier-b']);
+		self::assertSame('A-ARTICLE', $positionsBySupplier['supplier-a'][0]->getSupplierArticleNo());
+		self::assertSame('B-ARTICLE', $positionsBySupplier['supplier-b'][0]->getSupplierArticleNo());
+		self::assertSame([], $this->movementMapper->findByArticleAndWarehouse($this->articleId, $this->warehouseId));
+	}
+
+	public function testRejectsSupplierWithoutAnAssociationForTheSelectedSuggestionArticle(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->createDraftsFromSuggestions([[
+			'articleId' => $this->articleId,
+			'warehouseId' => $this->warehouseId,
+			'supplierContactUid' => 'arbitrary-supplier',
+		]], 'phpunit-po-user');
 	}
 
 	public function testOnlyAllowsAuditedLifecycleTransitions(): void {
