@@ -52,7 +52,10 @@ export default {
 .erp-app-content {
 	min-width: 0;
 	min-height: 0;
+	height: 100%;
+	box-sizing: border-box;
 	overflow-x: hidden;
 	overflow-y: auto;
+	padding-bottom: 32px;
 }
 </style>

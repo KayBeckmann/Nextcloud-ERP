@@ -90,6 +90,7 @@
 import { generateUrl } from '@nextcloud/router'
 import { createContactCard, createContactLink, deleteContactLink, fetchContactCards, fetchContactLinks, searchContacts, updateContactCard, updateContactLink } from '../services/contactsApi.js'
 import { contactCardDraft, contactCardPayload, emptyContactCard, userFacingContactCardError } from '../services/contactCards.mjs'
+import { acceptsContactRoleReload, beginContactRoleReload } from '../services/contactRoleReload.mjs'
 
 export default {
 	name: 'ContactLinksView',
@@ -109,26 +110,47 @@ export default {
 			isForbidden: false,
 			saving: false,
 			searchTimeout: null,
+			reloadRevision: 0,
 			contactsUrl: generateUrl('/apps/contacts'),
 			newContact: emptyContactCard(),
 		}
 	},
 	async mounted() {
-		await Promise.all([this.loadCards(), this.loadLinks()])
+		await this.reloadRole()
+	},
+	watch: {
+		role() {
+			this.reloadRole()
+		},
 	},
 	methods: {
-		async loadCards() {
+		async reloadRole() {
+			const revision = this.reloadRevision = beginContactRoleReload(this.reloadRevision)
+			this.cards = []
+			this.links = []
+			this.searchResults = []
+			this.query = ''
+			this.loadError = null
+			this.isForbidden = false
+			this.cancelEdit()
+			await Promise.all([this.loadCards(revision), this.loadLinks(revision)])
+		},
+		async loadCards(revision = this.reloadRevision) {
 			try {
-				this.cards = await fetchContactCards(this.role)
+				const cards = await fetchContactCards(this.role)
+				if (acceptsContactRoleReload(revision, this.reloadRevision)) this.cards = cards
 			} catch (e) {
+				if (!acceptsContactRoleReload(revision, this.reloadRevision)) return
 				this.isForbidden = e?.response?.status === 403
 				this.loadError = userFacingContactCardError(e)
 			}
 		},
-		async loadLinks() {
+		async loadLinks(revision = this.reloadRevision) {
 			try {
-				this.links = await fetchContactLinks(this.role)
+				const links = await fetchContactLinks(this.role)
+				if (acceptsContactRoleReload(revision, this.reloadRevision)) this.links = links
 			} catch (e) {
+				if (!acceptsContactRoleReload(revision, this.reloadRevision)) return
 				this.isForbidden = e?.response?.status === 403
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
