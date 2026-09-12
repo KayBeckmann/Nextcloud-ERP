@@ -15,22 +15,48 @@
 					<option value="vehicle">Fahrzeuglager</option>
 					<option value="site">Baustellenlager</option>
 				</select>
-				<input v-if="newWarehouse.type === 'site'" v-model.number="newWarehouse.projectId" type="number" placeholder="Projekt-ID" required>
+				<label v-if="newWarehouse.type === 'site'">Projekt
+					<select v-model.number="newWarehouse.projectId" required>
+						<option :value="null" disabled>Aktives Projekt wählen</option>
+						<option v-for="project in availableProjects" :key="project.id" :value="project.id">{{ projectLabel(project) }}</option>
+					</select>
+				</label>
+				<span v-if="newWarehouse.type === 'site' && !availableProjects.length">Keine aktiven Projekte verfügbar.</span>
 				<input v-model="newWarehouse.notes" placeholder="Notiz">
 				<button type="submit">Anlegen</button>
 			</form>
 
 			<table class="erp-warehouse__table">
-				<thead><tr><th>Name</th><th>Typ</th><th>Projekt</th><th>Status</th></tr></thead>
+				<thead><tr><th>Name</th><th>Typ</th><th>Projekt</th><th>Status</th><th></th></tr></thead>
 				<tbody>
 					<tr v-for="w in warehouses" :key="w.id">
 						<td>{{ w.name }}</td>
 						<td>{{ typeLabel(w.type) }}</td>
-						<td>{{ w.projectId ?? '—' }}</td>
+						<td>{{ projectName(w.projectId) }}</td>
 						<td>{{ w.active ? 'aktiv' : 'inaktiv' }}</td>
+						<td><button @click="startEditWarehouse(w)">Bearbeiten</button></td>
 					</tr>
 				</tbody>
 			</table>
+
+			<form v-if="editingWarehouse" class="erp-warehouse__form" @submit.prevent="submitUpdateWarehouse">
+				<input v-model="editingWarehouse.name" placeholder="Name" required>
+				<select v-model="editingWarehouse.type">
+					<option value="central">Zentrallager</option>
+					<option value="vehicle">Fahrzeuglager</option>
+					<option value="site">Baustellenlager</option>
+				</select>
+				<label v-if="editingWarehouse.type === 'site'">Projekt
+					<select v-model.number="editingWarehouse.projectId" required>
+						<option :value="null" disabled>Aktives Projekt wählen</option>
+						<option v-for="project in availableProjects" :key="project.id" :value="project.id">{{ projectLabel(project) }}</option>
+					</select>
+				</label>
+				<label><input v-model="editingWarehouse.active" type="checkbox"> Aktiv</label>
+				<input v-model="editingWarehouse.notes" placeholder="Notiz">
+				<button type="submit">Speichern</button>
+				<button type="button" @click="editingWarehouse = null">Abbrechen</button>
+			</form>
 		</section>
 
 		<section v-else-if="tab === 'Bestand'" class="erp-warehouse__section">
@@ -220,13 +246,15 @@
 
 <script>
 import {
-	fetchWarehouses, createWarehouse,
+	fetchWarehouses, createWarehouse, updateWarehouse,
 	fetchStock, setMinQuantity, recordMovement, transferStock,
 	fetchInventories, fetchInventory, startInventory, recordInventoryCount, closeInventory,
 	fetchPurchaseSuggestions,
 } from '../services/warehouseApi.js'
 import { fetchPurchaseOrders, fetchPurchaseOrder, createPurchaseOrder, transitionPurchaseOrder, receivePurchaseOrderPosition } from '../services/purchaseOrdersApi.js'
 import { fetchArticles } from '../services/articlesApi.js'
+import { fetchProjects } from '../services/projectsApi.js'
+import { activeProjects, projectLabel } from '../services/warehouseProjectPicker.js'
 
 const TYPE_LABELS = { central: 'Zentrallager', vehicle: 'Fahrzeuglager', site: 'Baustellenlager' }
 
@@ -238,8 +266,10 @@ export default {
 			tabs: ['Lagerorte', 'Bestand', 'Inventur', 'Bestellungen', 'Bestellvorschläge'],
 			loadError: null,
 			warehouses: [],
+			projects: [],
 			articles: [],
 			newWarehouse: { name: '', type: 'central', projectId: null, notes: '' },
+			editingWarehouse: null,
 			selectedWarehouseId: null,
 			stockLevels: [],
 			minQuantityForm: { articleId: null, minQuantity: 0 },
@@ -260,6 +290,9 @@ export default {
 		await this.loadAll()
 	},
 	computed: {
+		availableProjects() {
+			return activeProjects(this.projects)
+		},
 		orderableSuggestions() {
 			return this.suggestions.filter((suggestion) => suggestion.supplierOptions?.length)
 		},
@@ -271,6 +304,12 @@ export default {
 		articleName(id) {
 			return this.articles.find((a) => a.id === id)?.name ?? `#${id}`
 		},
+		projectLabel,
+		projectName(id) {
+			if (id === null) return '—'
+			const project = this.projects.find((candidate) => candidate.id === id)
+			return project ? projectLabel(project) : '—'
+		},
 		formatDate(timestamp) {
 			return new Date(timestamp * 1000).toLocaleString('de-DE')
 		},
@@ -279,16 +318,37 @@ export default {
 		},
 		async loadAll() {
 			try {
-				this.warehouses = await fetchWarehouses()
-				this.articles = await fetchArticles()
+				const [warehouses, articles, projects] = await Promise.all([fetchWarehouses(), fetchArticles(), fetchProjects()])
+				this.warehouses = warehouses
+				this.articles = articles
+				this.projects = projects
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
 			}
 		},
 		async submitCreateWarehouse() {
 			try {
-				await createWarehouse({ ...this.newWarehouse, notes: this.newWarehouse.notes || null })
+				await createWarehouse({ ...this.newWarehouse, projectId: this.newWarehouse.type === 'site' ? this.newWarehouse.projectId : null, notes: this.newWarehouse.notes || null })
 				this.newWarehouse = { name: '', type: 'central', projectId: null, notes: '' }
+				this.warehouses = await fetchWarehouses()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		startEditWarehouse(warehouse) {
+			this.editingWarehouse = { ...warehouse, notes: warehouse.notes ?? '' }
+		},
+		async submitUpdateWarehouse() {
+			try {
+				const warehouse = this.editingWarehouse
+				await updateWarehouse(warehouse.id, {
+					name: warehouse.name,
+					type: warehouse.type,
+					projectId: warehouse.type === 'site' ? warehouse.projectId : null,
+					active: warehouse.active,
+					notes: warehouse.notes || null,
+				})
+				this.editingWarehouse = null
 				this.warehouses = await fetchWarehouses()
 			} catch (e) {
 				this.loadError = this.errorMessage(e)

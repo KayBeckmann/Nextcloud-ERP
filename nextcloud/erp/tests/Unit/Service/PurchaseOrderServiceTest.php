@@ -10,6 +10,7 @@ use OCA\ERP\Db\PurchaseOrderMapper;
 use OCA\ERP\Db\PurchaseOrderPositionMapper;
 use OCA\ERP\Db\PurchaseOrderReceiptMapper;
 use OCA\ERP\Db\PurchaseOrderStatusChangeMapper;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\StockLevelMapper;
 use OCA\ERP\Db\StockMovementMapper;
 use OCA\ERP\Db\WarehouseMapper;
@@ -49,7 +50,7 @@ final class PurchaseOrderServiceTest extends TestCase {
 			new PurchaseOrderReceiptMapper($db),
 			new StockService(new StockLevelMapper($db), $this->movementMapper),
 		);
-		$this->warehouseId = (new WarehouseService($this->warehouseMapper))->create('phpunit-po-warehouse', 'central', null, null)->getId();
+		$this->warehouseId = (new WarehouseService($this->warehouseMapper, new ProjectMapper($db)))->create('phpunit-po-warehouse', 'central', null, null)->getId();
 		$article = new Article();
 		$article->setName('phpunit-po-article');
 		$article->setUnit('Stk');

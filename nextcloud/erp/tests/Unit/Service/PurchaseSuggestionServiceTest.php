@@ -8,6 +8,7 @@ use OCA\ERP\Db\Article;
 use OCA\ERP\Db\ArticleMapper;
 use OCA\ERP\Db\ArticleSupplierPrice;
 use OCA\ERP\Db\ArticleSupplierPriceMapper;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\StockLevelMapper;
 use OCA\ERP\Db\StockMovementMapper;
 use OCA\ERP\Db\WarehouseMapper;
@@ -38,7 +39,7 @@ final class PurchaseSuggestionServiceTest extends TestCase {
 		$this->articleMapper = new ArticleMapper($db);
 		$this->supplierPriceMapper = new ArticleSupplierPriceMapper($db);
 		$this->warehouseMapper = new WarehouseMapper($db);
-		$warehouseService = new WarehouseService($this->warehouseMapper);
+		$warehouseService = new WarehouseService($this->warehouseMapper, new ProjectMapper($db));
 
 		$this->service = new PurchaseSuggestionService($this->levelMapper, $this->articleMapper, $this->supplierPriceMapper, $this->warehouseMapper);
 

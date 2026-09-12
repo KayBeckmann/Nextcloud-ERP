@@ -7,6 +7,7 @@ namespace OCA\ERP\Tests\Unit\Service;
 use OCA\ERP\Db\ArticleMapper;
 use OCA\ERP\Db\InventoryCountMapper;
 use OCA\ERP\Db\InventoryMapper;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\StockLevelMapper;
 use OCA\ERP\Db\StockMovementMapper;
 use OCA\ERP\Db\WarehouseMapper;
@@ -38,7 +39,7 @@ final class InventoryServiceTest extends TestCase {
 		$this->levelMapper = new StockLevelMapper($db);
 		$this->stockService = new StockService($this->levelMapper, new StockMovementMapper($db));
 		$this->warehouseMapper = new WarehouseMapper($db);
-		$warehouseService = new WarehouseService($this->warehouseMapper);
+		$warehouseService = new WarehouseService($this->warehouseMapper, new ProjectMapper($db));
 		$this->articleMapper = new ArticleMapper($db);
 
 		$this->service = new InventoryService($this->mapper, $this->countMapper, $this->levelMapper, $this->stockService);

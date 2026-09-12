@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Service;
 
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\Warehouse;
 use OCA\ERP\Db\WarehouseMapper;
 
 /** Lagerorte (Roadmap Phase 8, ADR-0014) — Zentrallager, optional Fahrzeug-/Baustellenlager. */
 class WarehouseService {
 	private const VALID_TYPES = ['central', 'vehicle', 'site'];
+	private const ACTIVE_PROJECT_STATUSES = ['in_progress', 'waiting'];
 
 	public function __construct(
 		private WarehouseMapper $mapper,
+		private ProjectMapper $projectMapper,
 	) {
 	}
 
@@ -38,6 +41,9 @@ class WarehouseService {
 		if ($type === 'site' && $projectId === null) {
 			throw new \InvalidArgumentException("projectId is required for warehouse type 'site'");
 		}
+		if ($type === 'site') {
+			$this->assertActiveProject($projectId);
+		}
 
 		$now = time();
 		$warehouse = new Warehouse();
@@ -56,15 +62,38 @@ class WarehouseService {
 	}
 
 	/** @throws \OutOfBoundsException|\InvalidArgumentException */
-	public function update(int $id, string $name, bool $active, ?string $notes): Warehouse {
+	public function update(int $id, string $name, bool $active, ?string $notes, ?string $type = null, ?int $projectId = null): Warehouse {
 		$warehouse = $this->get($id);
 		if (trim($name) === '') {
 			throw new \InvalidArgumentException('name must not be empty');
 		}
+		$nextType = $type ?? $warehouse->getType();
+		if (!in_array($nextType, self::VALID_TYPES, true)) {
+			throw new \InvalidArgumentException('type must be one of: ' . implode(', ', self::VALID_TYPES));
+		}
+		$nextProjectId = $nextType === 'site'
+			? ($projectId ?? ($type === null ? $warehouse->getProjectId() : null))
+			: null;
+		if ($nextType === 'site') {
+			$this->assertActiveProject($nextProjectId);
+		}
 		$warehouse->setName($name);
+		$warehouse->setType($nextType);
+		$warehouse->setProjectId($nextProjectId);
 		$warehouse->setActive($active);
 		$warehouse->setNotes($notes);
 		$warehouse->setUpdatedAt(time());
 		return $this->mapper->update($warehouse);
+	}
+
+	/** @throws \InvalidArgumentException */
+	private function assertActiveProject(?int $projectId): void {
+		if ($projectId === null) {
+			throw new \InvalidArgumentException("projectId is required for warehouse type 'site'");
+		}
+		$project = $this->projectMapper->findById($projectId);
+		if ($project === null || !in_array($project->getStatus(), self::ACTIVE_PROJECT_STATUSES, true)) {
+			throw new \InvalidArgumentException('projectId must reference an active project');
+		}
 	}
 }

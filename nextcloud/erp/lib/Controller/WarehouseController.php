@@ -64,10 +64,10 @@ class WarehouseController extends AbstractResourceController {
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
 	#[NoAdminRequired]
-	public function update(int $id, string $name, bool $active = true, ?string $notes = null): DataResponse {
+	public function update(int $id, string $name, bool $active = true, ?string $notes = null, ?string $type = null, ?int $projectId = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		try {
-			return new DataResponse($this->warehouseService->update($id, $name, $active, $notes));
+			return new DataResponse($this->warehouseService->update($id, $name, $active, $notes, $type, $projectId));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Warehouse $id not found");
 		} catch (\InvalidArgumentException $e) {

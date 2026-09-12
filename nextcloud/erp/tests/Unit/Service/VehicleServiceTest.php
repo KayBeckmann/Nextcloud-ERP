@@ -6,6 +6,7 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\VehicleFuelLogMapper;
 use OCA\ERP\Db\VehicleMapper;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\WarehouseMapper;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\VehicleService;
@@ -126,7 +127,7 @@ final class VehicleServiceTest extends ErpIntegrationTestCase {
 
 	public function testGetFullIncludesLinkedWarehouses(): void {
 		$vehicle = $this->service->create('PHPUNIT-8', null, 'car', null, null, null);
-		$warehouseService = new \OCA\ERP\Service\WarehouseService($this->warehouseMapper);
+		$warehouseService = new \OCA\ERP\Service\WarehouseService($this->warehouseMapper, new ProjectMapper(\OC::$server->get(IDBConnection::class)));
 		$warehouse = $warehouseService->create('phpunit-vehicle-warehouse', 'vehicle', null, null, $vehicle->getId());
 
 		$full = $this->service->getFull($vehicle->getId());

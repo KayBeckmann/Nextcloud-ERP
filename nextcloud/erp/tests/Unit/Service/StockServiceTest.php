@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\ArticleMapper;
+use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\StockLevelMapper;
 use OCA\ERP\Db\StockMovementMapper;
 use OCA\ERP\Db\WarehouseMapper;
@@ -32,7 +33,7 @@ final class StockServiceTest extends TestCase {
 		$this->levelMapper = new StockLevelMapper($db);
 		$this->movementMapper = new StockMovementMapper($db);
 		$this->warehouseMapper = new WarehouseMapper($db);
-		$this->warehouseService = new WarehouseService($this->warehouseMapper);
+		$this->warehouseService = new WarehouseService($this->warehouseMapper, new ProjectMapper($db));
 		$this->articleMapper = new ArticleMapper($db);
 		$this->service = new StockService($this->levelMapper, $this->movementMapper);
 
