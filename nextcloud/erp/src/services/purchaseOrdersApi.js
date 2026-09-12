@@ -1,5 +1,5 @@
 import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 
 export async function fetchPurchaseOrders() {
 	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/purchase-orders'))
@@ -24,4 +24,13 @@ export async function transitionPurchaseOrder(id, status, notes = null) {
 export async function receivePurchaseOrderPosition(positionId, payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/purchase-order-positions/{positionId}/receipts', { positionId }), payload)
 	return data.ocs.data
+}
+
+export async function preparePurchaseOrderDocument(id) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/purchase-orders/{id}/document', { id }))
+	return data.ocs.data
+}
+
+export function purchaseOrderDocumentUrl(id) {
+	return generateUrl('/apps/erp/purchase-orders/{id}/document', { id })
 }

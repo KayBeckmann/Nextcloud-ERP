@@ -69,6 +69,12 @@ class ErpFolderService {
 		return $result;
 	}
 
+	/** Dedicated server-controlled folder for supplier purchase-order PDFs. */
+	public function ensurePurchaseOrderFolder(IUser $user): Folder {
+		$erpFolder = $this->ensureFolder($this->erpRoot($user), self::ROOT);
+		return $this->ensureFolder($this->ensureFolder($erpFolder, 'Lieferanten'), 'Bestellungen');
+	}
+
 	/**
 	 * Legt (falls nötig) den Projektordner ERP/Projekte/<projectNumber> an und
 	 * gibt dessen Node zurück (ADR-0010). Setzt voraus, dass ensureStructure()

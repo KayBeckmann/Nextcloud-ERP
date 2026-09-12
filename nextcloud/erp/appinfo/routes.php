@@ -18,6 +18,8 @@ return [
 		// (Nachtrag zu Phase 12, ADR-0021) — aus demselben Grund außerhalb
 		// des 'ocs'-Blocks wie reportExport#invoicesCsv.
 		['name' => 'documents#show', 'url' => '/documents/{fileId}', 'verb' => 'GET', 'requirements' => ['fileId' => '\d+']],
+		// PDF retrieval is bound to an authorized purchase-order record; clients never pass a file ID.
+		['name' => 'purchase_order#document', 'url' => '/purchase-orders/{id}/document', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		// Eine einzige Route mit optionalem Pfad (Default '') statt zweier
 		// gleichnamiger Routen — sonst schlägt die Navigations-URL-Generierung
 		// fehl, weil Symfony für 'erp.page.index' die zuletzt registrierte
@@ -77,7 +79,7 @@ return [
 		['name' => 'company_profile#update', 'url' => '/api/v1/company-profile', 'verb' => 'PUT'],
 		['name' => 'company_profile#uploadLogo', 'url' => '/api/v1/company-profile/logo', 'verb' => 'POST'],
 		['name' => 'document_layout#index', 'url' => '/api/v1/document-layouts', 'verb' => 'GET'],
-		['name' => 'document_layout#update', 'url' => '/api/v1/document-layouts/{documentType}', 'verb' => 'PUT', 'requirements' => ['documentType' => 'quote|order|delivery_note|invoice|credit_note']],
+		['name' => 'document_layout#update', 'url' => '/api/v1/document-layouts/{documentType}', 'verb' => 'PUT', 'requirements' => ['documentType' => 'quote|order|delivery_note|invoice|credit_note|purchase_order']],
 		['name' => 'vat_rate#index', 'url' => '/api/v1/vat-rates', 'verb' => 'GET'],
 		['name' => 'vat_rate#create', 'url' => '/api/v1/vat-rates', 'verb' => 'POST'],
 		['name' => 'vat_rate#update', 'url' => '/api/v1/vat-rates/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
@@ -188,6 +190,7 @@ return [
 		['name' => 'purchase_order#index', 'url' => '/api/v1/purchase-orders', 'verb' => 'GET'],
 		['name' => 'purchase_order#create', 'url' => '/api/v1/purchase-orders', 'verb' => 'POST'],
 		['name' => 'purchase_order#show', 'url' => '/api/v1/purchase-orders/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'purchase_order#prepareDocument', 'url' => '/api/v1/purchase-orders/{id}/document', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'purchase_order#transition', 'url' => '/api/v1/purchase-orders/{id}/status', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'purchase_order#receive', 'url' => '/api/v1/purchase-order-positions/{positionId}/receipts', 'verb' => 'POST', 'requirements' => ['positionId' => '\d+']],
 		// Project-scoped measurement workspace: Files assets are accepted only via this controlled endpoint.

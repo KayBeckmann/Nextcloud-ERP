@@ -8,8 +8,15 @@ use OCA\ERP\Permissions\PermissionLevel;
 use OCA\ERP\Permissions\ResourceType;
 use OCA\ERP\Service\PermissionService;
 use OCA\ERP\Service\PurchaseOrderService;
+use OCA\ERP\Service\PurchaseOrderDocumentService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\Http\FileDisplayResponse;
+use OCP\AppFramework\Http;
+use OCP\Files\File;
+use OCP\Files\IRootFolder;
+use OCP\Files\NotFoundException;
 use OCP\AppFramework\OCS\OCSBadRequestException;
 use OCP\AppFramework\OCS\OCSNotFoundException;
 use OCP\AppFramework\OCS\OCSPreconditionFailedException;
@@ -22,6 +29,8 @@ class PurchaseOrderController extends AbstractResourceController {
 		string $appName,
 		IRequest $request,
 		private PurchaseOrderService $purchaseOrderService,
+		private PurchaseOrderDocumentService $purchaseOrderDocumentService,
+		private IRootFolder $rootFolder,
 		PermissionService $permissionService,
 		IUserSession $userSession,
 	) {
@@ -86,5 +95,50 @@ class PurchaseOrderController extends AbstractResourceController {
 		} catch (\DomainException $e) {
 			throw new OCSPreconditionFailedException($e->getMessage());
 		}
+	}
+
+	/** @throws OCSNotFoundException */
+	#[NoAdminRequired]
+	public function prepareDocument(int $id): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Write);
+		try {
+			$order = $this->purchaseOrderDocumentService->prepare($id, $user);
+			return new DataResponse(['documentPrepared' => true]);
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Purchase order $id not found");
+		}
+	}
+
+	/** Protected retrieval: the file ID is read from the authorized purchase-order record only. */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function document(int $id): FileDisplayResponse|DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Read);
+		try {
+			$order = $this->purchaseOrderService->get($id)['order'];
+		} catch (\OutOfBoundsException) {
+			return new DataResponse(['error' => 'Purchase order not found'], Http::STATUS_NOT_FOUND);
+		}
+		$fileId = $order->getDocumentFileId();
+		if ($fileId === null) {
+			return new DataResponse(['error' => 'Document not prepared'], Http::STATUS_NOT_FOUND);
+		}
+		try {
+			$node = $this->rootFolder->getUserFolder($user->getUID())->getById($fileId)[0] ?? null;
+		} catch (NotFoundException) {
+			$node = null;
+		}
+		if (!$this->isOwnedPurchaseOrderPdf($node, $id)) {
+			return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
+		}
+		return new FileDisplayResponse($node, Http::STATUS_OK, ['Content-Type' => 'application/pdf']);
+	}
+
+	private function isOwnedPurchaseOrderPdf(mixed $node, int $purchaseOrderId): bool {
+		if (!($node instanceof File) || $node->getMimeType() !== 'application/pdf') {
+			return false;
+		}
+		$number = sprintf('PO-%05d', $purchaseOrderId);
+		return (bool)preg_match('#/ERP-Firma/ERP/Lieferanten/Bestellungen/' . preg_quote($number, '#') . '_[^/]+\\.pdf$#', $node->getPath());
 	}
 }

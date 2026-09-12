@@ -195,6 +195,8 @@
 			<section v-if="selectedPurchaseOrder" class="erp-warehouse__purchase-detail">
 				<h3>Bestellung #{{ selectedPurchaseOrder.order.id }} · {{ selectedPurchaseOrder.order.supplierContactUid }}</h3>
 				<p>Status: <strong>{{ selectedPurchaseOrder.order.status }}</strong></p>
+				<button v-if="purchaseOrderDocumentControls(selectedPurchaseOrder.order).canPrepare" @click="preparePurchaseOrderPdf">PDF-Beleg vorbereiten</button>
+				<a v-if="purchaseOrderDocumentControls(selectedPurchaseOrder.order).canDownload" :href="purchaseOrderDocumentUrl(selectedPurchaseOrder.order.id)" target="_blank" rel="noopener">PDF-Beleg herunterladen</a>
 				<button v-if="selectedPurchaseOrder.order.status === 'draft'" @click="changePurchaseStatus('approved')">Freigeben</button>
 				<button v-if="selectedPurchaseOrder.order.status === 'approved'" @click="changePurchaseStatus('sent')">Als versendet markieren</button>
 				<table class="erp-warehouse__table"><thead><tr><th>Position</th><th>Bestellt</th><th>Erhalten</th><th>Lagerort</th><th>Wareneingang</th></tr></thead>
@@ -251,10 +253,11 @@ import {
 	fetchInventories, fetchInventory, startInventory, recordInventoryCount, closeInventory,
 	fetchPurchaseSuggestions,
 } from '../services/warehouseApi.js'
-import { fetchPurchaseOrders, fetchPurchaseOrder, createPurchaseOrder, transitionPurchaseOrder, receivePurchaseOrderPosition } from '../services/purchaseOrdersApi.js'
+import { fetchPurchaseOrders, fetchPurchaseOrder, createPurchaseOrder, transitionPurchaseOrder, receivePurchaseOrderPosition, preparePurchaseOrderDocument, purchaseOrderDocumentUrl } from '../services/purchaseOrdersApi.js'
 import { fetchArticles } from '../services/articlesApi.js'
 import { fetchProjects } from '../services/projectsApi.js'
 import { activeProjects, projectLabel } from '../services/warehouseProjectPicker.js'
+import { purchaseOrderDocumentControls } from '../services/purchaseOrderDocumentControls.js'
 
 const TYPE_LABELS = { central: 'Zentrallager', vehicle: 'Fahrzeuglager', site: 'Baustellenlager' }
 
@@ -305,6 +308,8 @@ export default {
 			return this.articles.find((a) => a.id === id)?.name ?? `#${id}`
 		},
 		projectLabel,
+		purchaseOrderDocumentControls,
+		purchaseOrderDocumentUrl,
 		projectName(id) {
 			if (id === null) return '—'
 			const project = this.projects.find((candidate) => candidate.id === id)
@@ -483,6 +488,13 @@ export default {
 		async changePurchaseStatus(status) {
 			try {
 				await transitionPurchaseOrder(this.selectedPurchaseOrder.order.id, status)
+				await this.openPurchaseOrder(this.selectedPurchaseOrder.order.id)
+				await this.loadPurchaseOrders()
+			} catch (e) { this.loadError = this.errorMessage(e) }
+		},
+		async preparePurchaseOrderPdf() {
+			try {
+				await preparePurchaseOrderDocument(this.selectedPurchaseOrder.order.id)
 				await this.openPurchaseOrder(this.selectedPurchaseOrder.order.id)
 				await this.loadPurchaseOrders()
 			} catch (e) { this.loadError = this.errorMessage(e) }

@@ -10,7 +10,7 @@ use OCA\ERP\Db\DocumentLayoutMapper;
 /** Safe per-document text slots. Templates are rendered exclusively by DocumentTemplateRenderer. */
 class DocumentLayoutService {
 	/** @var list<string> */
-	private const DOCUMENT_TYPES = ['quote', 'order', 'delivery_note', 'invoice', 'credit_note'];
+	private const DOCUMENT_TYPES = ['quote', 'order', 'delivery_note', 'invoice', 'credit_note', 'purchase_order'];
 	/** @var list<string> */
 	private const TEXT_FIELDS = ['subject', 'headerText', 'introText', 'closingText', 'footerText', 'paymentNote', 'deliveryNote', 'numberPrefix'];
 	/** @var list<string> */
