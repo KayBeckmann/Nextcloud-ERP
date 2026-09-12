@@ -46,6 +46,10 @@
 					<input v-model="editContact.postalCode" placeholder="PLZ">
 					<input v-model="editContact.city" placeholder="Ort">
 					<input v-model="editContact.country" placeholder="Land">
+					<template v-for="field in metadataFields" :key="field.key">
+						<input v-if="field.key === 'referenceNumber'" v-model="editMetadata.referenceNumber" :placeholder="field.label">
+						<textarea v-else v-model="editMetadata.notes" :placeholder="field.label" rows="3" />
+					</template>
 					<button :disabled="saving">Änderungen speichern</button>
 					<button type="button" :disabled="saving" @click="cancelEdit">Abbrechen</button>
 				</form>
@@ -71,6 +75,7 @@ import { createContactCard, createContactLink, deleteContactCard, deleteContactL
 import { contactCardDraft, contactCardPayload, emptyContactCard, userFacingContactCardError } from '../services/contactCards.mjs'
 import { acceptsContactRoleReload, beginContactRoleReload } from '../services/contactRoleReload.mjs'
 import { mergeRoleContacts } from '../services/contactRoleList.mjs'
+import { contactRoleFields } from '../services/contactRoleFields.mjs'
 
 export default {
 	name: 'ContactLinksView',
@@ -85,6 +90,7 @@ export default {
 			cards: [],
 			editingCard: null,
 			editContact: emptyContactCard(),
+			editMetadata: { referenceNumber: '', notes: '' },
 			links: [],
 			loadError: null,
 			isForbidden: false,
@@ -105,6 +111,7 @@ export default {
 	},
 	computed: {
 		roleContacts() { return mergeRoleContacts(this.cards, this.links) },
+		metadataFields() { return contactRoleFields(this.role) },
 	},
 	methods: {
 		async reloadRole() {
@@ -157,17 +164,25 @@ export default {
 		startEdit(card) {
 			this.editingCard = card
 			this.editContact = contactCardDraft(card)
+			this.editMetadata = { referenceNumber: card.link?.referenceNumber ?? '', notes: card.link?.notes ?? '' }
 		},
 		cancelEdit() {
 			this.editingCard = null
 			this.editContact = emptyContactCard()
+			this.editMetadata = { referenceNumber: '', notes: '' }
 		},
 		async saveCard() {
 			if (!this.editingCard) return
 			this.saving = true
 			try {
 				await updateContactCard(this.role, this.editingCard.uid, contactCardPayload(this.editContact))
-				await this.loadCards()
+				const metadata = {
+					referenceNumber: this.role === 'supplier' ? this.editMetadata.referenceNumber.trim() || null : null,
+					notes: this.editMetadata.notes.trim() || null,
+				}
+				if (this.editingCard.link) await updateContactLink(this.editingCard.link.id, metadata)
+				else await createContactLink({ contactUid: this.editingCard.uid, role: this.role, ...metadata })
+				await Promise.all([this.loadCards(), this.loadLinks()])
 				this.cancelEdit()
 			} catch (e) {
 				this.loadError = userFacingContactCardError(e)
