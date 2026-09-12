@@ -185,6 +185,21 @@ class ContactsController extends OCSController {
 		return new DataResponse($card);
 	}
 
+	/** Native-card deletion is deliberately separate from unlinking metadata. */
+	#[NoAdminRequired]
+	public function deleteCard(string $role, string $contactUid): DataResponse {
+		$parsedRole = self::parseRole($role);
+		$this->requireLevel(self::resourceForRole($parsedRole), PermissionLevel::Write);
+		try {
+			$this->contactsService->deleteCard($parsedRole, $contactUid);
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		} catch (\RuntimeException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+		return new DataResponse([]);
+	}
+
 	/**
 	 * @throws OCSBadRequestException|OCSForbiddenException
 	 */

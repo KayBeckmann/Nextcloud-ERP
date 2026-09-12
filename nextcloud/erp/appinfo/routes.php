@@ -46,6 +46,7 @@ return [
 		['name' => 'contacts#cards', 'url' => '/api/v1/contacts/cards/{role}', 'verb' => 'GET'],
 		['name' => 'contacts#createCard', 'url' => '/api/v1/contacts/cards/{role}', 'verb' => 'POST'],
 		['name' => 'contacts#updateCard', 'url' => '/api/v1/contacts/cards/{role}/{contactUid}', 'verb' => 'PUT'],
+		['name' => 'contacts#deleteCard', 'url' => '/api/v1/contacts/cards/{role}/{contactUid}', 'verb' => 'DELETE'],
 		['name' => 'contacts#createLink', 'url' => '/api/v1/contacts/links', 'verb' => 'POST'],
 		['name' => 'contacts#updateLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'contacts#deleteLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],

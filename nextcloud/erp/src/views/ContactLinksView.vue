@@ -25,15 +25,16 @@
 					<button :disabled="saving">Kontakt anlegen und verknüpfen</button>
 				</form>
 
-				<h3>Adressbuch-Kontakte</h3>
-				<p v-if="!cards.length">Noch keine Kontakte in diesem {{ title }}-Adressbuch.</p>
+				<h3>{{ title }}</h3>
+				<p v-if="!roleContacts.length">Noch keine Kontakte in diesem {{ title }}-Adressbuch.</p>
 				<ul v-else class="erp-contacts__cards">
-					<li v-for="card in cards" :key="card.uid">
+					<li v-for="card in roleContacts" :key="card.uid">
 						<div>
 							<strong>{{ card.displayName }}</strong>
-							<span v-if="card.email" class="erp-contacts__email">{{ card.email }}</span>
+							<span v-if="card.link" class="erp-contacts__email">{{ card.link.referenceNumber || 'ERP-verknüpft' }}</span>
 						</div>
 						<button :disabled="saving" @click="startEdit(card)">Bearbeiten</button>
+						<button :disabled="saving" @click="confirmDeleteCard(card)">Löschen</button>
 					</li>
 				</ul>
 				<form v-if="editingCard" class="erp-contacts__new-card erp-contacts__edit-card" @submit.prevent="saveCard">
@@ -60,37 +61,16 @@
 					</li>
 				</ul>
 			</section>
-
-			<table v-if="links.length" class="erp-contacts__table">
-				<thead>
-					<tr>
-						<th>Name</th>
-						<th>Referenznummer</th>
-						<th>Zahlungsziel (Tage)</th>
-						<th>Notizen</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="l in links" :key="l.id">
-						<td>{{ l.displayName }}</td>
-						<td><input v-model="l.referenceNumber" @change="save(l)"></td>
-						<td><input v-model.number="l.paymentTermsDays" type="number" @change="save(l)"></td>
-						<td><input v-model="l.notes" @change="save(l)"></td>
-						<td><button @click="unlink(l)">Entfernen</button></td>
-					</tr>
-				</tbody>
-			</table>
-			<p v-else>Noch keine {{ title }} verknüpft.</p>
 		</template>
 	</div>
 </template>
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import { createContactCard, createContactLink, deleteContactLink, fetchContactCards, fetchContactLinks, searchContacts, updateContactCard, updateContactLink } from '../services/contactsApi.js'
+import { createContactCard, createContactLink, deleteContactCard, deleteContactLink, fetchContactCards, fetchContactLinks, searchContacts, updateContactCard, updateContactLink } from '../services/contactsApi.js'
 import { contactCardDraft, contactCardPayload, emptyContactCard, userFacingContactCardError } from '../services/contactCards.mjs'
 import { acceptsContactRoleReload, beginContactRoleReload } from '../services/contactRoleReload.mjs'
+import { mergeRoleContacts } from '../services/contactRoleList.mjs'
 
 export default {
 	name: 'ContactLinksView',
@@ -122,6 +102,9 @@ export default {
 		role() {
 			this.reloadRole()
 		},
+	},
+	computed: {
+		roleContacts() { return mergeRoleContacts(this.cards, this.links) },
 	},
 	methods: {
 		async reloadRole() {
@@ -186,6 +169,19 @@ export default {
 				await updateContactCard(this.role, this.editingCard.uid, contactCardPayload(this.editContact))
 				await this.loadCards()
 				this.cancelEdit()
+			} catch (e) {
+				this.loadError = userFacingContactCardError(e)
+			} finally {
+				this.saving = false
+			}
+		},
+		async confirmDeleteCard(card) {
+			if (!window.confirm(`Kontakt „${card.displayName}“ endgültig löschen? Historische Belege behalten Name und Anschrift.`)) return
+			this.saving = true
+			try {
+				await deleteContactCard(this.role, card.uid)
+				await Promise.all([this.loadCards(), this.loadLinks()])
+				if (this.editingCard?.uid === card.uid) this.cancelEdit()
 			} catch (e) {
 				this.loadError = userFacingContactCardError(e)
 			} finally {

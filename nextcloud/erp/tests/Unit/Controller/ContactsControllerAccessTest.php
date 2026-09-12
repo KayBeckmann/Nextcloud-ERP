@@ -141,4 +141,18 @@ final class ContactsControllerAccessTest extends TestCase {
 		$this->expectException(OCSForbiddenException::class);
 		$this->controller->updateCard('customer', 'native-1', 'ACME GmbH');
 	}
+
+	public function testDeleteCardRequiresWriteOnItsRole(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->deleteCard('supplier', 'native-1');
+	}
+
+	public function testDeleteCardDelegatesRoleScopedDeletionWithWritePermission(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->contactsService->expects($this->once())->method('deleteCard')->with(ContactRole::Customer, 'native-1');
+
+		$this->assertSame([], $this->controller->deleteCard('customer', 'native-1')->getData());
+	}
 }

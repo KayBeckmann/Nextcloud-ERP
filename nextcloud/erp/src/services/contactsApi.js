@@ -31,6 +31,10 @@ export async function updateContactCard(role, contactUid, payload) {
 	return data.ocs.data
 }
 
+export async function deleteContactCard(role, contactUid) {
+	await axios.delete(generateOcsUrl('apps/erp/api/v1/contacts/cards/{role}/{contactUid}', { role, contactUid }))
+}
+
 export async function createContactLink(payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/contacts/links'), payload)
 	return data.ocs.data

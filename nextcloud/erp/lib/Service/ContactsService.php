@@ -9,6 +9,8 @@ use OCA\ERP\Db\ContactLink;
 use OCA\ERP\Db\ContactLinkMapper;
 use OCP\Contacts\IManager as IContactsManager;
 use OCP\IAddressBook;
+use OCA\DAV\CardDAV\CardDavBackend;
+use OCP\IDBConnection;
 
 /**
  * Wrapper um OCP\Contacts\IManager + erp_contact_links (ADR-0009). Speichert
@@ -20,6 +22,9 @@ class ContactsService {
 		private ContactLinkMapper $mapper,
 		private IContactsManager $contactsManager,
 		private ?SharedAddressBookProvisioner $addressBookProvisioner = null,
+		private ?ContactHistorySnapshotService $historySnapshots = null,
+		private ?CardDavBackend $cardDavBackend = null,
+		private ?IDBConnection $db = null,
 	) {
 	}
 
@@ -239,7 +244,44 @@ class ContactsService {
 				'addressLines' => $this->addressLinesFromVCardAdr(is_array($adr) ? $adr : [$adr]),
 			];
 		}
+		if ($this->historySnapshots !== null) {
+			$snapshot = $this->historySnapshots->latestFor($contactUid);
+			if ($snapshot !== null) return $snapshot;
+		}
 		return ['displayName' => $contactUid, 'addressLines' => []];
+	}
+
+	/**
+	 * Destructive role-card deletion.  The full native name/address is read only
+	 * after the UI confirmation has reached this endpoint.  Database snapshots
+	 * are written before the CardDAV mutation, so a failed snapshot never deletes
+	 * the native card.  Existing issued document snapshots are intentionally not
+	 * touched.
+	 */
+	public function deleteCard(ContactRole $role, string $contactUid): void {
+		if ($this->historySnapshots === null || $this->cardDavBackend === null || $this->db === null) {
+			throw new \RuntimeException('Contact deletion dependencies are unavailable');
+		}
+		$addressBook = $this->addressBookForRole($role);
+		$card = null;
+		foreach ($addressBook->search($contactUid, ['UID'], []) as $candidate) {
+			if (($candidate['UID'] ?? null) === $contactUid && isset($candidate['URI'])) { $card = $candidate; break; }
+		}
+		if ($card === null) throw new \OutOfBoundsException("Contact $contactUid is not in the dedicated {$role->value} address book");
+		$details = ['displayName' => (string)($card['FN'] ?? $contactUid), 'addressLines' => $this->addressLinesFromVCardAdr(is_array($card['ADR'] ?? null) ? $card['ADR'] : [$card['ADR'] ?? ''])];
+		$this->db->beginTransaction();
+		try {
+			$this->historySnapshots->snapshotReferences($role, $contactUid, $details);
+			$link = $this->mapper->findOneByContactAndRole($contactUid, $role->value);
+			if ($link !== null) $this->mapper->delete($link);
+			// CardDAV is not part of the SQL transaction: keep it as the final
+			// mutation so any snapshot/link failure still leaves the vCard intact.
+			if (!$this->cardDavBackend->deleteCard((int)$addressBook->getKey(), (string)$card['URI'])) throw new \RuntimeException('Nextcloud Contacts did not delete the contact card');
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 	}
 
 	/**
