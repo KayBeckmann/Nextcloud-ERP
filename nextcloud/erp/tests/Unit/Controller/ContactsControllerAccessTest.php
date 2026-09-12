@@ -61,6 +61,18 @@ final class ContactsControllerAccessTest extends TestCase {
 		$this->assertSame([], $response->getData());
 	}
 
+	public function testCardsListsOnlyTheRequestedRoleWithReadPermission(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->contactsService->expects($this->once())
+			->method('listCards')
+			->with(ContactRole::Supplier)
+			->willReturn([['uid' => 'supplier-1', 'displayName' => 'Muster Lieferant']]);
+
+		$response = $this->controller->cards('supplier');
+
+		$this->assertSame([['uid' => 'supplier-1', 'displayName' => 'Muster Lieferant']], $response->getData());
+	}
+
 	public function testCreateLinkRequiresWriteNotJustRead(): void {
 		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
 		$this->expectException(OCSForbiddenException::class);
@@ -102,5 +114,31 @@ final class ContactsControllerAccessTest extends TestCase {
 		$response = $this->controller->search('foo');
 
 		$this->assertSame([], $response->getData());
+	}
+
+	public function testCreateCardRequiresWriteOnItsRole(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->createCard('customer', 'ACME GmbH');
+	}
+
+	public function testCreateCardUsesTheRoleScopedContactsService(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->contactsService->expects($this->once())
+			->method('createCard')
+			->with(ContactRole::Supplier, ['fullName' => 'Muster Lieferant', 'email' => '', 'phone' => '', 'address' => ''])
+			->willReturn(['uid' => 'native-1', 'displayName' => 'Muster Lieferant', 'emails' => [], 'uri' => 'native-1.vcf']);
+
+		$response = $this->controller->createCard('supplier', 'Muster Lieferant');
+
+		$this->assertSame('native-1', $response->getData()['uid']);
+	}
+
+	public function testUpdateCardRequiresWriteOnTheExistingRole(): void {
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->updateCard('customer', 'native-1', 'ACME GmbH');
 	}
 }

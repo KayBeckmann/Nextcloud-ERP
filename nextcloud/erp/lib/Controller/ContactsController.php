@@ -112,6 +112,80 @@ class ContactsController extends OCSController {
 	}
 
 	/**
+	 * Liefert die live Karten des dedizierten Kunden- bzw. Lieferanten-
+	 * Adressbuchs. Die Rollenprüfung läuft vor dem nativen CardDAV-Zugriff.
+	 *
+	 * @throws OCSBadRequestException|OCSForbiddenException
+	 */
+	#[NoAdminRequired]
+	public function cards(string $role): DataResponse {
+		$parsedRole = self::parseRole($role);
+		$this->requireLevel(self::resourceForRole($parsedRole), PermissionLevel::Read);
+		try {
+			return new DataResponse($this->contactsService->listCards($parsedRole));
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+	}
+
+	/**
+	 * Erstellt eine vCard im rollenfesten, dedizierten Nextcloud-Adressbuch.
+	 * Die Kontaktfelder werden ausschließlich an die öffentliche Contacts-API
+	 * weitergereicht; im ERP bleibt nur eine optionale spätere Rollenverknüpfung.
+	 *
+	 * @throws OCSBadRequestException|OCSForbiddenException
+	 */
+	#[NoAdminRequired]
+	public function createCard(
+		string $role,
+		string $fullName,
+		string $email = '',
+		string $phone = '',
+		string $address = '',
+	): DataResponse {
+		$parsedRole = self::parseRole($role);
+		$this->requireLevel(self::resourceForRole($parsedRole), PermissionLevel::Write);
+		try {
+			$card = $this->contactsService->createCard($parsedRole, [
+				'fullName' => $fullName,
+				'email' => $email,
+				'phone' => $phone,
+				'address' => $address,
+			]);
+		} catch (\InvalidArgumentException|\OutOfBoundsException|\RuntimeException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+		return new DataResponse($card);
+	}
+
+	/**
+	 * @throws OCSBadRequestException|OCSForbiddenException
+	 */
+	#[NoAdminRequired]
+	public function updateCard(
+		string $role,
+		string $contactUid,
+		string $fullName,
+		string $email = '',
+		string $phone = '',
+		string $address = '',
+	): DataResponse {
+		$parsedRole = self::parseRole($role);
+		$this->requireLevel(self::resourceForRole($parsedRole), PermissionLevel::Write);
+		try {
+			$card = $this->contactsService->updateCard($parsedRole, $contactUid, [
+				'fullName' => $fullName,
+				'email' => $email,
+				'phone' => $phone,
+				'address' => $address,
+			]);
+		} catch (\InvalidArgumentException|\OutOfBoundsException|\RuntimeException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+		return new DataResponse($card);
+	}
+
+	/**
 	 * @throws OCSBadRequestException|OCSForbiddenException
 	 */
 	#[NoAdminRequired]

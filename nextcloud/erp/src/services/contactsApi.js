@@ -16,6 +16,21 @@ export async function fetchContactLinks(role) {
 	return data.ocs.data
 }
 
+export async function fetchContactCards(role) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/contacts/cards/{role}', { role }))
+	return data.ocs.data
+}
+
+export async function createContactCard(role, payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/contacts/cards/{role}', { role }), payload)
+	return data.ocs.data
+}
+
+export async function updateContactCard(role, contactUid, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/contacts/cards/{role}/{contactUid}', { role, contactUid }), payload)
+	return data.ocs.data
+}
+
 export async function createContactLink(payload) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/contacts/links'), payload)
 	return data.ocs.data

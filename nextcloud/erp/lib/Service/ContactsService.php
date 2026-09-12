@@ -8,6 +8,7 @@ use OCA\ERP\Contacts\ContactRole;
 use OCA\ERP\Db\ContactLink;
 use OCA\ERP\Db\ContactLinkMapper;
 use OCP\Contacts\IManager as IContactsManager;
+use OCP\IAddressBook;
 
 /**
  * Wrapper um OCP\Contacts\IManager + erp_contact_links (ADR-0009). Speichert
@@ -42,6 +43,158 @@ class ContactsService {
 			];
 		}
 		return $contacts;
+	}
+
+	private static function addressBookUriForRole(ContactRole $role): string {
+		return $role === ContactRole::Customer ? 'erp-kunden' : 'erp-lieferanten';
+	}
+
+	/**
+	 * Liefert ausschließlich das für die ERP-Rolle vorgesehene, für den
+	 * aktuellen Nextcloud-User sichtbare Adressbuch. Die technische Key-ID wird
+	 * bewusst erst aus dessen öffentlicher IAddressBook-Repräsentation bezogen;
+	 * sie ist installationsspezifisch und wird nie im ERP gespeichert.
+	 *
+	 * @throws \OutOfBoundsException wenn das Adressbuch nicht provisioniert,
+	 *   nicht geteilt oder für den Benutzer nicht sichtbar ist.
+	 */
+	private function addressBookForRole(ContactRole $role): IAddressBook {
+		$expectedUri = self::addressBookUriForRole($role);
+		foreach ($this->contactsManager->getUserAddressBooks() as $addressBook) {
+			if ($addressBook->getUri() === $expectedUri) {
+				return $addressBook;
+			}
+		}
+
+		throw new \OutOfBoundsException("Dedicated address book '$expectedUri' is not visible");
+	}
+
+	/**
+	 * Erstellt eine neue vCard im ausschließlich zur Rolle gehörenden
+	 * Nextcloud-Adressbuch. Es werden keine Stammdaten ins ERP geschrieben;
+	 * IAddressBook::createOrUpdate() ist die öffentliche Contacts-API und
+	 * prüft die DAV-Schreibrechte des aktuellen Benutzers selbst.
+	 *
+	 * @param array{fullName: string, email?: string, phone?: string, address?: string} $fields
+	 * @return array{uid: string, displayName: string, emails: list<string>, uri: string}
+	 * @throws \InvalidArgumentException|\OutOfBoundsException
+	 */
+	public function createCard(ContactRole $role, array $fields): array {
+		$fullName = trim((string) ($fields['fullName'] ?? ''));
+		if ($fullName === '') {
+			throw new \InvalidArgumentException('fullName must not be empty');
+		}
+
+		$properties = ['FN' => $fullName];
+		foreach (['email' => 'EMAIL', 'phone' => 'TEL', 'address' => 'ADR'] as $field => $property) {
+			$value = trim((string) ($fields[$field] ?? ''));
+			if ($value !== '') {
+				$properties[$property] = [$value];
+			}
+		}
+
+		$card = $this->addressBookForRole($role)->createOrUpdate($properties);
+		if (!is_array($card) || !isset($card['UID'], $card['URI'])) {
+			throw new \RuntimeException('Nextcloud Contacts did not create the contact card');
+		}
+
+		return $this->cardResponse($card);
+	}
+
+	/**
+	 * Aktualisiert eine vorhandene vCard ausschließlich, wenn sie im passenden
+	 * dedizierten Adressbuch liegt. Eine UID aus einem privaten oder fremden
+	 * Adressbuch kann damit nicht über die ERP-API verändert werden.
+	 *
+	 * @param array{fullName: string, email?: string, phone?: string, address?: string} $fields
+	 * @return array{uid: string, displayName: string, emails: list<string>, uri: string}
+	 * @throws \InvalidArgumentException|\OutOfBoundsException
+	 */
+	public function updateCard(ContactRole $role, string $contactUid, array $fields): array {
+		$addressBook = $this->addressBookForRole($role);
+		$existing = null;
+		foreach ($addressBook->search($contactUid, ['UID'], []) as $card) {
+			if (($card['UID'] ?? null) === $contactUid) {
+				$existing = $card;
+				break;
+			}
+		}
+		if ($existing === null || !isset($existing['URI'])) {
+			throw new \OutOfBoundsException("Contact $contactUid is not in the dedicated {$role->value} address book");
+		}
+
+		$fullName = trim((string) ($fields['fullName'] ?? ''));
+		if ($fullName === '') {
+			throw new \InvalidArgumentException('fullName must not be empty');
+		}
+		$properties = [
+			'UID' => $contactUid,
+			'URI' => (string) $existing['URI'],
+			'FN' => $fullName,
+		];
+		foreach (['email' => 'EMAIL', 'phone' => 'TEL', 'address' => 'ADR'] as $field => $property) {
+			if (array_key_exists($field, $fields)) {
+				$value = trim((string) $fields[$field]);
+				$properties[$property] = $value === '' ? [] : [$value];
+			}
+		}
+
+		$card = $addressBook->createOrUpdate($properties);
+		if (!is_array($card) || !isset($card['UID'], $card['URI'])) {
+			throw new \RuntimeException('Nextcloud Contacts did not update the contact card');
+		}
+		return $this->cardResponse($card);
+	}
+
+	/**
+	 * Listet nur die live vCards des rollenfesten, sichtbaren Adressbuchs.
+	 * Die Kontaktdaten bleiben damit bei Nextcloud Contacts; die ERP-UI erhält
+	 * genau die Felder, die sie im selben nativen Datensatz bearbeiten darf.
+	 *
+	 * @return list<array{uid: string, displayName: string, email: string, phone: string, address: string, uri: string}>
+	 * @throws \OutOfBoundsException
+	 */
+	public function listCards(ContactRole $role): array {
+		$cards = [];
+		foreach ($this->addressBookForRole($role)->search('', ['FN', 'EMAIL'], []) as $card) {
+			if (!is_array($card) || !isset($card['UID'], $card['URI'])) {
+				continue;
+			}
+			$cards[] = $this->editableCardResponse($card);
+		}
+		return $cards;
+	}
+
+	/** @param array<string, mixed> $card @return array{uid: string, displayName: string, email: string, phone: string, address: string, uri: string} */
+	private function editableCardResponse(array $card): array {
+		$firstValue = static function (mixed $value): string {
+			if (is_array($value)) {
+				$value = $value[0] ?? '';
+			}
+			return (string) $value;
+		};
+		return [
+			'uid' => (string) $card['UID'],
+			'displayName' => (string) ($card['FN'] ?? $card['UID']),
+			'email' => $firstValue($card['EMAIL'] ?? ''),
+			'phone' => $firstValue($card['TEL'] ?? ''),
+			'address' => $firstValue($card['ADR'] ?? ''),
+			'uri' => (string) $card['URI'],
+		];
+	}
+
+	/** @param array<string, mixed> $card @return array{uid: string, displayName: string, emails: list<string>, uri: string} */
+	private function cardResponse(array $card): array {
+		$emails = $card['EMAIL'] ?? [];
+		if (!is_array($emails)) {
+			$emails = [$emails];
+		}
+		return [
+			'uid' => (string) $card['UID'],
+			'displayName' => (string) ($card['FN'] ?? $card['UID']),
+			'emails' => array_values(array_map('strval', $emails)),
+			'uri' => (string) $card['URI'],
+		];
 	}
 
 	/** Prüft, ob der aktuelle Benutzer diesen Contact per UID sehen darf. */
