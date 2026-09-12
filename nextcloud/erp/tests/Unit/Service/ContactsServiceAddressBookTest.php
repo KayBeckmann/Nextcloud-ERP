@@ -7,6 +7,7 @@ namespace OCA\ERP\Tests\Unit\Service;
 use OCA\ERP\Contacts\ContactRole;
 use OCA\ERP\Db\ContactLinkMapper;
 use OCA\ERP\Service\ContactsService;
+use OCA\ERP\Service\SharedAddressBookProvisioner;
 use OCP\Contacts\IManager as IContactsManager;
 use OCP\IAddressBook;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -126,5 +127,18 @@ final class ContactsServiceAddressBookTest extends TestCase {
 			'address' => ';;Musterstraße 1;Berlin;;10115;Deutschland',
 			'uri' => 'customer-1.vcf',
 		]], $this->service->listCards(ContactRole::Customer));
+	}
+
+	public function testListCardsEnsuresSharedRoleAddressBooksBeforeLookingThemUp(): void {
+		$provisioner = $this->createMock(SharedAddressBookProvisioner::class);
+		$provisioner->expects($this->once())->method('ensure');
+		$this->customerBook->method('search')->willReturn([]);
+		$service = new ContactsService(
+			$this->createMock(ContactLinkMapper::class),
+			$this->contactsManager,
+			$provisioner,
+		);
+
+		self::assertSame([], $service->listCards(ContactRole::Customer));
 	}
 }

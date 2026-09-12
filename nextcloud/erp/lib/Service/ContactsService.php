@@ -19,6 +19,7 @@ class ContactsService {
 	public function __construct(
 		private ContactLinkMapper $mapper,
 		private IContactsManager $contactsManager,
+		private ?SharedAddressBookProvisioner $addressBookProvisioner = null,
 	) {
 	}
 
@@ -59,6 +60,7 @@ class ContactsService {
 	 *   nicht geteilt oder für den Benutzer nicht sichtbar ist.
 	 */
 	private function addressBookForRole(ContactRole $role): IAddressBook {
+		$this->addressBookProvisioner?->ensure();
 		$expectedUri = self::addressBookUriForRole($role);
 		foreach ($this->contactsManager->getUserAddressBooks() as $addressBook) {
 			if ($addressBook->getUri() === $expectedUri) {
