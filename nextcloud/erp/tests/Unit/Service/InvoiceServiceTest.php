@@ -485,6 +485,70 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 		$this->assertSame($final->getId(), $fullPartial['relatedInvoices'][0]['id']);
 	}
 
+	public function testFinalSettlementDeductsIssuedPartialInvoices(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 10.0, 20.0); // Gesamt 200,00 netto
+
+		$partial = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-teil-settlement', 'partial', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 4.0], // 80,00 netto
+		]);
+		$partial = $this->service->issue($partial->getId(), $this->user);
+
+		$final = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-schluss-settlement', 'final', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 6.0], // 120,00 netto (Restmenge)
+		]);
+		$final = $this->service->issue($final->getId(), $this->user);
+
+		$full = $this->service->getFullInvoice($final->getId());
+		$settlement = $full['finalSettlement'];
+
+		$this->assertNotNull($settlement);
+		// Gesamt: 200,00 netto * 1.19 = 238,00; Teilrechnung: 80,00*1.19=95,20; Rest: 120,00*1.19=142,80.
+		$this->assertSame(238.0, $settlement['totalOrderValue']['grossTotal']);
+		$this->assertSame(95.2, $settlement['previouslyInvoiced']['grossTotal']);
+		$this->assertSame(142.8, $settlement['remainingDue']['grossTotal']);
+		// remainingDue ist rechnerisch identisch mit der eigenen calculation (ADR-0027).
+		$this->assertSame($full['calculation']['grossTotal'], $settlement['remainingDue']['grossTotal']);
+
+		$this->assertCount(1, $settlement['priorInvoices']);
+		$this->assertSame($partial->getInvoiceNumber(), $settlement['priorInvoices'][0]['invoiceNumber']);
+		$this->assertSame(80.0, $settlement['priorInvoices'][0]['netSubtotal']);
+		$this->assertSame(15.2, $settlement['priorInvoices'][0]['vatAmount']);
+		$this->assertSame(95.2, $settlement['priorInvoices'][0]['grossTotal']);
+	}
+
+	public function testFinalSettlementIsNullWithoutIssuedPriorInvoices(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 5.0, 10.0);
+		// Entwurf, nie ausgestellt -> zählt nicht als "Rechnung mit gesondertem Steuerausweis".
+		$this->service->createFromOrder($order->getId(), 'phpunit-invoice-teil-draft', 'partial', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 2.0],
+		]);
+
+		$final = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-schluss-nodraft', 'final', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 5.0],
+		]);
+		$final = $this->service->issue($final->getId(), $this->user);
+
+		$full = $this->service->getFullInvoice($final->getId());
+		$this->assertNull($full['finalSettlement']);
+	}
+
+	public function testFinalSettlementIsNullForNonFinalInvoiceType(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 5.0, 10.0);
+		$partial1 = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-teil-a', 'partial', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 2.0],
+		]);
+		$this->service->issue($partial1->getId(), $this->user);
+
+		// 'invoice' (nicht 'final') desselben Auftrags -> keine Verrechnungspflicht.
+		$plainInvoice = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-plain', 'invoice', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 3.0],
+		]);
+		$plainInvoice = $this->service->issue($plainInvoice->getId(), $this->user);
+
+		$full = $this->service->getFullInvoice($plainInvoice->getId());
+		$this->assertNull($full['finalSettlement']);
+	}
+
 	public function testGetFullInvoiceWithoutOrderHasEmptyRelatedInvoices(): void {
 		$invoice = $this->draftWithOnePosition();
 		$full = $this->service->getFullInvoice($invoice->getId());
