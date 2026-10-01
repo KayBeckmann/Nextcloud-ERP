@@ -75,6 +75,7 @@ final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 			$projectService,
 			new DocumentPdfService(),
 			$htmlBuilder,
+			$db,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -286,5 +287,43 @@ final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 
 		$this->expectException(\InvalidArgumentException::class);
 		$this->service->createFromOrder($order->getId(), [], null);
+	}
+
+	/**
+	 * ADR-0029: Die Mengenprüfung läuft jetzt innerhalb einer Transaktion
+	 * mit Zeilensperre. Dieser Test stellt sicher, dass die Summierung über
+	 * mehrere, nacheinander erzeugte Lieferscheine hinweg weiterhin korrekt
+	 * bleibt — die Sperre darf das Ergebnis nicht verändern, nur die
+	 * Gleichzeitigkeit absichern.
+	 */
+	public function testCreateFromOrderAcrossMultipleCallsStillSumsCorrectly(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 5.0);
+
+		$this->service->createFromOrder($order->getId(), [
+			['orderPositionId' => $position->getId(), 'quantity' => 3.0],
+		], null);
+
+		// Restmenge ist jetzt 2.0 — 3.0 muss weiterhin abgelehnt werden,
+		// obwohl die einzelne Anfrage für sich unter der vollen Menge liegt.
+		$this->expectException(\DomainException::class);
+		$this->service->createFromOrder($order->getId(), [
+			['orderPositionId' => $position->getId(), 'quantity' => 3.0],
+		], null);
+	}
+
+	public function testCreateFromOrderAcceptsExactRemainingQuantity(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 5.0);
+
+		$this->service->createFromOrder($order->getId(), [
+			['orderPositionId' => $position->getId(), 'quantity' => 3.0],
+		], null);
+
+		// Exakt die Restmenge (2.0) muss weiterhin möglich sein.
+		$deliveryNote = $this->service->createFromOrder($order->getId(), [
+			['orderPositionId' => $position->getId(), 'quantity' => 2.0],
+		], null);
+
+		$full = $this->service->getFull($deliveryNote->getId());
+		$this->assertSame(2.0, $full['positions'][0]->getQuantity());
 	}
 }
