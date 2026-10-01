@@ -918,3 +918,99 @@ Maschine verifizieren (die bestehende GitHub-Actions-CI baut/testet bereits
 reproduzierbar auf frischer Umgebung bei jedem Push — deckt den Kern dieses
 Kriteriums ab, ersetzt aber keinen echten Test auf einer zweiten
 Entwickler-Maschine).
+
+## 2026-09-04 bis 2026-09-12 — Nacharbeiten nach Phase 14 und Erweiterungen
+
+Nachträglich dokumentiert am 2026-10-01 (dieser Abschnitt fehlte bislang —
+die Arbeit selbst ist bereits auf `master` gelandet).
+
+**Rechte-/Freigabestruktur ([ADR-0024](adr/0024-gruppenbasierte-freigaben.md),
+2026-09-04):** Granulare Rollen-Gruppen (`erp-projektleiter`, `erp-monteure`)
+statt Ad-hoc-Einzelfreigaben. `ErpFolderService` legt die ERP-Ordnerstruktur
+jetzt in einem gemeinsamen Group Folder "ERP-Firma" an (schließt eine in
+ADR-0009 offen gelassene Lücke: vorher persönliches Home-Verzeichnis).
+Neuer `CalendarProvisioningService` legt pro User automatisch einen
+ERP-Kalender an und gibt ihn an `erp-projektleiter` frei (über die interne
+`OCA\DAV\CalDAV\Sharing`-API, kein öffentlicher OCP-Weg vorhanden). Neuer
+`occ`-Befehl `ProvisionSharedAddressBook` teilt das Adressbuch
+"erp-kontakte" mit beiden Gruppen. CI provisioniert Gruppen/Group Folder
+jetzt vor dem PHPUnit-Lauf.
+
+**Bekanntes offenes Problem:** Auf der lokalen Docker-Testumgebung
+verschwand der frisch angelegte Group Folder wiederholt aus
+`oc_filecache`/`oc_storages`, während die `oc_group_folders`-Zeile bestehen
+blieb — Ursache nicht abschließend identifiziert, korreliert zeitlich mit
+Hintergrund-Job-Aktivität auf der (bewusst öffentlich erreichbaren)
+Testinstanz, nicht mit den Codeänderungen selbst. CI nutzt eine frische,
+kurzlebige Instanz und ist davon vermutlich nicht betroffen.
+
+**CI-Stabilisierung (2026-09-04/05):** Trigger auf den tatsächlichen
+Default-Branch `master` umgestellt, PHP auf 8.3 angehoben (Nextcloud
+stable34 braucht ≥ 8.2), App-Pfad- und PCNTL-Warnung behoben,
+`files_external` aktiviert — alle Fixes einzeln lokal reproduziert und
+verifiziert, nicht nur "bis CI grün ist" durchprobiert.
+
+**Einkauf — Lieferantenbestellungen ([ADR-0017](adr/0017-fuhrpark.md) bzw.
+Migration `Version0017Date20260911123000`, 2026-09-11/12):** Neue Entität
+`PurchaseOrder` (+ Positionen, Wareneingänge, Statusverlauf) mit eigenem
+`PurchaseOrderService`: `createDraft()`, `transitionStatus()`,
+`receive()` (Wareneingang bucht direkt auf ein Lager). Bestellvorschläge
+(Phase 8) lassen sich jetzt nach ausgewähltem Lieferanten filtern/splitten
+statt nur als ein Gesamtbericht zu erscheinen. Bestellungen erzeugen
+Snapshot-gestützte PDF-Dokumente (`PurchaseOrderDocumentService` +
+`PurchaseOrderPdfRenderer`), analog zu den fünf Belegtypen aus Phase 12.
+Bestellvorschläge selbst bleiben weiterhin ein reiner, nicht gespeicherter
+Bericht (ADR-0014) — erst eine tatsächlich ausgelöste Bestellung wird zur
+persistenten `PurchaseOrder`.
+
+**Dokumenten-Branding ([Migration Version0018Date20260911150000](../nextcloud/erp/lib/Migration/Version0018Date20260911150000.php),
+2026-09-11):** Neue `CompanyProfile`-Entität (Name/Anschrift/USt-IdNr/Logo)
+und `DocumentLayout`-Snapshots je Beleg (Angebot/Auftrag/Lieferschein/
+Rechnung/Gutschrift) — das beim Ausstellen verwendete Firmenprofil wird
+pro Beleg eingefroren, spätere Profiländerungen verändern alte PDFs nicht
+rückwirkend. `CompanyLogoResolver` löst das Logo sicher auf (kontrollierter
+Datei-Zugriff, kein beliebiger Nextcloud-Dateipfad).
+
+**Projekt-Messprotokolle/Aufmaß-Arbeitsbereich (neu, nicht Teil der
+ursprünglichen 16-Phasen-Roadmap; [docs/measurement-workspace-api.md](measurement-workspace-api.md),
+2026-09-11):** Projektgebundener, versionierter Arbeitsbereich für
+Freitext, Messwerte, kontrollierte Foto-/Plan-Assets und Vektorzeichnungen.
+Erzeugt bewusst **keine** Angebotspositionen und führt **keine**
+OCR/Bilderkennung/KI-Handschrifterkennung durch — reine strukturierte
+Erfassung vor Ort. Jeder Datensatz/Block hat `uuid`, `version`,
+`createdAt`/`updatedAt` und nullable `deletedAt`-Tombstones, vorbereitet
+für späteren Flutter-Offline-Sync (Phase 15/16). Zeichnungs-Input ist
+clientseitig und serverseitig begrenzt (max. 100 Striche, 10.000 Punkte).
+
+**Geführter Projektablauf (neu, "Ablauf"-Tab im Projektdetail,
+[docs/p4-guided-workflow-smoke.md](p4-guided-workflow-smoke.md),
+2026-09-11):** Reine Bedienhilfe, die den tatsächlichen Stand vorhandener
+ERP-Datensätze sichtbar macht und zu den passenden Tabs verlinkt — legt
+selbst **keine** Daten an, ändert **keine** Statuswerte, führt **keinen**
+Versand/Wareneingang/Zahlung automatisch aus. Nutzt weiterhin die
+bestehende `write`-Rechteprüfung aus `GET /permissions/me`, führt keine
+neue Rechtestufe ein.
+
+**Sonstiges (2026-09-12):** Lager-Ansicht erlaubt Auswahl des aktiven
+Projekts für Baustellenbestand; Kontakt-Rollenlisten können jetzt direkt
+aus dem ERP verwaltet werden (automatische Provisionierung geteilter
+Rollen-Adressbücher, Eigentümer-Herleitung vom ersten User, Memo-Feld und
+Lieferanten-Kundennummer je Kontaktrolle, Neuladen bei Navigation,
+zusammengeführte Rollenlisten mit erhaltener Lösch-Historie).
+
+**Versionsstand:** App-Version 0.1.4 → 0.1.11 (sieben `chore(release)`-Bumps
+im Zeitraum). Testzahl laut `docker/README.md` war zuletzt am 2026-09-11
+mit 279 Tests/1244 Assertions dokumentiert und seitdem nicht nachgezogen
+worden; am 2026-10-01 neu verifiziert gegen die laufende Docker-
+Testumgebung: **340 Tests, 1522 Assertions, alle grün** (volle Suite inkl.
+Group-Folder-/Teamfolder-Provisionierung, `docker/README.md` entsprechend
+aktualisiert).
+
+**Noch offen:** Group-Folder-Verschwinden-Bug (siehe oben) weiterhin
+ungeklärt (am 2026-10-01 nicht erneut aufgetreten, aber nicht gezielt
+nachgestellt); keine der hier gelisteten neuen Funktionen (Einkauf,
+Branding, Messprotokolle, geführter Ablauf) hat bislang einen eigenen
+Abschnitt in `roadmap.md` — Messprotokolle und geführter Ablauf
+insbesondere waren in der ursprünglichen 16-Phasen-Planung nicht
+vorgesehen und sollten dort nachgetragen werden, damit Roadmap und
+tatsächlicher Funktionsumfang nicht auseinanderlaufen.

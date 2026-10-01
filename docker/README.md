@@ -138,7 +138,7 @@ docker compose exec -u www-data nextcloud bash -c \
   "cd /var/www/html/custom_apps/erp && php vendor/bin/phpunit --configuration tests/phpunit.xml"
 ```
 
-Erwartung: alle Tests grün (Stand 2026-09-11: 279 Tests, 1244 Assertions).
+Erwartung: alle Tests grün (Stand 2026-10-01: 340 Tests, 1522 Assertions).
 
 ### Nach jedem Testlauf: Teamfolder neu provisionieren
 
