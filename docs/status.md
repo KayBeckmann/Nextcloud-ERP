@@ -865,10 +865,12 @@ sind per API editierbar, aber ohne UI dafür.
   Punkte umgesetzt (ADR-0028).
 - Kollisionserkennung deckt nur ERP-Termine ab (mit Mitarbeiter-Zuweisung
   über die ERP-API angelegt), nicht private/sonstige Termine im
-  Nextcloud-Kalender eines Users; kein Bearbeiten/Verschieben/Löschen
-  bereits angelegter Termine; genau ein zugewiesener Mitarbeiter pro
-  Termin; ein zugewiesener Auftrag legt keinen Kalender-Termin an
-  (bleibt ein separater Schritt) — bewusst zurückgestellt (ADR-0020,
+  Nextcloud-Kalender eines Users; ~~kein Bearbeiten/Verschieben/Löschen
+  bereits angelegter Termine~~ — seit 2026-10-01 möglich (ADR-0031, über
+  `OCA\DAV\CalDAV\CalDavBackend`, da die öffentliche OCP-API dafür keinen
+  Weg bietet); genau ein zugewiesener Mitarbeiter pro Termin; ein
+  zugewiesener Auftrag legt keinen Kalender-Termin an (bleibt ein
+  separater Schritt) — Rest weiterhin bewusst zurückgestellt (ADR-0020,
   "Nicht Teil dieser Phase").
 
 ## 2026-09-01 — Phase 14 (Web-Reifegrad & Stabilisierung), erster Durchgang
@@ -1246,3 +1248,38 @@ Schlussrechnung selbst (nur auf vorige Teilrechnungen); keine
 gesonderte Behandlung abweichender MwSt.-Sätze zwischen Rechnung und
 Gutschrift über die bestehende `vatBreakdown`-Summierung hinaus (siehe
 ADR-0030 "Nicht Teil dieser Phase").
+
+## 2026-10-01 — Termine bearbeiten/verschieben/löschen ([ADR-0031](adr/0031-termine-bearbeiten-loeschen.md))
+
+**Erledigt:** Letzte der zuletzt offen dokumentierten Positionen aus
+diesem Durchgang geschlossen. `CalendarService::updateEvent()`/
+`deleteEvent()` erlauben jetzt das Bearbeiten/Verschieben bzw. Löschen
+eines bereits angelegten ERP-Termins.
+
+**Wichtiger technischer Befund:** Nextclouds öffentliche
+`OCP\Calendar`-API bietet dafür **keinen** unterstützten Weg — weder
+zum Löschen, noch (entgegen erster Annahme) zum Bearbeiten:
+`ICreateFromString::createFromString()` mit derselben `event_uri`
+schlägt immer mit einem Conflict fehl, es ist reines Create-only. Nach
+Rücksprache mit Kay läuft die Implementierung deshalb bewusst über
+`OCA\DAV\CalDAV\CalDavBackend` (interne Nextcloud-Klasse, dieselbe, die
+auch der reguläre CalDAV-Client-Handler nutzt) — eine bewusste
+Abweichung vom bisherigen Clean-OCP-Prinzip dieses Projekts, siehe ADR
+für die volle Abwägung und die Konsequenz für künftige
+Nextcloud-Upgrades.
+
+Neue Spalte `erp_calendar_links.created_by_user_id` (Migration 0023),
+damit ein nicht zugewiesener Termin (Default-Fall: eigener Kalender)
+nachträglich seinem Kalender zugeordnet werden kann — bisher nirgends
+gespeichert. Zeilen von vor diesem ADR ohne bestimmbaren Besitzer können
+nicht bearbeitet/gelöscht werden (`404`, bewusst kein Rateversuch).
+
+**Getestet:** 380 PHPUnit-Tests grün (375 → 380). Frontend-Build
+fehlerfrei (`ProjektDetailView`/`VehicleDetailView`: Bearbeiten-/
+Lösch-Buttons je Termin-Zeile).
+
+**Noch offen (unverändert zu ADR-0020):** Kollisionserkennung weiterhin
+nur für ERP-Termine, nicht private/sonstige Kalendertermine; genau ein
+zugewiesener Mitarbeiter pro Termin; ein zugewiesener Auftrag legt
+weiterhin keinen Kalender-Termin an (bewusste, keine offene,
+Entscheidung).

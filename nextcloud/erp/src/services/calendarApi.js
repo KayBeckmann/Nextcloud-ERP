@@ -17,3 +17,13 @@ export async function fetchCalendarLinks(resourceType, resourceId) {
 	})
 	return data.ocs.data
 }
+
+// Bearbeiten/Verschieben eines bereits angelegten Termins (ADR-0031).
+export async function updateCalendarEvent(id, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/calendar/events/{id}', { id }), payload)
+	return data.ocs.data
+}
+
+export async function deleteCalendarEvent(id) {
+	await axios.delete(generateOcsUrl('apps/erp/api/v1/calendar/events/{id}', { id }))
+}

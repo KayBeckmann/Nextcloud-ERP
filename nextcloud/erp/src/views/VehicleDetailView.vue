@@ -47,8 +47,22 @@
 					<input v-model="appointment.end" type="datetime-local" required>
 					<button type="submit">Anlegen</button>
 				</form>
+				<p v-if="eventError" class="erp-vehicle-detail__error">{{ eventError }}</p>
 				<ul v-if="calendarLinks.length" class="erp-vehicle-detail__events">
-					<li v-for="l in calendarLinks" :key="l.id">{{ l.summary }} <small>({{ l.calendarUri }})</small></li>
+					<li v-for="l in calendarLinks" :key="l.id">
+						<template v-if="editingEventId === l.id">
+							<input v-model="editEvent.summary" placeholder="Titel">
+							<input v-model="editEvent.start" type="datetime-local">
+							<input v-model="editEvent.end" type="datetime-local">
+							<button @click="saveEventEdit(l.id)">Speichern</button>
+							<button @click="editingEventId = null">Abbrechen</button>
+						</template>
+						<template v-else>
+							{{ l.summary }} <small>({{ l.calendarUri }})</small>
+							<button @click="startEventEdit(l)">Bearbeiten</button>
+							<button @click="removeEvent(l.id)">✕</button>
+						</template>
+					</li>
 				</ul>
 			</section>
 
@@ -180,7 +194,7 @@
 <script>
 import { generateUrl } from '@nextcloud/router'
 import { fetchVehicle, updateVehicle, addFuelLog, removeFuelLog, uploadFuelReceipt, addTrip, removeTrip } from '../services/vehiclesApi.js'
-import { fetchCalendars, createCalendarEvent, fetchCalendarLinks } from '../services/calendarApi.js'
+import { fetchCalendars, createCalendarEvent, fetchCalendarLinks, updateCalendarEvent, deleteCalendarEvent } from '../services/calendarApi.js'
 import { fetchStock } from '../services/warehouseApi.js'
 import UserPicker from '../components/UserPicker.vue'
 
@@ -203,6 +217,9 @@ export default {
 			calendarLinks: [],
 			showAppointmentForm: false,
 			appointment: { calendarUri: null, summary: '', start: '', end: '' },
+			eventError: null,
+			editingEventId: null,
+			editEvent: { summary: '', start: '', end: '' },
 			stockByWarehouse: {},
 		}
 	},
@@ -264,6 +281,48 @@ export default {
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
 			}
+		},
+		startEventEdit(link) {
+			this.eventError = null
+			this.editingEventId = link.id
+			this.editEvent = {
+				summary: link.summary ?? '',
+				start: this.toLocalDateTimeInput(link.startAt),
+				end: this.toLocalDateTimeInput(link.endAt),
+			}
+		},
+		toLocalDateTimeInput(unixSeconds) {
+			if (!unixSeconds) {
+				return ''
+			}
+			const d = new Date(unixSeconds * 1000)
+			const pad = (n) => String(n).padStart(2, '0')
+			return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+		},
+		async saveEventEdit(id) {
+			this.eventError = null
+			try {
+				await updateCalendarEvent(id, {
+					summary: this.editEvent.summary,
+					start: this.editEvent.start,
+					end: this.editEvent.end,
+				})
+			} catch (e) {
+				this.eventError = this.errorMessage(e)
+				return
+			}
+			this.editingEventId = null
+			await this.loadCalendarLinks()
+		},
+		async removeEvent(id) {
+			this.eventError = null
+			try {
+				await deleteCalendarEvent(id)
+			} catch (e) {
+				this.eventError = this.errorMessage(e)
+				return
+			}
+			await this.loadCalendarLinks()
 		},
 		async save() {
 			try {

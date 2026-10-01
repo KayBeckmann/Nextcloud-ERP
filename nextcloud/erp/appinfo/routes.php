@@ -56,6 +56,8 @@ return [
 		// Calendar-Integration (Roadmap Phase 3, ADR-0009).
 		['name' => 'calendar#calendars', 'url' => '/api/v1/calendar/calendars', 'verb' => 'GET'],
 		['name' => 'calendar#createEvent', 'url' => '/api/v1/calendar/events', 'verb' => 'POST'],
+		['name' => 'calendar#updateEvent', 'url' => '/api/v1/calendar/events/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'calendar#deleteEvent', 'url' => '/api/v1/calendar/events/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 		['name' => 'calendar#links', 'url' => '/api/v1/calendar/links', 'verb' => 'GET'],
 		// Files-Integration (Roadmap Phase 3, ADR-0009).
 		['name' => 'files#erpFolder', 'url' => '/api/v1/files/erp-folder', 'verb' => 'GET'],

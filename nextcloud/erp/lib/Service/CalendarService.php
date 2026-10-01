@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ERP\Service;
 
 use DateTimeInterface;
+use OCA\DAV\CalDAV\CalDavBackend;
 use OCA\ERP\Db\CalendarLink;
 use OCA\ERP\Db\CalendarLinkMapper;
 use OCP\Calendar\ICreateFromString;
@@ -23,13 +24,23 @@ use OCP\IUser;
  * `erp-projektleiter` freigegebenen "ERP"-Kalender des Zielusers
  * ({@see CalendarProvisioningService}) statt im generischen "Personal"-
  * Kalender — löst den in ADR-0009 offen gelassenen Punkt zur Sichtbarkeit
- * fremder Terminkalender.
+ * fremder Terminkalender. Seit ADR-0031 können bereits angelegte Termine
+ * auch bearbeitet/gelöscht werden — die öffentliche OCP\Calendar-API bietet
+ * dafür keinen Weg (nur `ICreateFromString::createFromString()`, das bei
+ * einer bereits existierenden `event_uri` mit einem Conflict fehlschlägt),
+ * weshalb dafür bewusst `OCA\DAV\CalDAV\CalDavBackend` genutzt wird —
+ * dieselbe interne Klasse, die auch der reguläre CalDAV-PUT/DELETE-Handler
+ * von Nextcloud selbst beim Bearbeiten/Löschen eines Termins im
+ * Kalender-Client nutzt. Kein Bestandteil der öffentlichen OCP-API, also
+ * ohne Abwärtskompatibilitätsgarantie über Nextcloud-Hauptversionen hinweg
+ * (siehe ADR-0031 für die Abwägung).
  */
 class CalendarService {
 	public function __construct(
 		private CalendarLinkMapper $mapper,
 		private ICalendarManager $calendarManager,
 		private CalendarProvisioningService $provisioning,
+		private CalDavBackend $calDavBackend,
 	) {
 	}
 
@@ -71,8 +82,8 @@ class CalendarService {
 	 * @throws \DomainException wenn sich der Zeitraum mit einem bereits
 	 *         zugewiesenen ERP-Termin desselben Users überschneidet
 	 */
-	private function assertNoCollision(string $assignedUserId, DateTimeInterface $start, DateTimeInterface $end): void {
-		$overlapping = $this->mapper->findOverlapping($assignedUserId, $start->getTimestamp(), $end->getTimestamp());
+	private function assertNoCollision(string $assignedUserId, DateTimeInterface $start, DateTimeInterface $end, ?int $excludeLinkId = null): void {
+		$overlapping = $this->mapper->findOverlapping($assignedUserId, $start->getTimestamp(), $end->getTimestamp(), $excludeLinkId);
 		if ($overlapping === []) {
 			return;
 		}
@@ -173,6 +184,7 @@ class CalendarService {
 		$link->setAssignedUserId($assignedUserId);
 		$link->setStartAt($start->getTimestamp());
 		$link->setEndAt($end->getTimestamp());
+		$link->setCreatedByUserId($user->getUID());
 		$link->setCreatedAt(time());
 		return $this->mapper->insert($link);
 	}
@@ -180,5 +192,95 @@ class CalendarService {
 	/** @return CalendarLink[] */
 	public function listLinks(string $resourceType, string $resourceId): array {
 		return $this->mapper->findByResource($resourceType, $resourceId);
+	}
+
+	/** @throws \OutOfBoundsException wenn der Termin nicht existiert */
+	public function getLink(int $id): CalendarLink {
+		$link = $this->mapper->findById($id);
+		if ($link === null) {
+			throw new \OutOfBoundsException("Calendar link $id not found");
+		}
+		return $link;
+	}
+
+	/**
+	 * Besitzer-Principal des Kalenders, in dem der Termin tatsächlich liegt
+	 * (ADR-0031) — bei Zuweisung der zugewiesene User (ADR-0020), sonst der
+	 * Ersteller (seit ADR-0031 gespeichert).
+	 *
+	 * @throws \OutOfBoundsException wenn der Termin vor ADR-0031 angelegt
+	 *         wurde und weder zugewiesen noch der Ersteller bekannt ist
+	 */
+	private function ownerUserId(CalendarLink $link): string {
+		$owner = $link->getAssignedUserId() ?? $link->getCreatedByUserId();
+		if ($owner === null) {
+			throw new \OutOfBoundsException("Calendar link {$link->getId()} predates ADR-0031 and has no known owner — cannot be edited or deleted");
+		}
+		return $owner;
+	}
+
+	/**
+	 * @throws \OutOfBoundsException wenn der Termin, sein Besitzer (siehe
+	 *         ownerUserId()) oder sein Kalender nicht (mehr) auffindbar ist
+	 */
+	private function calendarRowForLink(CalendarLink $link): array {
+		$calendarRow = $this->calDavBackend->getCalendarByUri($this->principalUriForUserId($this->ownerUserId($link)), $link->getCalendarUri());
+		if ($calendarRow === null) {
+			throw new \OutOfBoundsException("Calendar '{$link->getCalendarUri()}' for calendar link {$link->getId()} not found");
+		}
+		return $calendarRow;
+	}
+
+	/**
+	 * Bearbeitet/verschiebt einen bereits angelegten ERP-Termin (ADR-0031,
+	 * siehe Klassen-Doc für die Begründung, warum das über CalDavBackend
+	 * statt die öffentliche OCP\Calendar-API läuft).
+	 *
+	 * @throws \OutOfBoundsException siehe calendarRowForLink()
+	 * @throws \DomainException wenn die neue Zeit mit einem anderen
+	 *         ERP-Termin desselben zugewiesenen Users kollidiert (ADR-0020)
+	 */
+	public function updateEvent(int $id, string $summary, DateTimeInterface $start, DateTimeInterface $end, ?string $description = null): CalendarLink {
+		$link = $this->getLink($id);
+		if ($link->getAssignedUserId() !== null) {
+			$this->assertNoCollision($link->getAssignedUserId(), $start, $end, $id);
+		}
+		$calendarRow = $this->calendarRowForLink($link);
+
+		$builder = $this->calendarManager->createEventBuilder()
+			->setStartDate($start)
+			->setEndDate($end)
+			->setSummary($summary);
+		if ($description !== null && $description !== '') {
+			$builder->setDescription($description);
+		}
+		// toIcs() statt createInCalendar(), weil wir das Schreiben selbst
+		// über CalDavBackend::updateCalendarObject() steuern — die neue
+		// ICS-Nachricht bekommt dabei zwangsläufig eine neue interne
+		// VEVENT-UID (ICalendarEventBuilder hat keinen UID-Setter); die
+		// Datei-URI (und damit die ERP-Verknüpfung) bleibt aber stabil, nur
+		// die UID in den Kalenderdaten ändert sich mit — siehe ADR-0031
+		// "Nicht Teil dieser Phase" für die Einordnung dieser Einschränkung.
+		$calendarData = $builder->toIcs();
+
+		$this->calDavBackend->updateCalendarObject($calendarRow['id'], $link->getEventUri(), $calendarData);
+
+		$link->setSummary($summary);
+		$link->setStartAt($start->getTimestamp());
+		$link->setEndAt($end->getTimestamp());
+		return $this->mapper->update($link);
+	}
+
+	/**
+	 * Löscht einen bereits angelegten ERP-Termin inkl. ERP-Verknüpfung
+	 * (ADR-0031, siehe Klassen-Doc).
+	 *
+	 * @throws \OutOfBoundsException siehe calendarRowForLink()
+	 */
+	public function deleteEvent(int $id): void {
+		$link = $this->getLink($id);
+		$calendarRow = $this->calendarRowForLink($link);
+		$this->calDavBackend->deleteCalendarObject($calendarRow['id'], $link->getEventUri());
+		$this->mapper->delete($link);
 	}
 }

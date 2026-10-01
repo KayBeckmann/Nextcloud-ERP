@@ -13,6 +13,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSBadRequestException;
 use OCP\AppFramework\OCS\OCSForbiddenException;
+use OCP\AppFramework\OCS\OCSNotFoundException;
 use OCP\AppFramework\OCS\OCSPreconditionFailedException;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
@@ -116,5 +117,69 @@ class CalendarController extends OCSController {
 		$this->requireLevel($user, $resource, PermissionLevel::Read);
 
 		return new DataResponse($this->calendarService->listLinks($resourceType, $resourceId));
+	}
+
+	/**
+	 * Termin bearbeiten/verschieben (ADR-0031). Die Rechteprüfung läuft
+	 * über den `resourceType` der bestehenden Verknüpfung, nicht über einen
+	 * Request-Parameter — anders als bei createEvent() ist er hier nicht
+	 * vom Aufrufer frei wählbar.
+	 *
+	 * @throws OCSBadRequestException|OCSForbiddenException|OCSNotFoundException|OCSPreconditionFailedException
+	 */
+	#[NoAdminRequired]
+	public function updateEvent(int $id, string $summary, string $start, string $end, ?string $description = null): DataResponse {
+		$user = $this->requireUser();
+
+		try {
+			$link = $this->calendarService->getLink($id);
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+		$resource = self::parseResource($link->getResourceType());
+		$this->requireLevel($user, $resource, PermissionLevel::Write);
+
+		try {
+			$startDt = new DateTimeImmutable($start);
+			$endDt = new DateTimeImmutable($end);
+		} catch (\Exception $e) {
+			throw new OCSBadRequestException('start/end must be valid date-time strings: ' . $e->getMessage());
+		}
+
+		try {
+			$updated = $this->calendarService->updateEvent($id, $summary, $startDt, $endDt, $description);
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
+
+		return new DataResponse($updated);
+	}
+
+	/**
+	 * Termin löschen (ADR-0031). Rechteprüfung analog updateEvent().
+	 *
+	 * @throws OCSForbiddenException|OCSNotFoundException
+	 */
+	#[NoAdminRequired]
+	public function deleteEvent(int $id): DataResponse {
+		$user = $this->requireUser();
+
+		try {
+			$link = $this->calendarService->getLink($id);
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+		$resource = self::parseResource($link->getResourceType());
+		$this->requireLevel($user, $resource, PermissionLevel::Write);
+
+		try {
+			$this->calendarService->deleteEvent($id);
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+
+		return new DataResponse([]);
 	}
 }
