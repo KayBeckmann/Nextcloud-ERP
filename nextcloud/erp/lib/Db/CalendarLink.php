@@ -23,6 +23,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setStartAt(?int $startAt)
  * @method int|null getEndAt()
  * @method void setEndAt(?int $endAt)
+ * @method string|null getCreatedByUserId()
+ * @method void setCreatedByUserId(?string $createdByUserId)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
@@ -37,6 +39,10 @@ class CalendarLink extends Entity implements \JsonSerializable {
 	protected ?string $assignedUserId = null;
 	protected ?int $startAt = null;
 	protected ?int $endAt = null;
+	// Seit ADR-0031 gespeichert, um beim Bearbeiten/Löschen eines Termins
+	// ohne assignedUserId den richtigen Kalender (den des Erstellers)
+	// wiederzufinden — bei Zeilen aus der Zeit davor weiterhin null.
+	protected ?string $createdByUserId = null;
 	protected int $createdAt = 0;
 
 	public function __construct() {
@@ -57,6 +63,7 @@ class CalendarLink extends Entity implements \JsonSerializable {
 			'assignedUserId' => $this->getAssignedUserId(),
 			'startAt' => $this->getStartAt(),
 			'endAt' => $this->getEndAt(),
+			'createdByUserId' => $this->getCreatedByUserId(),
 		];
 	}
 }

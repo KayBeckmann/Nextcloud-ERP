@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Db;
 
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\IDBConnection;
 
@@ -25,20 +26,36 @@ class CalendarLinkMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	public function findById(int $id): ?CalendarLink {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \PDO::PARAM_INT)));
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+
 	/**
 	 * ERP-Termine desselben zugewiesenen Users, deren Zeitraum sich mit
 	 * [$start, $end) überschneidet (ADR-0020, Kollisionserkennung).
 	 * Offene Intervalle: ein Termin, der exakt endet, wenn der nächste
-	 * beginnt, gilt nicht als Kollision.
+	 * beginnt, gilt nicht als Kollision. `$excludeId` schließt den
+	 * bearbeiteten Termin selbst aus der Prüfung aus (ADR-0031, Verschieben
+	 * eines bereits angelegten Termins).
 	 *
 	 * @return CalendarLink[]
 	 */
-	public function findOverlapping(string $assignedUserId, int $start, int $end): array {
+	public function findOverlapping(string $assignedUserId, int $start, int $end, ?int $excludeId = null): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->eq('assigned_user_id', $qb->createNamedParameter($assignedUserId)))
 			->andWhere($qb->expr()->lt('start_at', $qb->createNamedParameter($end, \PDO::PARAM_INT)))
 			->andWhere($qb->expr()->gt('end_at', $qb->createNamedParameter($start, \PDO::PARAM_INT)));
+		if ($excludeId !== null) {
+			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($excludeId, \PDO::PARAM_INT)));
+		}
 		return $this->findEntities($qb);
 	}
 }
