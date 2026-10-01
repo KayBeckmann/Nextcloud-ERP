@@ -14,6 +14,7 @@
 				<option :value="null">MwSt. —</option>
 				<option v-for="v in vatRates" :key="v.id" :value="v.id">{{ v.name }}</option>
 			</select>
+			<input v-model.number="newArticle.sellingPriceNet" type="number" step="0.01" placeholder="Verkaufspreis netto (optional)" style="max-width:180px">
 			<button type="submit">Anlegen</button>
 		</form>
 
@@ -26,6 +27,7 @@
 					<th>Hersteller</th>
 					<th>Hersteller-Art.Nr.</th>
 					<th>Einheit</th>
+					<th>VK-Preis</th>
 					<th></th>
 				</tr>
 			</thead>
@@ -36,10 +38,11 @@
 						<td>{{ a.manufacturer }}</td>
 						<td>{{ a.manufacturerArticleNo }}</td>
 						<td>{{ a.unit }}</td>
+						<td>{{ a.sellingPriceNet !== null ? `${a.sellingPriceNet.toFixed(2)} €` : '—' }}</td>
 						<td>{{ expanded === a.id ? '▲' : '▼' }}</td>
 					</tr>
 					<tr v-if="expanded === a.id">
-						<td colspan="5">
+						<td colspan="6">
 							<div v-if="detail" class="erp-articles__detail">
 								<table class="erp-articles__prices">
 									<thead>
@@ -82,7 +85,7 @@ export default {
 			showCreate: false,
 			expanded: null,
 			detail: null,
-			newArticle: { name: '', manufacturer: '', manufacturerArticleNo: '', unit: 'Stk', vatRateId: null },
+			newArticle: { name: '', manufacturer: '', manufacturerArticleNo: '', unit: 'Stk', vatRateId: null, sellingPriceNet: null },
 			newPrice: { supplierContactUid: '', purchasePrice: null },
 		}
 	},
@@ -109,7 +112,7 @@ export default {
 		},
 		async submitCreate() {
 			await createArticle(this.newArticle)
-			this.newArticle = { name: '', manufacturer: '', manufacturerArticleNo: '', unit: 'Stk', vatRateId: null }
+			this.newArticle = { name: '', manufacturer: '', manufacturerArticleNo: '', unit: 'Stk', vatRateId: null, sellingPriceNet: null }
 			this.showCreate = false
 			await this.load()
 		},
