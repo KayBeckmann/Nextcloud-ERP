@@ -853,10 +853,10 @@ sind per API editierbar, aber ohne UI dafür.
 - Rechnung aus Angebot ohne Projekt ist seit ADR-0015 unmöglich, da beide
   jetzt zwingend ein Projekt erfordern — kein produktiv genutzter
   Anwendungsfall betroffen (lokale Docker-Testdaten).
-- Kein Fahrtenbuch, keine automatische TÜV-Erinnerungs-Benachrichtigung
+- ~~Kein Fahrtenbuch, keine automatische TÜV-Erinnerungs-Benachrichtigung
   (nur farbliche Markierung im UI), keine Fahrer-Zuweisungs-Historie,
-  keine Kraftstoffverbrauchsstatistik — bewusst zurückgestellt (ADR-0017,
-  "Nicht Teil dieser Phase").
+  keine Kraftstoffverbrauchsstatistik~~ — seit 2026-10-01 alle vier
+  Punkte umgesetzt (ADR-0028).
 - Kollisionserkennung deckt nur ERP-Termine ab (mit Mitarbeiter-Zuweisung
   über die ERP-API angelegt), nicht private/sonstige Termine im
   Nextcloud-Kalender eines Users; kein Bearbeiten/Verschieben/Löschen
@@ -1146,3 +1146,48 @@ gestellte Teilrechnungen in der Verrechnung; keine Unterscheidung
 zwischen echter Anzahlung und Teilleistungsabrechnung (beide laufen
 identisch über `type='partial'`, siehe ADR-0027 für die Begründung,
 warum das unschädlich ist).
+
+## 2026-10-01 — Fuhrpark-Erweiterungen: Fahrtenbuch, TÜV-Erinnerung, Zuweisungs-Historie, Verbrauchsstatistik ([ADR-0028](adr/0028-fuhrpark-fahrtenbuch-historie-verbrauch.md))
+
+**Erledigt:** Vierte der in ADR-0017 zurückgestellten Fuhrpark-Positionen
+geschlossen, alle vier Punkte in einem Branch gebündelt (gleiches
+Domänenmodell).
+
+- **Fahrtenbuch** (`erp_vehicle_trips`): Fahrten mit Zweck
+  (dienstlich/privat, §6 Abs. 1 Nr. 4 EStG), Start/Ziel, Kilometerstand.
+  `distanceKm` wird aus `endMileageKm - startMileageKm` abgeleitet, nicht
+  gespeichert (gleiches Drift-Vermeidungsprinzip wie `remainingDue` in
+  ADR-0027). Ein `endMileageKm` über dem bisherigen `currentMileageKm`
+  schreibt diesen automatisch fort (wie bei Tankbelegen).
+- **TÜV-Erinnerung:** kein neues Benachrichtigungssystem (keine
+  Infrastruktur dafür im Projekt) — stattdessen Erweiterung des
+  bestehenden Dashboards um `vehiclesOverdue` und eine begrenzte,
+  nach Datum sortierte `vehicleInspections`-Liste.
+- **Fahrer-Zuweisungs-Historie** (`erp_vehicle_assignments`):
+  offenes/geschlossenes Zeitraum-Muster (`unassignedAt IS NULL` =
+  aktuell aktiv). `create()`/`update()` öffnen/schließen Einträge
+  automatisch bei Änderung von `assignedUserId`; unveränderter Wert
+  erzeugt keinen neuen Eintrag.
+- **Kraftstoffverbrauchsstatistik:** `l/100km` je Tankbeleg (gegenüber
+  dem vorherigen), Durchschnitt über alle berechenbaren Einträge.
+  Unterstellt Volltanken bei jedem Beleg — nicht validierbar, bewusste
+  Einschränkung (siehe ADR).
+
+**Migrations-Fallstrick gefunden und dokumentiert:** Nextcloud-Entities
+überspringen beim `INSERT` Felder, deren gesetzter Wert gleich dem
+PHP-Property-Default ist. `VehicleTrip::$purpose` hatte Default
+`'business'` — der häufigste reale Wert — wodurch genau dieser Fall am
+`NOT NULL`-Constraint scheiterte. Fix: DB-Spalten-Default muss den
+PHP-Default spiegeln (wie bei `Vehicle::$vehicleType`/`$status` bereits
+etabliert); jetzt auch für `purpose`, `startMileageKm`, `endMileageKm`.
+
+**Getestet:** 372 PHPUnit-Tests grün. Frontend-Build fehlerfrei
+(`VehicleDetailView.vue`: Fahrtenbuch-, Verbrauchs- und
+Zuweisungs-Historie-Abschnitte; `DashboardView.vue`: überfällige
+Fahrzeuge in der TÜV-Kachel).
+
+**Noch offen:** Keine Push-/E-Mail-Benachrichtigung für TÜV-Fälligkeit;
+keine automatische Steuerberechnung aus dem Fahrtenbuch (vor
+produktivem Einsatz für die Fahrtenbuchmethode mit dem Steuerberater
+abstimmen, u. a. wegen fehlender Revisionssicherheit); keine Validierung
+der Zuweisungs-Historie gegen Abwesenheiten.

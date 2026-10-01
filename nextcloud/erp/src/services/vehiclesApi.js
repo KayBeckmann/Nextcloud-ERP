@@ -38,3 +38,13 @@ export async function uploadFuelReceipt(vehicleId, fuelLogId, fileName, content)
 	)
 	return data.ocs.data
 }
+
+// Fahrtenbuch (ADR-0028).
+export async function addTrip(vehicleId, payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/vehicles/{vehicleId}/trips', { vehicleId }), payload)
+	return data.ocs.data
+}
+
+export async function removeTrip(vehicleId, id) {
+	await axios.delete(generateOcsUrl('apps/erp/api/v1/vehicles/{vehicleId}/trips/{id}', { vehicleId, id }))
+}
