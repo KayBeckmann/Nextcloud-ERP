@@ -80,11 +80,23 @@
 						<option :value="null">Ohne Gruppe</option>
 						<option v-for="grp in groups" :key="grp.id" :value="grp.id">{{ grp.title }}</option>
 					</select>
-					<select v-model="newPosition.positionType">
+					<select v-model="newPosition.positionType" @change="newPosition.referenceId = null">
 						<option value="custom">Freitext</option>
 						<option value="article">Artikel</option>
 						<option value="product">Produkt</option>
 						<option value="labor">Arbeitsstunden</option>
+					</select>
+					<select v-if="newPosition.positionType === 'article'" v-model.number="newPosition.referenceId" @change="applyReferencePrefill">
+						<option :value="null">Artikel wählen …</option>
+						<option v-for="a in articles" :key="a.id" :value="a.id">{{ a.name }}</option>
+					</select>
+					<select v-if="newPosition.positionType === 'product'" v-model.number="newPosition.referenceId" @change="applyReferencePrefill">
+						<option :value="null">Produkt wählen …</option>
+						<option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+					</select>
+					<select v-if="newPosition.positionType === 'labor'" v-model.number="newPosition.referenceId" @change="applyReferencePrefill">
+						<option :value="null">Arbeitstyp wählen …</option>
+						<option v-for="w in workTypes" :key="w.id" :value="w.id">{{ w.name }}</option>
 					</select>
 					<input v-model="newPosition.description" placeholder="Beschreibung" required>
 					<input v-model.number="newPosition.quantity" type="number" step="0.01" placeholder="Menge" required>
@@ -122,7 +134,9 @@
 
 <script>
 import { addGroup, addPosition, fetchQuote, removePosition, updatePosition, updateQuote } from '../services/quotesApi.js'
-import { fetchVatRates } from '../services/settingsApi.js'
+import { fetchVatRates, fetchWorkTypes } from '../services/settingsApi.js'
+import { fetchArticles } from '../services/articlesApi.js'
+import { fetchProducts } from '../services/productsApi.js'
 import { createInvoiceFromQuote } from '../services/invoicesApi.js'
 import { createOrderFromQuote } from '../services/ordersApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
@@ -143,11 +157,14 @@ export default {
 			groups: [],
 			positions: [],
 			vatRates: [],
+			articles: [],
+			products: [],
+			workTypes: [],
 			loadError: null,
 			edit: { title: '', status: 'draft', customerContactUid: null, notes: '', discountPercent: 0 },
 			statusOptions: Object.keys(STATUS_LABELS),
 			newGroupTitle: '',
-			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			newPosition: { groupId: null, positionType: 'custom', referenceId: null, description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
 			editingPositionId: null,
 			editPosition: {},
 		}
@@ -169,12 +186,64 @@ export default {
 	},
 	async mounted() {
 		await this.load()
-		this.vatRates = await fetchVatRates()
+		;[this.vatRates, this.articles, this.products, this.workTypes] = await Promise.all([
+			fetchVatRates(),
+			fetchArticles(),
+			fetchProducts(),
+			fetchWorkTypes(),
+		])
 		if (this.vatRates.length) {
 			this.newPosition.vatRatePercent = this.vatRates.find((v) => v.isDefault)?.percentage ?? this.vatRates[0].percentage
 		}
 	},
 	methods: {
+		applyReferencePrefill() {
+			const { positionType, referenceId } = this.newPosition
+			if (referenceId === null) {
+				return
+			}
+			const vatPercent = (vatRateId) => this.vatRates.find((v) => v.id === vatRateId)?.percentage
+			if (positionType === 'article') {
+				const a = this.articles.find((x) => x.id === referenceId)
+				if (!a) {
+					return
+				}
+				this.newPosition.description = a.name
+				this.newPosition.unit = a.unit
+				if (a.sellingPriceNet !== null) {
+					this.newPosition.unitPriceNet = a.sellingPriceNet
+				}
+				const percent = vatPercent(a.vatRateId)
+				if (percent !== undefined) {
+					this.newPosition.vatRatePercent = percent
+				}
+			} else if (positionType === 'product') {
+				const p = this.products.find((x) => x.id === referenceId)
+				if (!p) {
+					return
+				}
+				this.newPosition.description = p.name
+				if (p.sellingPriceNet !== null) {
+					this.newPosition.unitPriceNet = p.sellingPriceNet
+				}
+				const percent = vatPercent(p.vatRateId)
+				if (percent !== undefined) {
+					this.newPosition.vatRatePercent = percent
+				}
+			} else if (positionType === 'labor') {
+				const w = this.workTypes.find((x) => x.id === referenceId)
+				if (!w) {
+					return
+				}
+				this.newPosition.description = w.name
+				this.newPosition.unitPriceNet = w.hourlyRate
+				this.newPosition.unit = 'Std.'
+				const percent = vatPercent(w.vatRateId)
+				if (percent !== undefined) {
+					this.newPosition.vatRatePercent = percent
+				}
+			}
+		},
 		statusLabel(status) {
 			return STATUS_LABELS[status] ?? status
 		},
@@ -228,7 +297,7 @@ export default {
 		},
 		async submitPosition() {
 			await addPosition(this.id, this.newPosition)
-			this.newPosition = { ...this.newPosition, description: '', quantity: 1, unitPriceNet: 0 }
+			this.newPosition = { ...this.newPosition, referenceId: null, description: '', quantity: 1, unitPriceNet: 0 }
 			await this.load()
 		},
 		async removePos(id) {

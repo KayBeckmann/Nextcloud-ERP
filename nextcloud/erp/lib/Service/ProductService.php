@@ -43,12 +43,13 @@ class ProductService {
 		];
 	}
 
-	public function create(string $name, ?string $description, ?int $vatRateId, ?string $notes): Product {
+	public function create(string $name, ?string $description, ?int $vatRateId, ?string $notes, ?float $sellingPriceNet = null): Product {
 		$now = time();
 		$product = new Product();
 		$product->setName($name);
 		$product->setDescription($description);
 		$product->setVatRateId($vatRateId);
+		$product->setSellingPriceNet($sellingPriceNet);
 		$product->setNotes($notes);
 		$product->setCreatedAt($now);
 		$product->setUpdatedAt($now);
@@ -56,11 +57,12 @@ class ProductService {
 	}
 
 	/** @throws \OutOfBoundsException */
-	public function update(int $id, string $name, ?string $description, ?int $vatRateId, ?string $notes): Product {
+	public function update(int $id, string $name, ?string $description, ?int $vatRateId, ?string $notes, ?float $sellingPriceNet = null): Product {
 		$product = $this->get($id);
 		$product->setName($name);
 		$product->setDescription($description);
 		$product->setVatRateId($vatRateId);
+		$product->setSellingPriceNet($sellingPriceNet);
 		$product->setNotes($notes);
 		$product->setUpdatedAt(time());
 		return $this->mapper->update($product);

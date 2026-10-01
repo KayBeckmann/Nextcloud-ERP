@@ -57,12 +57,13 @@ class ArticleController extends AbstractResourceController {
 		?string $category = null,
 		?int $vatRateId = null,
 		?string $notes = null,
+		?float $sellingPriceNet = null,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($name) === '') {
 			throw new OCSBadRequestException('name must not be empty');
 		}
-		return new DataResponse($this->articleService->create($name, $manufacturer, $manufacturerArticleNo, $unit, $category, $vatRateId, $notes));
+		return new DataResponse($this->articleService->create($name, $manufacturer, $manufacturerArticleNo, $unit, $category, $vatRateId, $notes, $sellingPriceNet));
 	}
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
@@ -76,13 +77,14 @@ class ArticleController extends AbstractResourceController {
 		?string $category = null,
 		?int $vatRateId = null,
 		?string $notes = null,
+		?float $sellingPriceNet = null,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($name) === '') {
 			throw new OCSBadRequestException('name must not be empty');
 		}
 		try {
-			return new DataResponse($this->articleService->update($id, $name, $manufacturer, $manufacturerArticleNo, $unit, $category, $vatRateId, $notes));
+			return new DataResponse($this->articleService->update($id, $name, $manufacturer, $manufacturerArticleNo, $unit, $category, $vatRateId, $notes, $sellingPriceNet));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Article $id not found");
 		}

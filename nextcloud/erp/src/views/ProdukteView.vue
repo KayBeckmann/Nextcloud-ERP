@@ -11,6 +11,7 @@
 				<option :value="null">MwSt. —</option>
 				<option v-for="v in vatRates" :key="v.id" :value="v.id">{{ v.name }}</option>
 			</select>
+			<input v-model.number="newProduct.sellingPriceNet" type="number" step="0.01" placeholder="Verkaufspreis netto (optional)" style="max-width:180px">
 			<button type="submit">Anlegen</button>
 		</form>
 
@@ -20,6 +21,7 @@
 			<li v-for="p in products" :key="p.id">
 				<div class="erp-products__row" @click="toggle(p.id)">
 					<strong>{{ p.name }}</strong>
+					<span>{{ p.sellingPriceNet !== null ? `${p.sellingPriceNet.toFixed(2)} €` : '—' }}</span>
 					<span>{{ expanded === p.id ? '▲' : '▼' }}</span>
 				</div>
 				<div v-if="expanded === p.id && detail" class="erp-products__detail">
@@ -69,7 +71,7 @@ export default {
 			showCreate: false,
 			expanded: null,
 			detail: null,
-			newProduct: { name: '', vatRateId: null },
+			newProduct: { name: '', vatRateId: null, sellingPriceNet: null },
 			newComponent: { articleId: null, quantity: 1, unit: 'Stk' },
 			newLabor: { workTypeId: null, hours: 1 },
 		}
@@ -97,7 +99,7 @@ export default {
 		},
 		async submitCreate() {
 			await createProduct(this.newProduct)
-			this.newProduct = { name: '', vatRateId: null }
+			this.newProduct = { name: '', vatRateId: null, sellingPriceNet: null }
 			this.showCreate = false
 			await this.load()
 		},

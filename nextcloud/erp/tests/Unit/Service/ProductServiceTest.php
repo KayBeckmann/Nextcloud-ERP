@@ -73,4 +73,12 @@ final class ProductServiceTest extends TestCase {
 		$this->assertCount(0, $full['components']);
 		$this->assertCount(0, $full['labor']);
 	}
+
+	public function testCreateAndUpdatePersistSellingPriceNet(): void {
+		$product = $this->service->create('phpunit-product-3', null, null, null, 99.9);
+		$this->assertSame(99.9, $product->getSellingPriceNet());
+
+		$updated = $this->service->update($product->getId(), 'phpunit-product-3', null, null, null, 120.0);
+		$this->assertSame(120.0, $updated->getSellingPriceNet());
+	}
 }

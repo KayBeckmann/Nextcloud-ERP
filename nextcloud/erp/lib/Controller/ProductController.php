@@ -49,23 +49,23 @@ class ProductController extends AbstractResourceController {
 
 	/** @throws OCSBadRequestException */
 	#[NoAdminRequired]
-	public function create(string $name, ?string $description = null, ?int $vatRateId = null, ?string $notes = null): DataResponse {
+	public function create(string $name, ?string $description = null, ?int $vatRateId = null, ?string $notes = null, ?float $sellingPriceNet = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($name) === '') {
 			throw new OCSBadRequestException('name must not be empty');
 		}
-		return new DataResponse($this->productService->create($name, $description, $vatRateId, $notes));
+		return new DataResponse($this->productService->create($name, $description, $vatRateId, $notes, $sellingPriceNet));
 	}
 
 	/** @throws OCSBadRequestException|OCSNotFoundException */
 	#[NoAdminRequired]
-	public function update(int $id, string $name, ?string $description = null, ?int $vatRateId = null, ?string $notes = null): DataResponse {
+	public function update(int $id, string $name, ?string $description = null, ?int $vatRateId = null, ?string $notes = null, ?float $sellingPriceNet = null): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($name) === '') {
 			throw new OCSBadRequestException('name must not be empty');
 		}
 		try {
-			return new DataResponse($this->productService->update($id, $name, $description, $vatRateId, $notes));
+			return new DataResponse($this->productService->update($id, $name, $description, $vatRateId, $notes, $sellingPriceNet));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Product $id not found");
 		}
