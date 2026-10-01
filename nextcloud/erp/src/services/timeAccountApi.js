@@ -27,6 +27,12 @@ export async function fetchWorkSchedule(userId) {
 	return data.ocs.data
 }
 
+// Resturlaub-Zähler (ADR-0033).
+export async function fetchVacationBalance(year, userId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/vacation-balance'), { params: { year, userId } })
+	return data.ocs.data
+}
+
 // Abwesenheiten.
 export async function fetchAbsenceTypes() {
 	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/absence-types'))
