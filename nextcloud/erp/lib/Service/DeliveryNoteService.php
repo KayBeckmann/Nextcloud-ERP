@@ -13,6 +13,7 @@ use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
+use OCP\IDBConnection;
 use OCP\IUser;
 
 /**
@@ -39,6 +40,7 @@ class DeliveryNoteService {
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -99,7 +101,12 @@ class DeliveryNoteService {
 	 * Legt einen Lieferschein aus ausgewählten Auftragspositionen an
 	 * (ADR-0016) — nur `article`/`product`, keine Arbeitsstunden. Jede
 	 * Auswahl `{orderPositionId, quantity}` darf die noch nicht gelieferte
-	 * Restmenge nicht überschreiten (informative Prüfung, kein Locking).
+	 * Restmenge nicht überschreiten. Die Prüfung läuft seit ADR-0029
+	 * innerhalb einer Transaktion mit `SELECT ... FOR UPDATE` auf die
+	 * betroffenen Auftragspositionen — zwei gleichzeitige Anfragen auf
+	 * dieselbe Position werden damit serialisiert, statt beide gegen eine
+	 * veraltete Summe zu prüfen (TOCTOU-Lücke, ADR-0016 "Nicht Teil dieser
+	 * Phase").
 	 *
 	 * @param array<int, array{orderPositionId: int, quantity: float}> $positions
 	 * @throws \OutOfBoundsException wenn Auftrag oder Auftragsposition nicht existiert
@@ -146,32 +153,51 @@ class DeliveryNoteService {
 			$groupIdMap[$sourceGroupId] = $this->groupMapper->insert($group)->getId();
 		}
 
-		foreach ($positions as $index => $selection) {
-			$quantity = (float)($selection['quantity'] ?? 0);
-			$orderPosition = $orderPositions[$index];
+		// Betroffene Auftragspositionen in fester Reihenfolge (aufsteigende
+		// ID) sperren — eine feste Sperr-Reihenfolge über alle Aufrufer
+		// schließt Deadlocks aus, falls zwei Anfragen mehrere gemeinsame
+		// Positionen in unterschiedlicher Reihenfolge anfragen.
+		$uniqueIds = array_unique(array_map(static fn ($op) => $op->getId(), $orderPositions));
+		sort($uniqueIds);
 
-			if (!in_array($orderPosition->getPositionType(), self::ORDER_CONVERTIBLE_TYPES, true)) {
-				throw new \DomainException("Order position {$orderPosition->getId()} has type '{$orderPosition->getPositionType()}' — only article/product can become a delivery note position");
-			}
-			if ($quantity <= 0) {
-				throw new \InvalidArgumentException('quantity must be greater than 0');
-			}
-			$alreadyDelivered = $this->positionMapper->sumQuantityForOrderPosition($orderPosition->getId());
-			if ($alreadyDelivered + $quantity > $orderPosition->getQuantity() + 0.0001) {
-				throw new \DomainException("Order position {$orderPosition->getId()}: requested quantity exceeds remaining deliverable quantity");
+		$this->db->beginTransaction();
+		try {
+			$lockedById = [];
+			foreach ($uniqueIds as $id) {
+				$lockedById[$id] = $this->orderPositionMapper->findOneForUpdate($orderId, $id);
 			}
 
-			$position = new DeliveryNotePosition();
-			$position->setDeliveryNoteId($deliveryNote->getId());
-			$position->setGroupId($orderPosition->getGroupId() !== null ? ($groupIdMap[$orderPosition->getGroupId()] ?? null) : null);
-			$position->setPositionType($orderPosition->getPositionType());
-			$position->setReferenceId($orderPosition->getReferenceId());
-			$position->setDescription($orderPosition->getDescription());
-			$position->setQuantity($quantity);
-			$position->setUnit($orderPosition->getUnit());
-			$position->setPositionOrder(count($this->positionMapper->findByDeliveryNote($deliveryNote->getId())));
-			$position->setOrderPositionId($orderPosition->getId());
-			$this->positionMapper->insert($position);
+			foreach ($positions as $index => $selection) {
+				$quantity = (float)($selection['quantity'] ?? 0);
+				$orderPosition = $lockedById[$orderPositions[$index]->getId()];
+
+				if (!in_array($orderPosition->getPositionType(), self::ORDER_CONVERTIBLE_TYPES, true)) {
+					throw new \DomainException("Order position {$orderPosition->getId()} has type '{$orderPosition->getPositionType()}' — only article/product can become a delivery note position");
+				}
+				if ($quantity <= 0) {
+					throw new \InvalidArgumentException('quantity must be greater than 0');
+				}
+				$alreadyDelivered = $this->positionMapper->sumQuantityForOrderPosition($orderPosition->getId());
+				if ($alreadyDelivered + $quantity > $orderPosition->getQuantity() + 0.0001) {
+					throw new \DomainException("Order position {$orderPosition->getId()}: requested quantity exceeds remaining deliverable quantity");
+				}
+
+				$position = new DeliveryNotePosition();
+				$position->setDeliveryNoteId($deliveryNote->getId());
+				$position->setGroupId($orderPosition->getGroupId() !== null ? ($groupIdMap[$orderPosition->getGroupId()] ?? null) : null);
+				$position->setPositionType($orderPosition->getPositionType());
+				$position->setReferenceId($orderPosition->getReferenceId());
+				$position->setDescription($orderPosition->getDescription());
+				$position->setQuantity($quantity);
+				$position->setUnit($orderPosition->getUnit());
+				$position->setPositionOrder(count($this->positionMapper->findByDeliveryNote($deliveryNote->getId())));
+				$position->setOrderPositionId($orderPosition->getId());
+				$this->positionMapper->insert($position);
+			}
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
 		}
 
 		return $deliveryNote;
