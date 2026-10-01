@@ -78,6 +78,8 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 	private ProjectMapper $projectMapper;
 	private QuoteMapper $quoteMapper;
 	private InvoiceMapper $invoiceMapper;
+	private VehicleMapper $vehicleMapper;
+	private VehicleService $vehicleService;
 	private IUser $user;
 
 	protected function setUp(): void {
@@ -152,7 +154,9 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			new WarehouseMapper($db),
 		);
 
-		$vehicleService = new VehicleService(new VehicleMapper($db), new VehicleFuelLogMapper($db), new WarehouseMapper($db), $folderService);
+		$this->vehicleMapper = new VehicleMapper($db);
+		$this->vehicleService = new VehicleService($this->vehicleMapper, new VehicleFuelLogMapper($db), new WarehouseMapper($db), $folderService, new \OCA\ERP\Db\VehicleTripMapper($db), new \OCA\ERP\Db\VehicleAssignmentMapper($db));
+		$vehicleService = $this->vehicleService;
 
 		$costService = new CostService(new \OCA\ERP\Db\CostEntryMapper($db), new \OCA\ERP\Db\CostSettingsMapper($db));
 
@@ -202,6 +206,11 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 		foreach ($this->projectMapper->findAll() as $project) {
 			if (str_starts_with($project->getTitle(), 'phpunit-reporting-')) {
 				$this->projectMapper->delete($project);
+			}
+		}
+		foreach ($this->vehicleMapper->findAll() as $vehicle) {
+			if (str_starts_with($vehicle->getLicensePlate(), 'PHPUNIT-REPORTING-')) {
+				$this->vehicleMapper->delete($vehicle);
 			}
 		}
 		$contactLinks = new \OCA\ERP\Db\ContactLinkMapper(\OC::$server->get(IDBConnection::class));
@@ -345,6 +354,33 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 		$this->assertStringContainsString($issued->getInvoiceNumber(), $csv);
 		$this->assertStringContainsString('238,00', $csv);
 		$this->assertStringNotContainsString('phpunit-reporting-csv-draft', $csv);
+	}
+
+	public function testDashboardSummaryTracksOverdueAndDueSoonVehicleInspections(): void {
+		$today = new \DateTimeImmutable();
+		$overdueDate = $today->modify('-1 day')->format('Y-m-d');
+		$dueSoonDate = $today->modify('+10 days')->format('Y-m-d');
+		$farFutureDate = $today->modify('+120 days')->format('Y-m-d');
+
+		$overdueVehicle = $this->vehicleService->create('PHPUNIT-REPORTING-OVERDUE', null, 'car', null, $overdueDate, null);
+		$dueSoonVehicle = $this->vehicleService->create('PHPUNIT-REPORTING-DUESOON', null, 'car', null, $dueSoonDate, null);
+		$this->vehicleService->create('PHPUNIT-REPORTING-FARFUTURE', null, 'car', null, $farFutureDate, null);
+
+		$summary = $this->service->dashboardSummary(self::TEST_UID);
+
+		$this->assertGreaterThanOrEqual(1, $summary['vehiclesOverdue']);
+		$this->assertGreaterThanOrEqual(2, $summary['vehiclesDueSoon']);
+
+		$ids = array_column($summary['vehicleInspections'], 'id');
+		$this->assertContains($overdueVehicle->getId(), $ids);
+		$this->assertContains($dueSoonVehicle->getId(), $ids);
+
+		$byId = [];
+		foreach ($summary['vehicleInspections'] as $entry) {
+			$byId[$entry['id']] = $entry;
+		}
+		$this->assertTrue($byId[$overdueVehicle->getId()]['overdue']);
+		$this->assertFalse($byId[$dueSoonVehicle->getId()]['overdue']);
 	}
 
 	public function testExportInvoicesCsvFiltersByDateRange(): void {

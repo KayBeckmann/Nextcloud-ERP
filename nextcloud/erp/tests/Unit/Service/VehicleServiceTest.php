@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\VehicleAssignmentMapper;
+use OCA\ERP\Db\VehicleTripMapper;
 use OCA\ERP\Db\VehicleFuelLogMapper;
 use OCA\ERP\Db\VehicleMapper;
 use OCA\ERP\Db\ProjectMapper;
@@ -28,6 +30,8 @@ final class VehicleServiceTest extends ErpIntegrationTestCase {
 	private VehicleService $service;
 	private VehicleMapper $mapper;
 	private VehicleFuelLogMapper $fuelLogMapper;
+	private VehicleTripMapper $tripMapper;
+	private VehicleAssignmentMapper $assignmentMapper;
 	private WarehouseMapper $warehouseMapper;
 	private ErpFolderService $folderService;
 	private IUser $user;
@@ -39,7 +43,9 @@ final class VehicleServiceTest extends ErpIntegrationTestCase {
 		$this->fuelLogMapper = new VehicleFuelLogMapper($db);
 		$this->warehouseMapper = new WarehouseMapper($db);
 		$this->folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
-		$this->service = new VehicleService($this->mapper, $this->fuelLogMapper, $this->warehouseMapper, $this->folderService);
+		$this->tripMapper = new VehicleTripMapper($db);
+		$this->assignmentMapper = new VehicleAssignmentMapper($db);
+		$this->service = new VehicleService($this->mapper, $this->fuelLogMapper, $this->warehouseMapper, $this->folderService, $this->tripMapper, $this->assignmentMapper);
 
 		$userManager = \OC::$server->get(IUserManager::class);
 		if ($userManager->userExists(self::TEST_UID)) {
@@ -55,6 +61,12 @@ final class VehicleServiceTest extends ErpIntegrationTestCase {
 			if (str_starts_with($vehicle->getLicensePlate(), 'PHPUNIT-')) {
 				foreach ($this->fuelLogMapper->findByVehicle($vehicle->getId()) as $log) {
 					$this->fuelLogMapper->delete($log);
+				}
+				foreach ($this->tripMapper->findByVehicle($vehicle->getId()) as $trip) {
+					$this->tripMapper->delete($trip);
+				}
+				foreach ($this->assignmentMapper->findByVehicle($vehicle->getId()) as $assignment) {
+					$this->assignmentMapper->delete($assignment);
 				}
 				$this->mapper->delete($vehicle);
 			}
@@ -156,5 +168,104 @@ final class VehicleServiceTest extends ErpIntegrationTestCase {
 
 		$this->expectException(\InvalidArgumentException::class);
 		$this->service->uploadReceipt($vehicle->getId(), $log->getId(), $this->user, 'beleg.jpg', '@@@not-base64@@@');
+	}
+
+	public function testRecordTripAdvancesMileageAndComputesDistance(): void {
+		$vehicle = $this->service->create('PHPUNIT-11', null, 'car', null, null, null);
+		$trip = $this->service->recordTrip($vehicle->getId(), '2026-10-01', self::TEST_UID, 'business', 'Büro', 'Kunde Müller', 10000, 10045, self::TEST_UID, 'Materiallieferung');
+
+		$this->assertSame(45, $trip->getEndMileageKm() - $trip->getStartMileageKm());
+		$this->assertSame(45, $trip->jsonSerialize()['distanceKm']);
+
+		$reloaded = $this->service->get($vehicle->getId());
+		$this->assertSame(10045, $reloaded->getCurrentMileageKm());
+	}
+
+	public function testRecordTripRejectsEndMileageBeforeStart(): void {
+		$vehicle = $this->service->create('PHPUNIT-12', null, 'car', null, null, null);
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->recordTrip($vehicle->getId(), '2026-10-01', null, 'business', 'A', 'B', 100, 50, self::TEST_UID, null);
+	}
+
+	public function testRecordTripRejectsUnknownPurpose(): void {
+		$vehicle = $this->service->create('PHPUNIT-13', null, 'car', null, null, null);
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->recordTrip($vehicle->getId(), '2026-10-01', null, 'vacation', 'A', 'B', 100, 150, self::TEST_UID, null);
+	}
+
+	public function testListAndRemoveTrips(): void {
+		$vehicle = $this->service->create('PHPUNIT-14', null, 'car', null, null, null);
+		$trip = $this->service->recordTrip($vehicle->getId(), '2026-10-01', null, 'private', 'A', 'B', 100, 150, self::TEST_UID, null);
+		$this->assertCount(1, $this->service->listTrips($vehicle->getId()));
+
+		$this->service->removeTrip($vehicle->getId(), $trip->getId());
+		$this->assertCount(0, $this->service->listTrips($vehicle->getId()));
+	}
+
+	public function testAssignmentHistoryOpensOnCreateAndTracksChanges(): void {
+		$vehicle = $this->service->create('PHPUNIT-15', null, 'car', 'driver-a', null, null);
+		$history = $this->service->listAssignmentHistory($vehicle->getId());
+		$this->assertCount(1, $history);
+		$this->assertSame('driver-a', $history[0]->getUserId());
+		$this->assertNull($history[0]->getUnassignedAt());
+
+		$this->service->update($vehicle->getId(), 'PHPUNIT-15', null, 'car', 'active', 'driver-b', null, null);
+		$history = $this->service->listAssignmentHistory($vehicle->getId());
+		$this->assertCount(2, $history);
+		// findByVehicle sortiert neueste zuerst.
+		$this->assertSame('driver-b', $history[0]->getUserId());
+		$this->assertNull($history[0]->getUnassignedAt());
+		$this->assertSame('driver-a', $history[1]->getUserId());
+		$this->assertNotNull($history[1]->getUnassignedAt());
+	}
+
+	public function testAssignmentHistoryUnchangedDriverDoesNotOpenNewEntry(): void {
+		$vehicle = $this->service->create('PHPUNIT-16', null, 'car', 'driver-a', null, null);
+		$this->service->update($vehicle->getId(), 'PHPUNIT-16', null, 'car', 'active', 'driver-a', null, 'unrelated change');
+		$this->assertCount(1, $this->service->listAssignmentHistory($vehicle->getId()));
+	}
+
+	public function testAssignmentHistoryUnassigningClosesOpenEntryWithoutOpeningNew(): void {
+		$vehicle = $this->service->create('PHPUNIT-17', null, 'car', 'driver-a', null, null);
+		$this->service->update($vehicle->getId(), 'PHPUNIT-17', null, 'car', 'active', null, null, null);
+		$history = $this->service->listAssignmentHistory($vehicle->getId());
+		$this->assertCount(1, $history);
+		$this->assertNotNull($history[0]->getUnassignedAt());
+	}
+
+	public function testFuelConsumptionStatsComputesL100kmFromConsecutiveFillUps(): void {
+		$vehicle = $this->service->create('PHPUNIT-18', null, 'car', null, null, null);
+		// Erster Beleg: keine Vorgänger-Distanz -> kein Verbrauch berechenbar.
+		$this->service->addFuelLog($vehicle->getId(), '2026-09-01', 40.0, 60.0, 10000, null);
+		// Zweiter Beleg: 400 km seit dem ersten, 32 Liter getankt -> 8,0 l/100km.
+		$this->service->addFuelLog($vehicle->getId(), '2026-09-15', 32.0, 50.0, 10400, null);
+
+		$stats = $this->service->fuelConsumptionStats($vehicle->getId());
+
+		$this->assertCount(2, $stats['entries']);
+		$this->assertNull($stats['entries'][0]['consumptionL100km']);
+		$this->assertSame(400, $stats['entries'][1]['distanceKm']);
+		$this->assertSame(8.0, $stats['entries'][1]['consumptionL100km']);
+		$this->assertSame(8.0, $stats['averageL100km']);
+	}
+
+	public function testFuelConsumptionStatsIsEmptyWithoutFuelLogs(): void {
+		$vehicle = $this->service->create('PHPUNIT-19', null, 'car', null, null, null);
+		$stats = $this->service->fuelConsumptionStats($vehicle->getId());
+		$this->assertSame([], $stats['entries']);
+		$this->assertNull($stats['averageL100km']);
+	}
+
+	public function testGetFullIncludesTripsAssignmentHistoryAndFuelStats(): void {
+		$vehicle = $this->service->create('PHPUNIT-20', null, 'car', 'driver-a', null, null);
+		$this->service->recordTrip($vehicle->getId(), '2026-10-01', null, 'business', 'A', 'B', 0, 10, self::TEST_UID, null);
+		$this->service->addFuelLog($vehicle->getId(), '2026-10-01', 5.0, 8.0, 10, null);
+
+		$full = $this->service->getFull($vehicle->getId());
+
+		$this->assertCount(1, $full['trips']);
+		$this->assertCount(1, $full['assignmentHistory']);
+		$this->assertArrayHasKey('entries', $full['fuelConsumption']);
+		$this->assertArrayHasKey('averageL100km', $full['fuelConsumption']);
 	}
 }
