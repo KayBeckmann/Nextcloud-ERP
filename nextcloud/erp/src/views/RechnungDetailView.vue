@@ -190,10 +190,31 @@
 				</form>
 			</section>
 
+			<section v-if="invoice.finalSettlement" class="erp-invoice-detail__settlement">
+				<h3>Verrechnung bereits gestellter Teilrechnungen (§ 14 Abs. 5 Satz 2 UStG)</h3>
+				<table>
+					<thead><tr><th>Teilrechnung</th><th>Datum</th><th>Netto</th><th>MwSt.</th><th>Brutto</th></tr></thead>
+					<tbody>
+						<tr v-for="p in invoice.finalSettlement.priorInvoices" :key="p.invoiceNumber">
+							<td>{{ p.invoiceNumber || '—' }}</td>
+							<td>{{ p.issuedAt ? formatTimestamp(p.issuedAt) : '—' }}</td>
+							<td>{{ formatMoney(p.netSubtotal) }}</td>
+							<td>{{ formatMoney(p.vatAmount) }}</td>
+							<td>{{ formatMoney(p.grossTotal) }}</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>Gesamtwert der Leistung (brutto): <strong>{{ formatMoney(invoice.finalSettlement.totalOrderValue.grossTotal) }}</strong></p>
+				<p>Bereits berechnet (Teilrechnungen gesamt): -{{ formatMoney(invoice.finalSettlement.previouslyInvoiced.grossTotal) }}</p>
+				<p><strong>Noch zu zahlen (diese Rechnung): {{ formatMoney(invoice.finalSettlement.remainingDue.grossTotal) }}</strong></p>
+			</section>
+
 			<section v-if="invoice.relatedInvoices && invoice.relatedInvoices.length" class="erp-invoice-detail__related">
 				<h3>Teilrechnungen &amp; Teilzahlungen dieses Auftrags</h3>
 				<p class="erp-invoice-detail__related-note">
-					Rein informative Auflistung — keine automatische Verrechnung mit dieser Rechnung (ADR-0016).
+					Rein informative Auflistung aller Rechnungen desselben Auftrags. Die oben stehende
+					Verrechnung (falls vorhanden) berücksichtigt davon nur die tatsächlich ausgestellten
+					Teilrechnungen (ADR-0027) — diese Liste zeigt zusätzlich Entwürfe und stornierte Belege.
 				</p>
 				<table>
 					<thead><tr><th>Nr.</th><th>Titel</th><th>Typ</th><th>Status</th><th>Betrag brutto</th><th>Bezahlt</th></tr></thead>
@@ -450,7 +471,9 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__pdf-frame { width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--color-border); }
 .erp-invoice-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-invoice-detail__gross { font-size: 16px; }
-.erp-invoice-detail__payment, .erp-invoice-detail__dunning, .erp-invoice-detail__credit-notes, .erp-invoice-detail__related { margin-top: 20px; }
+.erp-invoice-detail__payment, .erp-invoice-detail__dunning, .erp-invoice-detail__credit-notes, .erp-invoice-detail__related, .erp-invoice-detail__settlement { margin-top: 20px; }
+.erp-invoice-detail__settlement table { width: 100%; border-collapse: collapse; }
+.erp-invoice-detail__settlement th, .erp-invoice-detail__settlement td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
 .erp-invoice-detail__related table { width: 100%; border-collapse: collapse; }
 .erp-invoice-detail__related th, .erp-invoice-detail__related td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
 .erp-invoice-detail__related-row { cursor: pointer; }
