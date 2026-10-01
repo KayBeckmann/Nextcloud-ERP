@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Service;
 
+use OCA\ERP\Db\CreditNoteMapper;
+use OCA\ERP\Db\CreditNotePositionMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -55,6 +57,8 @@ class InvoiceService {
 		private DocumentHtmlBuilder $htmlBuilder,
 		private InvoicePaymentMapper $paymentMapper,
 		private InvoiceDunningStepMapper $dunningMapper,
+		private CreditNoteMapper $creditNoteMapper,
+		private CreditNotePositionMapper $creditNotePositionMapper,
 	) {
 	}
 
@@ -151,8 +155,21 @@ class InvoiceService {
 			return null;
 		}
 
-		$priorCalcs = array_map(static fn (array $r): array => $r['calculation'], $priorIssued);
-		$previouslyInvoiced = self::sumCalculations($priorCalcs);
+		// ADR-0030: Eine Teil-Gutschrift auf eine bereits gestellte
+		// Teilrechnung mindert, was der Kunde über sie effektiv bereits
+		// berechnet bekam — ohne das würde `previouslyInvoiced` den
+		// ursprünglichen, nicht korrigierten Betrag zählen. Eine
+		// Vollstorno-Gutschrift braucht hier keine Sonderbehandlung: sie
+		// setzt die Rechnung bereits auf 'cancelled' und nimmt sie damit
+		// oben im Status-Filter komplett aus $priorIssued heraus.
+		$priorNetCalcs = array_map(
+			fn (array $r): array => self::sumCalculations([
+				$r['calculation'],
+				self::negateCalculation($this->creditedAmountForInvoice($r['invoice']->getId())),
+			]),
+			$priorIssued,
+		);
+		$previouslyInvoiced = self::sumCalculations($priorNetCalcs);
 		$totalOrderValue = self::sumCalculations([$calculation, $previouslyInvoiced]);
 
 		return [
@@ -164,13 +181,51 @@ class InvoiceService {
 			// Verbleibend" zeigen kann, ohne dass der Konsument selbst
 			// nachrechnen muss.
 			'remainingDue' => $calculation,
-			'priorInvoices' => array_map(static fn (array $r): array => [
+			'priorInvoices' => array_map(static fn (array $r, array $netCalc): array => [
 				'invoiceNumber' => $r['invoice']->getInvoiceNumber(),
 				'issuedAt' => $r['invoice']->getIssuedAt(),
-				'netSubtotal' => $r['calculation']['netSubtotal'],
-				'vatAmount' => round($r['calculation']['grossTotal'] - $r['calculation']['netSubtotal'], 2),
-				'grossTotal' => $r['calculation']['grossTotal'],
-			], $priorIssued),
+				'netSubtotal' => $netCalc['netSubtotal'],
+				'vatAmount' => round($netCalc['grossTotal'] - $netCalc['netSubtotal'], 2),
+				'grossTotal' => $netCalc['grossTotal'],
+			], $priorIssued, $priorNetCalcs),
+		];
+	}
+
+	/**
+	 * Summe aller tatsächlich ausgestellten Teil-Gutschriften zu einer
+	 * Rechnung, als Berechnungs-Array wie calculate() (ADR-0030). Eine
+	 * Gutschrift im Entwurf zählt nicht — sie ist noch nicht "erteilt" im
+	 * Sinne des Gesetzes.
+	 */
+	private function creditedAmountForInvoice(int $invoiceId): array {
+		$calcs = [];
+		foreach ($this->creditNoteMapper->findByInvoice($invoiceId) as $creditNote) {
+			if ($creditNote->getStatus() !== 'issued') {
+				continue;
+			}
+			$positions = $this->creditNotePositionMapper->findByCreditNote($creditNote->getId());
+			$calcs[] = QuoteCalculationService::calculate([], array_map(static fn ($p): array => [
+				'id' => $p->getId(),
+				'groupId' => null,
+				'quantity' => $p->getQuantity(),
+				'unitPriceNet' => $p->getUnitPriceNet(),
+				'vatRatePercent' => $p->getVatRatePercent(),
+				'discountPercent' => $p->getDiscountPercent(),
+			], $positions));
+		}
+		return self::sumCalculations($calcs);
+	}
+
+	/** Kehrt das Vorzeichen eines sumCalculations()-Ergebnisses um. */
+	private static function negateCalculation(array $calc): array {
+		return [
+			'netSubtotal' => -$calc['netSubtotal'],
+			'grossTotal' => -$calc['grossTotal'],
+			'vatBreakdown' => array_map(static fn (array $v): array => [
+				'ratePercent' => $v['ratePercent'],
+				'netBase' => -$v['netBase'],
+				'vatAmount' => -$v['vatAmount'],
+			], $calc['vatBreakdown']),
 		];
 	}
 
