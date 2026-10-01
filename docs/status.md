@@ -821,7 +821,12 @@ sind per API editierbar, aber ohne UI dafür.
   Rechnung/Lieferschein) — dieselbe bereits vorher bestehende
   Inkonsistenz wie beim Löschen einzelner Positionen, durch ADR-0022
   nicht neu eingeführt, aber auch nicht behoben.
-- Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.
+- ~~Kein Steuerberater-Exportformat (z. B. DATEV) implementiert~~ — seit
+  2026-10-01 gibt es `GET /export/datev-buchungsstapel.csv`
+  (ADR-0026). **Vor produktivem Einsatz mit dem Steuerberater
+  abstimmen** — siehe ADR für die genauen Einschränkungen (pauschale
+  SKR03-Konten, kein eigener Kontenplan, keine Zahlungs-/Kreditoren-
+  Buchungen).
 - Keine Offline-Synchronisierung von Materialverbrauch — bewusst eine
   Aufgabe der späteren Flutter-Phasen, nicht des Web-MVP.
 - Keine automatische Reservierungslogik gegen Angebots-/Auftragspositionen
@@ -1066,3 +1071,39 @@ nicht).
 Teil dieser Phase); kein automatischer Mahnlauf; kein
 Zahlungsjournal-Reporting über alle Rechnungen hinweg (gehört eher zu
 Phase 11).
+
+## 2026-10-01 — DATEV-Buchungsstapel-Export ([ADR-0026](adr/0026-datev-buchungsstapel-export.md))
+
+**Erledigt:** Zweite der offen dokumentierten Positionen geschlossen:
+`GET /export/datev-buchungsstapel.csv` liefert einen echten
+DATEV-EXTF-Buchungsstapel (Format 700, Kategorie 21, 125-spaltige
+Struktur 1:1 aus einer realen DATEV-Beispieldatei übernommen) für
+ausgestellte Rechnungen im gewählten Zeitraum. Eine Buchungszeile je
+MwSt.-Satz-Block, SKR03-Standardkonten mit automatischer
+USt.-Verbuchung (19 % → 8400, 7 % → 8300, 0 % → 8120, andere Sätze →
+Platzhalter 8400 mit `PRÜFEN`-Markierung im Buchungstext), Gegenbuchung
+auf ein generisches Debitoren-Sammelkonto (Default 10000, änderbar).
+Neue Dashboard-Sektion mit Formular (Zeitraum, Pflichtfelder
+Berater-/Mandantennummer, optionales Debitorenkonto).
+
+**Bewusst kein vollständiger Kontenplan** — dieses ERP hat keine
+individuellen Debitoren- oder frei konfigurierbaren Erlöskonten; siehe
+ADR-0026 für die vollständige Liste der Einschränkungen und die
+**ausdrückliche Pflicht, den Export vor produktivem Einsatz mit dem
+Steuerberater abzustimmen** (Kontenrahmen, Zeichensatz, exotische
+MwSt.-Sätze).
+
+**Beim Bauen gefunden:** PHPs `fputcsv()` reichte nicht — eigene
+Quotierungs-Heuristik (uneinheitlich: Klammern lösen Anführungszeichen
+aus, ein blankes `"S"` nicht) und Standard-Zeilenende `\n` statt des von
+DATEV erwarteten `\r\n`. Zeilen werden jetzt manuell gebaut
+(`DatevField`-Werttyp: jedes Feld markiert explizit, ob es Text
+— immer in Anführungszeichen — oder ein nackter Wert ist), exakt nach
+dem Muster der echten Referenzdatei.
+
+**Getestet:** 358 PHPUnit-Tests grün (347 → 358, davon 11 neu für
+`DatevExportService`: Validierung, Kopfzeilen-Metadaten,
+Spaltenstruktur, Standard-/Exoten-MwSt.-Sätze, Entwurf-/Storno-
+Ausschluss, Datumsfilter, konfigurierbares Debitorenkonto).
+Frontend-Build fehlerfrei. Nur gegen die lokale Docker-Testumgebung
+verifiziert, kein echter Import in eine DATEV-Installation getestet.
