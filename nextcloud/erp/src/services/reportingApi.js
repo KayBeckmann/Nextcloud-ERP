@@ -28,3 +28,17 @@ export function invoicesCsvExportUrl(from, to, status) {
 	const query = params.toString()
 	return generateUrl('/apps/erp/export/invoices.csv') + (query ? `?${query}` : '')
 }
+
+// DATEV-Buchungsstapel-Export (ADR-0026) — derselbe Download-statt-axios-
+// Grund wie invoicesCsvExportUrl.
+export function datevBuchungsstapelExportUrl(from, to, beraternummer, mandantennummer, debtorAccount) {
+	const params = new URLSearchParams()
+	params.set('from', from)
+	params.set('to', to)
+	params.set('beraternummer', beraternummer)
+	params.set('mandantennummer', mandantennummer)
+	if (debtorAccount) {
+		params.set('debtorAccount', debtorAccount)
+	}
+	return generateUrl('/apps/erp/export/datev-buchungsstapel.csv') + `?${params.toString()}`
+}

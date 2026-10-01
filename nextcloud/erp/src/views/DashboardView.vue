@@ -73,12 +73,32 @@
 				<label>Bis <input v-model="exportTo" type="date"></label>
 				<a :href="exportUrl" target="_blank" rel="noopener" class="erp-dashboard__export-link">CSV herunterladen</a>
 			</form>
+
+			<h3>DATEV-Buchungsstapel</h3>
+			<p>
+				EXTF-Buchungsstapel (SKR03-Standardkonten) für ausgestellte Rechnungen im Zeitraum.
+				<strong>Vor produktivem Einsatz mit dem Steuerberater abstimmen</strong> — siehe ADR-0026.
+			</p>
+			<form class="erp-dashboard__export-form" @submit.prevent>
+				<label>Von <input v-model="datevFrom" type="date" required></label>
+				<label>Bis <input v-model="datevTo" type="date" required></label>
+				<label>Beraternummer <input v-model.number="datevBeraternummer" type="number" min="1" max="9999999" style="max-width:120px" required></label>
+				<label>Mandantennummer <input v-model.number="datevMandantennummer" type="number" min="1" max="99999" style="max-width:100px" required></label>
+				<a
+					v-if="datevFrom && datevTo && datevBeraternummer && datevMandantennummer"
+					:href="datevExportUrl"
+					target="_blank"
+					rel="noopener"
+					class="erp-dashboard__export-link"
+				>DATEV-CSV herunterladen</a>
+				<span v-else class="erp-dashboard__export-hint">Von/Bis/Beraternummer/Mandantennummer ausfüllen</span>
+			</form>
 		</section>
 	</div>
 </template>
 
 <script>
-import { fetchDashboardSummary, invoicesCsvExportUrl } from '../services/reportingApi.js'
+import { fetchDashboardSummary, invoicesCsvExportUrl, datevBuchungsstapelExportUrl } from '../services/reportingApi.js'
 
 export default {
 	name: 'DashboardView',
@@ -88,11 +108,18 @@ export default {
 			loadError: null,
 			exportFrom: '',
 			exportTo: '',
+			datevFrom: '',
+			datevTo: '',
+			datevBeraternummer: null,
+			datevMandantennummer: null,
 		}
 	},
 	computed: {
 		exportUrl() {
 			return invoicesCsvExportUrl(this.exportFrom || null, this.exportTo || null, null)
+		},
+		datevExportUrl() {
+			return datevBuchungsstapelExportUrl(this.datevFrom, this.datevTo, this.datevBeraternummer, this.datevMandantennummer)
 		},
 	},
 	async mounted() {
@@ -189,6 +216,11 @@ export default {
 	color: var(--color-primary-element-text, #fff);
 	border-radius: var(--border-radius, 4px);
 	text-decoration: none;
+	height: fit-content;
+}
+.erp-dashboard__export-hint {
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
 	height: fit-content;
 }
 </style>
