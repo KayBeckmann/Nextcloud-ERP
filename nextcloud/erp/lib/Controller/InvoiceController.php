@@ -254,13 +254,51 @@ class InvoiceController extends AbstractResourceController {
 
 	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
-	public function recordPayment(int $id, float $amount): DataResponse {
-		$this->requireLevel(PermissionLevel::Write);
+	public function recordPayment(int $id, float $amount, string $paidAt, ?string $reference = null, ?string $notes = null): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Write);
 		if ($amount <= 0) {
 			throw new OCSBadRequestException('amount must be greater than 0');
 		}
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $paidAt)) {
+			throw new OCSBadRequestException('paidAt must be an ISO date (YYYY-MM-DD)');
+		}
 		try {
-			return new DataResponse($this->invoiceService->recordPayment($id, $amount));
+			return new DataResponse($this->invoiceService->recordPayment($id, $amount, $paidAt, $user->getUID(), $reference, $notes));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Invoice $id not found");
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
+	}
+
+	/** @throws OCSNotFoundException */
+	#[NoAdminRequired]
+	public function listPayments(int $id): DataResponse {
+		$this->requireLevel(PermissionLevel::Read);
+		try {
+			return new DataResponse($this->invoiceService->listPayments($id));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Invoice $id not found");
+		}
+	}
+
+	/** @throws OCSNotFoundException */
+	#[NoAdminRequired]
+	public function listDunningSteps(int $id): DataResponse {
+		$this->requireLevel(PermissionLevel::Read);
+		try {
+			return new DataResponse($this->invoiceService->listDunningSteps($id));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Invoice $id not found");
+		}
+	}
+
+	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
+	#[NoAdminRequired]
+	public function recordDunningStep(int $id, int $level, ?string $notes = null): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Write);
+		try {
+			return new DataResponse($this->invoiceService->recordDunningStep($id, $level, $user->getUID(), $notes));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Invoice $id not found");
 		} catch (\DomainException $e) {

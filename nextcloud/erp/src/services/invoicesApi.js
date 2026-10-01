@@ -63,8 +63,23 @@ export async function issueInvoice(id) {
 	return data.ocs.data
 }
 
-export async function recordInvoicePayment(id, amount) {
-	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/{id}/payments', { id }), { amount })
+export async function recordInvoicePayment(id, amount, paidAt, reference, notes) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/{id}/payments', { id }), { amount, paidAt, reference, notes })
+	return data.ocs.data
+}
+
+export async function fetchInvoicePayments(id) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/invoices/{id}/payments', { id }))
+	return data.ocs.data
+}
+
+export async function recordInvoiceDunningStep(id, level, notes) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/invoices/{id}/dunning-steps', { id }), { level, notes })
+	return data.ocs.data
+}
+
+export async function fetchInvoiceDunningSteps(id) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/invoices/{id}/dunning-steps', { id }))
 	return data.ocs.data
 }
 

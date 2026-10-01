@@ -6,6 +6,8 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\CompanyProfileMapper;
 use OCA\ERP\Db\ContactLinkMapper;
+use OCA\ERP\Db\InvoiceDunningStepMapper;
+use OCA\ERP\Db\InvoicePaymentMapper;
 use OCA\ERP\Db\CreditNoteMapper;
 use OCA\ERP\Db\CreditNotePositionMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
@@ -88,6 +90,8 @@ final class CreditNoteServiceTest extends ErpIntegrationTestCase {
 			$projectService,
 			new DocumentPdfService(),
 			$htmlBuilder,
+			new InvoicePaymentMapper($db),
+			new InvoiceDunningStepMapper($db),
 		);
 		$this->service = new CreditNoteService(
 			$this->mapper,

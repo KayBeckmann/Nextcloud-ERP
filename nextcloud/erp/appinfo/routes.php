@@ -156,6 +156,9 @@ return [
 		['name' => 'invoice#updateDiscount', 'url' => '/api/v1/invoices/{id}/discount', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'invoice#issue', 'url' => '/api/v1/invoices/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'invoice#recordPayment', 'url' => '/api/v1/invoices/{id}/payments', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'invoice#listPayments', 'url' => '/api/v1/invoices/{id}/payments', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'invoice#recordDunningStep', 'url' => '/api/v1/invoices/{id}/dunning-steps', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'invoice#listDunningSteps', 'url' => '/api/v1/invoices/{id}/dunning-steps', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		// Gutschriften (Roadmap Phase 7, ADR-0013).
 		['name' => 'credit_note#index', 'url' => '/api/v1/credit-notes', 'verb' => 'GET'],
 		['name' => 'credit_note#show', 'url' => '/api/v1/credit-notes/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],

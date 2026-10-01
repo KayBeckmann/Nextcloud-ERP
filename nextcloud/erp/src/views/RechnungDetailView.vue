@@ -6,6 +6,7 @@
 				<h2>{{ invoice.invoiceNumber || '(Entwurf)' }} — {{ invoice.title }}</h2>
 				<span class="erp-status-badge" :class="`is-${invoice.status}`">{{ statusLabel(invoice.status) }}</span>
 				<span v-if="invoice.isOverdue" class="erp-status-badge is-overdue">Überfällig</span>
+				<span v-if="invoice.dunningLevel > 0" class="erp-status-badge is-overdue">{{ dunningLabel(invoice.dunningLevel) }}</span>
 			</header>
 
 			<section class="erp-invoice-detail__meta">
@@ -118,11 +119,48 @@
 			</section>
 
 			<section v-if="['issued', 'partially_paid', 'paid'].includes(invoice.status)" class="erp-invoice-detail__payment">
-				<h3>Zahlung</h3>
+				<h3>Zahlungsjournal</h3>
+				<table v-if="invoice.payments && invoice.payments.length" class="erp-invoice-detail__payments-table">
+					<thead><tr><th>Datum</th><th>Betrag</th><th>Referenz</th><th>Erfasst von</th></tr></thead>
+					<tbody>
+						<tr v-for="p in invoice.payments" :key="p.id">
+							<td>{{ p.paidAt }}</td>
+							<td>{{ formatMoney(p.amount) }}</td>
+							<td>{{ p.reference || '—' }}</td>
+							<td>{{ p.recordedBy }}</td>
+						</tr>
+					</tbody>
+				</table>
+				<p v-else>Noch keine Zahlung erfasst.</p>
 				<form v-if="invoice.status !== 'paid'" class="erp-invoice-detail__payment-form" @submit.prevent="submitPayment">
-					<input v-model.number="paymentAmount" type="number" step="0.01" min="0.01" placeholder="Betrag" required>
+					<input v-model.number="payment.amount" type="number" step="0.01" min="0.01" placeholder="Betrag" required>
+					<input v-model="payment.paidAt" type="date" required>
+					<input v-model="payment.reference" placeholder="Referenz (optional)">
 					<button type="submit">Zahlung erfassen</button>
 				</form>
+			</section>
+
+			<section v-if="['issued', 'partially_paid'].includes(invoice.status)" class="erp-invoice-detail__dunning">
+				<h3>Mahnwesen</h3>
+				<p><strong>Aktuelle Stufe:</strong> {{ invoice.dunningLevel > 0 ? dunningLabel(invoice.dunningLevel) : 'Keine' }}</p>
+				<table v-if="invoice.dunningSteps && invoice.dunningSteps.length" class="erp-invoice-detail__dunning-table">
+					<thead><tr><th>Datum</th><th>Stufe</th><th>Notiz</th><th>Erfasst von</th></tr></thead>
+					<tbody>
+						<tr v-for="s in invoice.dunningSteps" :key="s.id">
+							<td>{{ formatTimestamp(s.createdAt) }}</td>
+							<td>{{ dunningLabel(s.level) }}</td>
+							<td>{{ s.notes || '—' }}</td>
+							<td>{{ s.createdBy }}</td>
+						</tr>
+					</tbody>
+				</table>
+				<button
+					v-if="invoice.isOverdue && invoice.dunningLevel < 3"
+					@click="submitDunningStep"
+				>
+					{{ dunningLabel(invoice.dunningLevel + 1) }} erfassen
+				</button>
+				<p v-else-if="!invoice.isOverdue">Noch nicht überfällig — kein Mahnschritt möglich.</p>
 			</section>
 
 			<section v-if="['issued', 'partially_paid', 'paid'].includes(invoice.status)" class="erp-invoice-detail__credit-notes">
@@ -179,12 +217,17 @@
 import { generateUrl } from '@nextcloud/router'
 import {
 	fetchInvoice, addInvoiceGroup, addInvoicePosition, updateInvoicePosition, removeInvoicePosition, issueInvoice, recordInvoicePayment,
+	recordInvoiceDunningStep,
 	fetchCreditNotes, createFullCancellation, createPartialCreditNote, addCreditNotePosition, issueCreditNote, updateInvoiceDiscount,
 } from '../services/invoicesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
 
 const STATUS_LABELS = { draft: 'Entwurf', issued: 'Ausgestellt', partially_paid: 'Teilweise bezahlt', paid: 'Bezahlt', cancelled: 'Storniert' }
 const TYPE_LABELS = { article: 'Artikel', product: 'Produkt', labor: 'Arbeitsstunden', custom: 'Freitext', invoice: 'Rechnung', partial: 'Abschlagsrechnung', final: 'Schlussrechnung' }
+const DUNNING_LABELS = { 1: 'Zahlungserinnerung', 2: 'Erste Mahnung', 3: 'Zweite/letzte Mahnung' }
+function todayIso() {
+	return new Date().toISOString().slice(0, 10)
+}
 
 export default {
 	name: 'RechnungDetailView',
@@ -199,7 +242,7 @@ export default {
 			loadError: null,
 			newPosition: { groupId: null, positionType: 'custom', description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
 			newGroupTitle: '',
-			paymentAmount: null,
+			payment: { amount: null, paidAt: todayIso(), reference: '' },
 			partialCreditNote: { reason: '', description: '', quantity: 1, unitPriceNet: 0 },
 			editingPositionId: null,
 			editPosition: {},
@@ -245,6 +288,12 @@ export default {
 		},
 		formatMoney(value) {
 			return `${Number(value).toFixed(2)} €`
+		},
+		formatTimestamp(unixSeconds) {
+			return new Date(unixSeconds * 1000).toLocaleDateString('de-DE')
+		},
+		dunningLabel(level) {
+			return DUNNING_LABELS[level] ?? `Stufe ${level}`
 		},
 		openInFilesUrl(fileId) {
 			return generateUrl(`/f/${fileId}`)
@@ -327,8 +376,18 @@ export default {
 		},
 		async submitPayment() {
 			try {
-				await recordInvoicePayment(this.id, this.paymentAmount)
-				this.paymentAmount = null
+				await recordInvoicePayment(this.id, this.payment.amount, this.payment.paidAt, this.payment.reference || null)
+				this.payment = { amount: null, paidAt: todayIso(), reference: '' }
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async submitDunningStep() {
+			const nextLevel = this.invoice.dunningLevel + 1
+			const notes = window.prompt(`Notiz zu "${this.dunningLabel(nextLevel)}" (optional):`) || null
+			try {
+				await recordInvoiceDunningStep(this.id, nextLevel, notes)
 				await this.load()
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -376,9 +435,12 @@ export default {
 header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__meta { margin: 16px 0; padding: 12px; background: var(--color-background-dark); }
 .erp-invoice-detail__meta p { margin: 4px 0; }
-.erp-invoice-detail__positions table, .erp-invoice-detail__credit-notes table { width: 100%; border-collapse: collapse; }
+.erp-invoice-detail__positions table, .erp-invoice-detail__credit-notes table,
+.erp-invoice-detail__payments-table, .erp-invoice-detail__dunning-table { width: 100%; border-collapse: collapse; }
 .erp-invoice-detail__positions th, .erp-invoice-detail__positions td,
-.erp-invoice-detail__credit-notes th, .erp-invoice-detail__credit-notes td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.erp-invoice-detail__credit-notes th, .erp-invoice-detail__credit-notes td,
+.erp-invoice-detail__payments-table th, .erp-invoice-detail__payments-table td,
+.erp-invoice-detail__dunning-table th, .erp-invoice-detail__dunning-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
 .erp-invoice-detail__edit-row input, .erp-invoice-detail__edit-row select { width: 100%; }
 .erp-invoice-detail__discount label { display: inline-block; margin-right: 8px; }
 .erp-invoice-group { margin-bottom: 16px; }
@@ -388,7 +450,7 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__pdf-frame { width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--color-border); }
 .erp-invoice-detail__summary { margin-top: 20px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; max-width: 400px; }
 .erp-invoice-detail__gross { font-size: 16px; }
-.erp-invoice-detail__payment, .erp-invoice-detail__credit-notes, .erp-invoice-detail__related { margin-top: 20px; }
+.erp-invoice-detail__payment, .erp-invoice-detail__dunning, .erp-invoice-detail__credit-notes, .erp-invoice-detail__related { margin-top: 20px; }
 .erp-invoice-detail__related table { width: 100%; border-collapse: collapse; }
 .erp-invoice-detail__related th, .erp-invoice-detail__related td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
 .erp-invoice-detail__related-row { cursor: pointer; }

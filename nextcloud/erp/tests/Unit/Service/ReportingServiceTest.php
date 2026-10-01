@@ -7,6 +7,8 @@ namespace OCA\ERP\Tests\Unit\Service;
 use OCA\ERP\Db\ArticleSupplierPriceMapper;
 use OCA\ERP\Db\CompanyProfileMapper;
 use OCA\ERP\Db\ContactLinkMapper;
+use OCA\ERP\Db\InvoiceDunningStepMapper;
+use OCA\ERP\Db\InvoicePaymentMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -136,6 +138,8 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			$this->projectService,
 			$pdfService,
 			$htmlBuilder,
+			new InvoicePaymentMapper($db),
+			new InvoiceDunningStepMapper($db),
 		);
 
 		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));

@@ -31,6 +31,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDueDate(?string $dueDate)
  * @method float getPaidAmount()
  * @method void setPaidAmount(float $paidAmount)
+ * @method int getDunningLevel()
+ * @method void setDunningLevel(int $dunningLevel)
  * @method string|null getNotes()
  * @method void setNotes(?string $notes)
  * @method int|null getDocumentFileId()
@@ -63,6 +65,8 @@ class Invoice extends Entity implements \JsonSerializable {
 	protected ?int $issuedAt = null;
 	protected ?string $dueDate = null;
 	protected float $paidAmount = 0.0;
+	// 0 = keine Mahnstufe, 1 = Zahlungserinnerung, 2/3 = Mahnungen (ADR-0025).
+	protected int $dunningLevel = 0;
 	protected ?string $notes = null;
 	protected ?int $documentFileId = null;
 	// Rabatt auf den gesamten Beleg (ADR-0022), wirkt zusaetzlich zum
@@ -80,6 +84,7 @@ class Invoice extends Entity implements \JsonSerializable {
 		$this->addType('deliveryNoteId', 'integer');
 		$this->addType('issuedAt', 'integer');
 		$this->addType('paidAmount', 'float');
+		$this->addType('dunningLevel', 'integer');
 		$this->addType('documentFileId', 'integer');
 		$this->addType('discountPercent', 'float');
 		$this->addType('createdAt', 'integer');
@@ -101,6 +106,7 @@ class Invoice extends Entity implements \JsonSerializable {
 			'issuedAt' => $this->getIssuedAt(),
 			'dueDate' => $this->getDueDate(),
 			'paidAmount' => $this->getPaidAmount(),
+			'dunningLevel' => $this->getDunningLevel(),
 			'notes' => $this->getNotes(),
 			'documentFileId' => $this->getDocumentFileId(),
 			'layoutSnapshot' => $this->getLayoutSnapshot(),
