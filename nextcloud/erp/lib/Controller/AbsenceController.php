@@ -10,6 +10,8 @@ use OCA\ERP\Service\AbsenceRequestService;
 use OCA\ERP\Service\AbsenceTypeService;
 use OCA\ERP\Service\CalendarService;
 use OCA\ERP\Service\PermissionService;
+use OCA\ERP\Service\VacationBalanceService;
+use OCA\ERP\Service\VacationEntitlementService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSBadRequestException;
@@ -26,6 +28,8 @@ class AbsenceController extends AbstractResourceController {
 		private AbsenceTypeService $absenceTypeService,
 		private AbsenceRequestService $absenceRequestService,
 		private CalendarService $calendarService,
+		private VacationBalanceService $vacationBalanceService,
+		private VacationEntitlementService $vacationEntitlementService,
 		PermissionService $permissionService,
 		IUserSession $userSession,
 	) {
@@ -120,5 +124,38 @@ class AbsenceController extends AbstractResourceController {
 	public function calendarLinks(int $id): DataResponse {
 		$this->requireLevel(PermissionLevel::Read);
 		return new DataResponse($this->calendarService->listLinks('absence', (string)$id));
+	}
+
+	/** Eigener Resturlaub ab Read, fremder (userId-Parameter) erfordert Approve (ADR-0033). */
+	#[NoAdminRequired]
+	public function vacationBalance(?string $userId = null, ?int $year = null): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Read);
+		$targetUserId = $userId ?? $user->getUID();
+		if ($targetUserId !== $user->getUID()) {
+			$this->requireLevel(PermissionLevel::Approve);
+		}
+		$targetYear = $year ?? (int)date('Y');
+		return new DataResponse($this->vacationBalanceService->getForUser($targetUserId, $targetYear));
+	}
+
+	/** Eigener Urlaubsanspruch ab Read, fremder erfordert Approve. */
+	#[NoAdminRequired]
+	public function vacationEntitlement(?string $userId = null): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Read);
+		$targetUserId = $userId ?? $user->getUID();
+		if ($targetUserId !== $user->getUID()) {
+			$this->requireLevel(PermissionLevel::Approve);
+		}
+		return new DataResponse($this->vacationEntitlementService->getForUser($targetUserId));
+	}
+
+	/** @throws OCSBadRequestException */
+	#[NoAdminRequired]
+	public function setVacationEntitlement(string $userId, float $daysPerYear): DataResponse {
+		$this->requireLevel(PermissionLevel::Approve);
+		if ($daysPerYear < 0 || $daysPerYear > 366) {
+			throw new OCSBadRequestException('daysPerYear must be between 0 and 366');
+		}
+		return new DataResponse($this->vacationEntitlementService->setForUser($userId, $daysPerYear));
 	}
 }
