@@ -75,10 +75,10 @@ class InvoiceService {
 	/**
 	 * Rechnung inkl. Positionen, berechneter Netto-/MwSt.-Summen und —
 	 * sofern die Rechnung an einem Auftrag hängt — den Geschwister-
-	 * Rechnungen desselben Auftrags (`relatedInvoices`, ADR-0016). Damit
-	 * lässt sich in der Schlussrechnung am Ende auflisten, welche
-	 * Teilrechnungen/Teilzahlungen bereits erfolgt sind — ohne
-	 * automatische Verrechnung (siehe ADR-0016, "Nicht Teil dieser Phase").
+	 * Rechnungen desselben Auftrags (`relatedInvoices`, ADR-0016). Für
+	 * eine Schlussrechnung (`type === 'final'`) zusätzlich
+	 * `finalSettlement` — die nach § 14 Abs. 5 Satz 2 UStG geforderte
+	 * Verrechnung bereits gestellter Teilrechnungen (ADR-0027).
 	 */
 	public function getFullInvoice(int $id): array {
 		$invoice = $this->getInvoice($id);
@@ -87,12 +87,15 @@ class InvoiceService {
 		$calculation = $this->calculate($positions, $groups, $invoice->getDiscountPercent());
 
 		$relatedInvoices = [];
+		$relatedCalculations = [];
 		if ($invoice->getOrderId() !== null) {
 			foreach ($this->mapper->findByOrder($invoice->getOrderId(), $id) as $related) {
 				$relatedPositions = $this->positionMapper->findByInvoice($related->getId());
+				$relatedCalc = $this->calculate($relatedPositions, [], $related->getDiscountPercent());
+				$relatedCalculations[] = ['invoice' => $related, 'calculation' => $relatedCalc];
 				$relatedInvoices[] = [
 					...$related->jsonSerialize(),
-					'grossTotal' => $this->calculate($relatedPositions, [], $related->getDiscountPercent())['grossTotal'],
+					'grossTotal' => $relatedCalc['grossTotal'],
 				];
 			}
 		}
@@ -104,8 +107,108 @@ class InvoiceService {
 			'calculation' => $calculation,
 			'isOverdue' => $this->isOverdue($invoice),
 			'relatedInvoices' => $relatedInvoices,
+			'finalSettlement' => $this->finalSettlement($invoice, $calculation, $relatedCalculations),
 			'payments' => $this->paymentMapper->findByInvoice($id),
 			'dunningSteps' => $this->dunningMapper->findByInvoice($id),
+		];
+	}
+
+	/**
+	 * Verrechnung bereits gestellter Teilrechnungen in einer Schlussrechnung
+	 * (ADR-0027, § 14 Abs. 5 Satz 2 UStG): "in einer Rechnung, in der über
+	 * die gesamte Leistung abgerechnet wird, sind die vor Ausführung der
+	 * Leistung vereinnahmten Teilentgelte und die auf sie entfallenden
+	 * Steuerbeträge abzusetzen, wenn über sie Rechnungen mit gesondertem
+	 * Steuerausweis erteilt wurden." `null`, wenn keine Verrechnung nötig
+	 * ist (keine Schlussrechnung, kein Auftragsbezug, oder keine
+	 * tatsächlich ausgestellten Teilrechnungen zum selben Auftrag).
+	 *
+	 * Bewusst rein darstellend — ändert NICHT, wogegen recordPayment()
+	 * "bezahlt" prüft (weiterhin die eigene calculation.grossTotal dieser
+	 * Rechnung). Rechnerisch gilt immer remainingDue === calculation
+	 * dieser Rechnung (totalOrderValue minus previouslyInvoiced kürzt sich
+	 * algebraisch exakt dazu heraus) — die Pflicht nach § 14 Abs. 5 UStG
+	 * ist, diese Herleitung auf dem Beleg sichtbar zu machen, nicht den
+	 * fälligen Betrag zu verändern.
+	 *
+	 * @param array<int, array{invoice: Invoice, calculation: array}> $relatedCalculations
+	 */
+	private function finalSettlement(Invoice $invoice, array $calculation, array $relatedCalculations): ?array {
+		if ($invoice->getType() !== 'final' || $invoice->getOrderId() === null) {
+			return null;
+		}
+
+		// Nur tatsächlich ausgestellte, nicht stornierte Teilrechnungen
+		// zählen als "Rechnungen mit gesondertem Steuerausweis" im Sinne
+		// des Gesetzes — ein Entwurf hat weder Rechnungsnummer noch
+		// MwSt.-Ausweis, eine stornierte Rechnung wurde durch eine
+		// Gutschrift bereits neutralisiert.
+		$priorIssued = array_values(array_filter(
+			$relatedCalculations,
+			static fn (array $r): bool => in_array($r['invoice']->getStatus(), ['issued', 'partially_paid', 'paid'], true),
+		));
+		if ($priorIssued === []) {
+			return null;
+		}
+
+		$priorCalcs = array_map(static fn (array $r): array => $r['calculation'], $priorIssued);
+		$previouslyInvoiced = self::sumCalculations($priorCalcs);
+		$totalOrderValue = self::sumCalculations([$calculation, $previouslyInvoiced]);
+
+		return [
+			'totalOrderValue' => $totalOrderValue,
+			'previouslyInvoiced' => $previouslyInvoiced,
+			// Algebraisch identisch mit $calculation — siehe Methoden-Doc —,
+			// aber als eigenes Feld, damit das Web-UI/PDF exakt den vom
+			// Gesetz verlangten Dreisatz "Gesamt − Bereits berechnet =
+			// Verbleibend" zeigen kann, ohne dass der Konsument selbst
+			// nachrechnen muss.
+			'remainingDue' => $calculation,
+			'priorInvoices' => array_map(static fn (array $r): array => [
+				'invoiceNumber' => $r['invoice']->getInvoiceNumber(),
+				'issuedAt' => $r['invoice']->getIssuedAt(),
+				'netSubtotal' => $r['calculation']['netSubtotal'],
+				'vatAmount' => round($r['calculation']['grossTotal'] - $r['calculation']['netSubtotal'], 2),
+				'grossTotal' => $r['calculation']['grossTotal'],
+			], $priorIssued),
+		];
+	}
+
+	/**
+	 * Summiert mehrere `calculate()`-Ergebnisse zu einem gemeinsamen
+	 * Gesamtbild — addiert netSubtotal/grossTotal und führt vatBreakdown
+	 * je Steuersatz zusammen (unterschiedliche Rechnungen können
+	 * unterschiedliche Sätze enthalten). `groups`/`netSubtotalBeforeDiscount`/
+	 * `documentDiscountAmount` sind für eine Summe mehrerer Belege fachlich
+	 * nicht sinnvoll und werden bewusst weggelassen.
+	 *
+	 * @param list<array> $calculations
+	 */
+	private static function sumCalculations(array $calculations): array {
+		$netSubtotal = 0.0;
+		$grossTotal = 0.0;
+		/** @var array<string, array{ratePercent: float, netBase: float, vatAmount: float}> $byRate */
+		$byRate = [];
+		foreach ($calculations as $calc) {
+			$netSubtotal += $calc['netSubtotal'];
+			$grossTotal += $calc['grossTotal'];
+			foreach ($calc['vatBreakdown'] as $vat) {
+				$key = (string) $vat['ratePercent'];
+				$bucket = $byRate[$key] ?? ['ratePercent' => $vat['ratePercent'], 'netBase' => 0.0, 'vatAmount' => 0.0];
+				$bucket['netBase'] += $vat['netBase'];
+				$bucket['vatAmount'] += $vat['vatAmount'];
+				$byRate[$key] = $bucket;
+			}
+		}
+		ksort($byRate, SORT_NUMERIC);
+		return [
+			'netSubtotal' => round($netSubtotal, 2),
+			'vatBreakdown' => array_map(static fn (array $b): array => [
+				'ratePercent' => $b['ratePercent'],
+				'netBase' => round($b['netBase'], 2),
+				'vatAmount' => round($b['vatAmount'], 2),
+			], array_values($byRate)),
+			'grossTotal' => round($grossTotal, 2),
 		];
 	}
 
@@ -562,10 +665,25 @@ class InvoiceService {
 		$groupsForCalc = array_map(static fn (InvoiceGroup $g) => ['id' => $g->getId(), 'title' => $g->getTitle()], $groups);
 		$calc = $this->calculate($positions, $groups, $invoice->getDiscountPercent());
 
+		$relatedCalculations = [];
+		if ($invoice->getOrderId() !== null) {
+			foreach ($this->mapper->findByOrder($invoice->getOrderId(), $invoice->getId()) as $related) {
+				$relatedPositions = $this->positionMapper->findByInvoice($related->getId());
+				$relatedCalculations[] = [
+					'invoice' => $related,
+					'calculation' => $this->calculate($relatedPositions, [], $related->getDiscountPercent()),
+				];
+			}
+		}
+		$settlement = $this->finalSettlement($invoice, $calc, $relatedCalculations);
+
 		$invoiceNumber = (string) $invoice->getInvoiceNumber();
 		$html = $this->htmlBuilder->header($this->typeLabel($invoice->getType()), $invoiceNumber, $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), 'invoice', $invoice->getDueDate(), $invoice->getLayoutSnapshot());
 		$html .= $this->htmlBuilder->positionsTable($groupsForCalc, array_map(static fn (InvoicePosition $p) => $p->jsonSerialize(), $positions), true, 'invoice', $invoice->getLayoutSnapshot());
 		$html .= $this->htmlBuilder->summary($calc);
+		if ($settlement !== null) {
+			$html .= $this->htmlBuilder->finalSettlement($settlement);
+		}
 		$html .= $this->htmlBuilder->footer('invoice', $invoiceNumber, $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), $invoice->getDueDate(), $invoice->getLayoutSnapshot());
 
 		return $this->htmlBuilder->wrap($invoiceNumber, $html);

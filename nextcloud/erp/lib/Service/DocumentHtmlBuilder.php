@@ -104,6 +104,40 @@ class DocumentHtmlBuilder {
 		return $html . '<p><strong>Brutto-Gesamt: ' . number_format($calc['grossTotal'], 2, ',', '.') . ' €</strong></p></div>';
 	}
 
+	/**
+	 * Verrechnung bereits gestellter Teilrechnungen in einer Schlussrechnung
+	 * (§ 14 Abs. 5 Satz 2 UStG, ADR-0027): zeigt den Gesamtauftragswert,
+	 * listet jede zuvor ausgestellte Teilrechnung einzeln mit Netto/MwSt.
+	 * auf ("besondere Aufstellung", von der Finanzverwaltung ausdrücklich
+	 * als ausreichend anerkannt statt Einzelausweis in der Haupttabelle)
+	 * und zieht die Summe davon ab.
+	 *
+	 * @param array{
+	 *     totalOrderValue: array{netSubtotal:float,vatBreakdown:list<array{ratePercent:float,netBase:float,vatAmount:float}>,grossTotal:float},
+	 *     previouslyInvoiced: array{netSubtotal:float,vatBreakdown:list<array{ratePercent:float,netBase:float,vatAmount:float}>,grossTotal:float},
+	 *     remainingDue: array{netSubtotal:float,vatBreakdown:list<array{ratePercent:float,netBase:float,vatAmount:float}>,grossTotal:float},
+	 *     priorInvoices: list<array{invoiceNumber:?string,issuedAt:?int,netSubtotal:float,vatAmount:float,grossTotal:float}>
+	 * } $settlement
+	 */
+	public function finalSettlement(array $settlement): string {
+		$html = '<div class="final-settlement"><h3>Verrechnung bereits gestellter Teilrechnungen (§ 14 Abs. 5 Satz 2 UStG)</h3>';
+		$html .= '<p>Gesamtwert der Leistung: <strong>' . number_format($settlement['totalOrderValue']['grossTotal'], 2, ',', '.') . ' €</strong> (brutto)</p>';
+
+		$html .= '<table class="final-settlement-table"><thead><tr><th>Teilrechnung</th><th>Datum</th><th>Netto</th><th>MwSt.</th><th>Brutto</th></tr></thead><tbody>';
+		foreach ($settlement['priorInvoices'] as $prior) {
+			$date = $prior['issuedAt'] !== null ? date('d.m.Y', $prior['issuedAt']) : '—';
+			$html .= '<tr><td>' . htmlspecialchars((string) ($prior['invoiceNumber'] ?? '—'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</td><td>' . $date . '</td><td>'
+				. number_format($prior['netSubtotal'], 2, ',', '.') . ' €</td><td>' . number_format($prior['vatAmount'], 2, ',', '.') . ' €</td><td>'
+				. number_format($prior['grossTotal'], 2, ',', '.') . ' €</td></tr>';
+		}
+		$html .= '</tbody></table>';
+
+		$html .= '<p>Bereits berechnet (Teilrechnungen gesamt): -' . number_format($settlement['previouslyInvoiced']['grossTotal'], 2, ',', '.') . ' €</p>';
+		$html .= '<p><strong>Noch zu zahlen (diese Rechnung): ' . number_format($settlement['remainingDue']['grossTotal'], 2, ',', '.') . ' €</strong></p>';
+
+		return $html . '</div>';
+	}
+
 	public function footer(?string $documentType = null, string $documentNumber = '', string $title = '', int $createdAt = 0, ?int $validUntil = null, ?string $customerContactUid = null, ?string $dueDate = null, ?string $snapshot = null): string {
 		$context = $this->renderingContext($snapshot);
 		$profile = $context['company'] ?? $this->companyProfileService->get();
