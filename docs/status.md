@@ -776,11 +776,13 @@ sind per API editierbar, aber ohne UI dafür.
 
 - Artikel, Produkte, Angebote existieren jetzt (Phase 5) — Rechnungen/Lager/
   Fuhrpark/Zeitwirtschaft/Kosten noch nicht (Phase 6+).
-- Kein Live-Preisabgleich beim Auswählen eines Artikels/Produkts/Arbeitstyps
-  in der Angebotsposition — der Web-UI-Nutzer trägt EP/MwSt. aktuell noch
-  manuell ein, statt dass sie automatisch aus dem gewählten Artikel/Produkt
-  vorbefüllt werden. Fachlich durch das Snapshot-Prinzip (ADR-0011) gedeckt,
-  aber noch kein Komfort-Feature im UI.
+- ~~Kein Live-Preisabgleich beim Auswählen eines Artikels/Produkts/
+  Arbeitstyps in der Angebotsposition~~ — seit 2026-10-01 möglich
+  (ADR-0032): Angebots-/Auftrags-/Rechnungspositionen haben ein
+  Auswahl-Dropdown, das Beschreibung/Einheit/MwSt. (und bei Artikel/
+  Produkt den neuen `sellingPriceNet`, bei Arbeitstyp den bestehenden
+  `hourlyRate`) vorbefüllt. Reine Vorbefüllung, alle Felder bleiben
+  editierbar (Snapshot-Prinzip, ADR-0011 unverändert).
 - Projektordner leben weiterhin im Home-Verzeichnis des anlegenden Users
   (ADR-0009-Einschränkung gilt unverändert für Projektordner).
 - Verantwortlicher User (`responsibleUserId`) ist ein reines Freitextfeld
@@ -1283,3 +1285,30 @@ nur für ERP-Termine, nicht private/sonstige Kalendertermine; genau ein
 zugewiesener Mitarbeiter pro Termin; ein zugewiesener Auftrag legt
 weiterhin keinen Kalender-Termin an (bewusste, keine offene,
 Entscheidung).
+
+## 2026-10-01 — Verkaufspreis für Artikel/Produkte + Live-Preisabgleich ([ADR-0032](adr/0032-verkaufspreis-live-preisabgleich.md))
+
+**Erledigt:** Nächste der in "Bekannte Einschränkungen" dokumentierten
+Positionen geschlossen. Neues, optionales Feld `sellingPriceNet` auf
+`Article`/`Product` (Migration 0024) — getrennt von den
+Einkaufs-/Lieferantenpreisen (ADR-0019). Die Positions-Masken in
+`AngebotDetailView`/`AuftragDetailView`/`RechnungDetailView` bekommen
+ein Auswahl-Dropdown für Artikel/Produkt/Arbeitstyp (existierte vorher
+gar nicht — `referenceId` wurde server-seitig seit ADR-0011 unterstützt,
+aber vom Web-UI nie gesetzt); eine Auswahl befüllt
+Beschreibung/Einheit/MwSt. und, sofern vorhanden, den Preis
+(`sellingPriceNet` bzw. bei Arbeitstyp `hourlyRate`) automatisch vor —
+reine Vorbefüllung, alle Felder bleiben editierbar.
+
+`ArtikelView`/`ProdukteView` bekommen ein Eingabefeld für den
+Verkaufspreis im Anlageformular. Kein Bearbeiten-Formular für Artikel/
+Produkte im Web-UI (vorbestehende Lücke, durch dieses ADR nicht
+geschlossen).
+
+**Getestet:** 383 PHPUnit-Tests grün (380 → 383). Frontend-Build
+fehlerfrei.
+
+**Noch offen:** Keine automatische Kalkulation des Produkt-
+Verkaufspreises aus Komponenten/Arbeitszeit; kein Bearbeiten-Formular
+für Artikel/Produkte; Lieferschein-Positionen bewusst ausgenommen
+(keine Preise, ADR-0015).
