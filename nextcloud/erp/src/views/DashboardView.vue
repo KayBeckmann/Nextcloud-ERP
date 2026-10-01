@@ -36,10 +36,17 @@
 				<p class="erp-tile__value">{{ summary.purchaseSuggestionCount }}</p>
 				<router-link :to="{ name: 'lager' }">Zum Lager →</router-link>
 			</div>
-			<div class="erp-tile" :class="{ 'is-warning': summary.vehiclesDueSoon > 0 }">
+			<div class="erp-tile" :class="{ 'is-warning': summary.vehiclesOverdue > 0 }">
 				<h3>Fällige TÜV/Werkstatt</h3>
 				<p class="erp-tile__value">{{ summary.vehiclesDueSoon }}</p>
-				<p>Fahrzeuge mit anstehendem oder überfälligem Termin (30 Tage).</p>
+				<p v-if="summary.vehiclesOverdue > 0" class="erp-tile__warning">
+					davon {{ summary.vehiclesOverdue }} überfällig
+				</p>
+				<ul v-if="summary.vehicleInspections.length" class="erp-dashboard__inspection-list">
+					<li v-for="v in summary.vehicleInspections" :key="v.id" :class="{ 'is-warning-text': v.overdue }">
+						{{ v.licensePlate }} — {{ v.nextInspectionDate }}
+					</li>
+				</ul>
 			</div>
 			<div class="erp-tile">
 				<h3>Fuhrparkkosten Monat</h3>
@@ -222,5 +229,11 @@ export default {
 	font-size: 12px;
 	color: var(--color-text-maxcontrast);
 	height: fit-content;
+}
+.erp-dashboard__inspection-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	font-size: 12px;
 }
 </style>

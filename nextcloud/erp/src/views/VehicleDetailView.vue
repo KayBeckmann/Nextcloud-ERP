@@ -85,6 +85,76 @@
 				</form>
 			</section>
 
+			<section class="erp-vehicle-detail__trips">
+				<h3>Fahrtenbuch</h3>
+				<table v-if="vehicle.trips.length" class="erp-vehicle-detail__table">
+					<thead><tr><th>Datum</th><th>Zweck</th><th>Von</th><th>Nach</th><th>km</th><th>Distanz</th><th>Fahrer</th><th></th></tr></thead>
+					<tbody>
+						<tr v-for="trip in vehicle.trips" :key="trip.id">
+							<td>{{ trip.tripDate }}</td>
+							<td>{{ trip.purpose === 'business' ? 'Dienstlich' : 'Privat' }}</td>
+							<td>{{ trip.startLocation }}</td>
+							<td>{{ trip.destination }}</td>
+							<td>{{ trip.startMileageKm }} → {{ trip.endMileageKm }}</td>
+							<td>{{ trip.distanceKm }} km</td>
+							<td>{{ trip.driverUserId ?? '—' }}</td>
+							<td><button @click="removeTripEntry(trip.id)">✕</button></td>
+						</tr>
+					</tbody>
+				</table>
+				<p v-else>Noch keine Fahrten erfasst.</p>
+
+				<form class="erp-vehicle-detail__fuel-form" @submit.prevent="submitTrip">
+					<input v-model="newTrip.tripDate" type="date" required>
+					<select v-model="newTrip.purpose">
+						<option value="business">Dienstlich</option>
+						<option value="private">Privat</option>
+					</select>
+					<input v-model="newTrip.startLocation" placeholder="Von" required>
+					<input v-model="newTrip.destination" placeholder="Nach" required>
+					<input v-model.number="newTrip.startMileageKm" type="number" placeholder="km Start" required>
+					<input v-model.number="newTrip.endMileageKm" type="number" placeholder="km Ende" required>
+					<UserPicker v-model="newTrip.driverUserId" placeholder="Fahrer (optional)" />
+					<input v-model="newTrip.notes" placeholder="Notiz (optional)">
+					<button type="submit">Fahrt erfassen</button>
+				</form>
+			</section>
+
+			<section class="erp-vehicle-detail__fuel-stats">
+				<h3>Kraftstoffverbrauch</h3>
+				<p v-if="vehicle.fuelConsumption.averageL100km !== null">
+					Ø {{ vehicle.fuelConsumption.averageL100km.toFixed(1) }} l/100 km
+					<small>(unterstellt Volltanken bei jedem Beleg, siehe ADR-0028)</small>
+				</p>
+				<table v-if="vehicle.fuelConsumption.entries.length" class="erp-vehicle-detail__table">
+					<thead><tr><th>Datum</th><th>Liter</th><th>Distanz</th><th>Verbrauch</th></tr></thead>
+					<tbody>
+						<tr v-for="entry in vehicle.fuelConsumption.entries" :key="entry.id">
+							<td>{{ entry.entryDate }}</td>
+							<td>{{ entry.liters }} l</td>
+							<td>{{ entry.distanceKm !== null ? `${entry.distanceKm} km` : '—' }}</td>
+							<td>{{ entry.consumptionL100km !== null ? `${entry.consumptionL100km.toFixed(1)} l/100km` : '—' }}</td>
+						</tr>
+					</tbody>
+				</table>
+				<p v-else>Noch keine Verbrauchsdaten — mindestens zwei Tankbelege nötig.</p>
+			</section>
+
+			<section class="erp-vehicle-detail__assignments">
+				<h3>Fahrer-Zuweisungs-Historie</h3>
+				<table v-if="vehicle.assignmentHistory.length" class="erp-vehicle-detail__table">
+					<thead><tr><th>Fahrer</th><th>Von</th><th>Bis</th></tr></thead>
+					<tbody>
+						<tr v-for="a in vehicle.assignmentHistory" :key="a.id">
+							<td>{{ a.userId }}</td>
+							<td>{{ formatTimestamp(a.assignedAt) }}</td>
+							<td>{{ a.unassignedAt ? formatTimestamp(a.unassignedAt) : 'aktuell zugewiesen' }}</td>
+						</tr>
+					</tbody>
+				</table>
+				<p v-else>Noch keine Zuweisungs-Historie.</p>
+			</section>
+
 			<section v-if="vehicle.warehouses.length" class="erp-vehicle-detail__warehouse">
 				<h3>Fahrzeuglager</h3>
 				<div v-for="w in vehicle.warehouses" :key="w.id">
@@ -109,7 +179,7 @@
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import { fetchVehicle, updateVehicle, addFuelLog, removeFuelLog, uploadFuelReceipt } from '../services/vehiclesApi.js'
+import { fetchVehicle, updateVehicle, addFuelLog, removeFuelLog, uploadFuelReceipt, addTrip, removeTrip } from '../services/vehiclesApi.js'
 import { fetchCalendars, createCalendarEvent, fetchCalendarLinks } from '../services/calendarApi.js'
 import { fetchStock } from '../services/warehouseApi.js'
 import UserPicker from '../components/UserPicker.vue'
@@ -128,6 +198,7 @@ export default {
 			loadError: null,
 			edit: { licensePlate: '', brandModel: '', vehicleType: 'car', status: 'active', assignedUserId: null, nextInspectionDate: '', notes: '' },
 			newFuelLog: { entryDate: '', liters: 0, amount: 0, mileageKm: 0, notes: '' },
+			newTrip: { tripDate: '', purpose: 'business', startLocation: '', destination: '', startMileageKm: 0, endMileageKm: 0, driverUserId: null, notes: '' },
 			calendars: [],
 			calendarLinks: [],
 			showAppointmentForm: false,
@@ -164,6 +235,9 @@ export default {
 		},
 		errorMessage(e) {
 			return e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+		},
+		formatTimestamp(unixSeconds) {
+			return new Date(unixSeconds * 1000).toLocaleString('de-DE')
 		},
 		async load() {
 			try {
@@ -247,6 +321,19 @@ export default {
 		},
 		async removeLog(logId) {
 			await removeFuelLog(this.id, logId)
+			await this.load()
+		},
+		async submitTrip() {
+			try {
+				await addTrip(this.id, { ...this.newTrip, notes: this.newTrip.notes || null })
+				this.newTrip = { tripDate: '', purpose: 'business', startLocation: '', destination: '', startMileageKm: 0, endMileageKm: 0, driverUserId: null, notes: '' }
+				await this.load()
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async removeTripEntry(tripId) {
+			await removeTrip(this.id, tripId)
 			await this.load()
 		},
 		async uploadReceipt(logId, event) {
