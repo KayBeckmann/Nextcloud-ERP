@@ -9,8 +9,12 @@ use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\Invoice;
 use OCA\ERP\Db\InvoiceGroup;
+use OCA\ERP\Db\InvoiceDunningStep;
+use OCA\ERP\Db\InvoiceDunningStepMapper;
 use OCA\ERP\Db\InvoiceGroupMapper;
 use OCA\ERP\Db\InvoiceMapper;
+use OCA\ERP\Db\InvoicePayment;
+use OCA\ERP\Db\InvoicePaymentMapper;
 use OCA\ERP\Db\InvoicePosition;
 use OCA\ERP\Db\InvoicePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
@@ -49,6 +53,8 @@ class InvoiceService {
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
+		private InvoicePaymentMapper $paymentMapper,
+		private InvoiceDunningStepMapper $dunningMapper,
 	) {
 	}
 
@@ -98,7 +104,21 @@ class InvoiceService {
 			'calculation' => $calculation,
 			'isOverdue' => $this->isOverdue($invoice),
 			'relatedInvoices' => $relatedInvoices,
+			'payments' => $this->paymentMapper->findByInvoice($id),
+			'dunningSteps' => $this->dunningMapper->findByInvoice($id),
 		];
+	}
+
+	/** @return InvoicePayment[] */
+	public function listPayments(int $invoiceId): array {
+		$this->getInvoice($invoiceId);
+		return $this->paymentMapper->findByInvoice($invoiceId);
+	}
+
+	/** @return InvoiceDunningStep[] */
+	public function listDunningSteps(int $invoiceId): array {
+		$this->getInvoice($invoiceId);
+		return $this->dunningMapper->findByInvoice($invoiceId);
 	}
 
 	/** @throws \OutOfBoundsException wenn die Rechnung nicht existiert */
@@ -560,22 +580,91 @@ class InvoiceService {
 	}
 
 	/**
-	 * Erfasst eine (Teil-)Zahlung und leitet den Status live daraus ab.
+	 * Erfasst eine Einzelzahlung als Journalbuchung (Datum, Referenz,
+	 * Notiz — ADR-0025, löst die bis dahin blinde Summenfortschreibung
+	 * ab) und leitet Invoice::paidAmount/status live aus der Summe aller
+	 * Zahlungen ab, statt paidAmount eigenständig als Zähler zu pflegen.
+	 * Das verhindert Drift zwischen Journal und Summenfeld.
 	 *
 	 * @throws \OutOfBoundsException
 	 * @throws \DomainException wenn die Rechnung noch nicht ausgestellt oder bereits storniert ist
 	 */
-	public function recordPayment(int $id, float $amount): Invoice {
+	public function recordPayment(
+		int $id,
+		float $amount,
+		string $paidAt,
+		string $recordedBy,
+		?string $reference = null,
+		?string $notes = null,
+	): Invoice {
 		$invoice = $this->getInvoice($id);
 		if (!in_array($invoice->getStatus(), ['issued', 'partially_paid', 'paid'], true)) {
 			throw new \DomainException("Invoice $id must be issued before payments can be recorded");
 		}
 
+		$payment = new InvoicePayment();
+		$payment->setInvoiceId($id);
+		$payment->setAmount(round($amount, 2));
+		$payment->setPaidAt($paidAt);
+		$payment->setReference($reference);
+		$payment->setNotes($notes);
+		$payment->setRecordedBy($recordedBy);
+		$payment->setRecordedAt(time());
+		$this->paymentMapper->insert($payment);
+
 		$positions = $this->positionMapper->findByInvoice($id);
 		$grossTotal = $this->calculate($positions, [], $invoice->getDiscountPercent())['grossTotal'];
+		$paidTotal = round($this->paymentMapper->sumByInvoice($id), 2);
 
-		$invoice->setPaidAmount(round($invoice->getPaidAmount() + $amount, 2));
-		$invoice->setStatus($invoice->getPaidAmount() >= $grossTotal ? 'paid' : 'partially_paid');
+		$invoice->setPaidAmount($paidTotal);
+		$invoice->setStatus($paidTotal >= $grossTotal ? 'paid' : 'partially_paid');
+		// Vollständige Zahlung schließt das Mahnwesen für diese Rechnung ab.
+		if ($paidTotal >= $grossTotal) {
+			$invoice->setDunningLevel(0);
+		}
+		$invoice->setUpdatedAt(time());
+		return $this->mapper->update($invoice);
+	}
+
+	/**
+	 * Erfasst einen manuellen Mahnschritt (ADR-0025) — bewusst ohne
+	 * automatischen Versand/PDF-Erzeugung in dieser Phase (siehe ADR), nur
+	 * Nachweis/Historie, wer wann welche Stufe ausgelöst hat.
+	 *
+	 * Level muss lückenlos um genau 1 steigen (0→1→2→3), damit die
+	 * Historie eine nachvollziehbare Eskalationskette bleibt statt
+	 * versehentlich Stufen überspringen zu können.
+	 *
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn die Rechnung nicht überfällig ist, bereits bezahlt/storniert
+	 *                          ist, oder die Stufe nicht genau eine Eskalation ist
+	 */
+	public function recordDunningStep(int $id, int $level, string $createdBy, ?string $notes = null): Invoice {
+		$invoice = $this->getInvoice($id);
+		if (!in_array($invoice->getStatus(), ['issued', 'partially_paid'], true)) {
+			throw new \DomainException("Invoice $id must be issued and unpaid for a dunning step");
+		}
+		if (!$this->isOverdue($invoice)) {
+			throw new \DomainException("Invoice $id is not overdue yet");
+		}
+		if ($level < 1 || $level > 3) {
+			throw new \DomainException('level must be between 1 and 3');
+		}
+		if ($level !== $invoice->getDunningLevel() + 1) {
+			throw new \DomainException(
+				"level must escalate by exactly 1 (current: {$invoice->getDunningLevel()}, requested: $level)"
+			);
+		}
+
+		$step = new InvoiceDunningStep();
+		$step->setInvoiceId($id);
+		$step->setLevel($level);
+		$step->setNotes($notes);
+		$step->setCreatedBy($createdBy);
+		$step->setCreatedAt(time());
+		$this->dunningMapper->insert($step);
+
+		$invoice->setDunningLevel($level);
 		$invoice->setUpdatedAt(time());
 		return $this->mapper->update($invoice);
 	}
