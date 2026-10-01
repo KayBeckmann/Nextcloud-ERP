@@ -847,9 +847,15 @@ sind per API editierbar, aber ohne UI dafür.
   inkl. Einzelaufstellung; im PDF und Web-UI sichtbar. `relatedInvoices`
   bleibt unverändert eine reine, nicht verrechnete Auflistung aller
   Geschwister-Rechnungen (inkl. Entwürfe/Stornos).
-- Kein Locking gegen doppeltes Verplanen von Auftragspositions-Mengen bei
-  gleichzeitiger Bearbeitung — "bereits berechnet/geliefert" ist
-  informativ (ADR-0016).
+- ~~Kein Locking gegen doppeltes Verplanen von Auftragspositions-Mengen bei
+  gleichzeitiger Bearbeitung~~ — seit 2026-10-01 sperrt
+  `DeliveryNoteService::createFromOrder()` die betroffenen
+  Auftragspositionen per `SELECT ... FOR UPDATE` innerhalb einer
+  Transaktion (ADR-0029). Gilt nur für den Lieferschein-Pfad — die
+  Rechnungsseite (`InvoiceService::createFromOrder()`) hat bewusst keine
+  Restmengen-Obergrenze (Schlussrechnungen dürfen die volle
+  Auftragsmenge erneut auflisten, ADR-0027), daher auch keine Sperre
+  nötig.
 - Rechnung aus Angebot ohne Projekt ist seit ADR-0015 unmöglich, da beide
   jetzt zwingend ein Projekt erfordern — kein produktiv genutzter
   Anwendungsfall betroffen (lokale Docker-Testdaten).
@@ -1191,3 +1197,30 @@ keine automatische Steuerberechnung aus dem Fahrtenbuch (vor
 produktivem Einsatz für die Fahrtenbuchmethode mit dem Steuerberater
 abstimmen, u. a. wegen fehlender Revisionssicherheit); keine Validierung
 der Zuweisungs-Historie gegen Abwesenheiten.
+
+## 2026-10-01 — Locking gegen doppeltes Verplanen von Auftragspositions-Mengen ([ADR-0029](adr/0029-locking-auftragsposition-mengen.md))
+
+**Erledigt:** Fünfte der offen dokumentierten Positionen geschlossen.
+`DeliveryNoteService::createFromOrder()` sperrt die betroffenen
+Auftragspositionen jetzt per `SELECT ... FOR UPDATE`
+(`OrderPositionMapper::findOneForUpdate()`) innerhalb einer expliziten
+Transaktion, bevor die Restmenge geprüft und die Lieferscheinpositionen
+eingefügt werden. Zwei gleichzeitige Anfragen auf dieselbe
+Auftragsposition werden damit serialisiert, statt beide gegen eine
+veraltete Summe zu prüfen (TOCTOU-Lücke, bisher nur "informativ").
+Gesperrt wird in fester Reihenfolge (aufsteigende ID), um Deadlocks bei
+überlappenden Mehrfachauswahlen auszuschließen.
+
+**Scope bewusst auf den Lieferschein-Pfad begrenzt:**
+`InvoiceService::createFromOrder()`/`createFromDeliveryNote()` haben
+keine entsprechende Sperre, weil sie keine durchzusetzende
+Restmengen-Obergrenze haben — eine Schlussrechnung darf laut ADR-0027
+die volle Auftragsmenge erneut auflisten, eine Sperre für einen nicht
+existierenden Grenzwert wäre bedeutungslos.
+
+**Getestet:** 374 PHPUnit-Tests grün (372 → 374: zwei neue Tests prüfen,
+dass die Summierung über mehrere nacheinander erzeugte Lieferscheine
+nach dem Umbau weiterhin korrekt bleibt). **Keine echte
+Mehrprozess-Testabdeckung** — die Sperrwirkung selbst lässt sich im
+PHPUnit-Testharness mit einer einzelnen DB-Verbindung nicht abbilden,
+siehe ADR-0029 "Nicht Teil dieser Phase".
