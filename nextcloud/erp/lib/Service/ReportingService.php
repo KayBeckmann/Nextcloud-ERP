@@ -85,14 +85,31 @@ class ReportingService {
 		}
 
 		$today = new \DateTimeImmutable();
+		$todayStr = $today->format('Y-m-d');
 		$dueSoonCutoff = $today->modify('+' . self::VEHICLE_DUE_SOON_DAYS . ' days')->format('Y-m-d');
 		$vehiclesDueSoon = 0;
+		$vehiclesOverdue = 0;
+		$vehicleInspections = [];
 		$fuelCostsThisMonth = 0.0;
 		$monthStart = $today->format('Y-m-01');
 		foreach ($this->vehicleService->listAll() as $vehicle) {
 			$due = $vehicle->getNextInspectionDate();
 			if ($due !== null && $due <= $dueSoonCutoff) {
 				$vehiclesDueSoon++;
+				$overdue = $due < $todayStr;
+				if ($overdue) {
+					$vehiclesOverdue++;
+				}
+				// Nur fällige/überfällige Fahrzeuge (nicht alle) — hält die
+				// Liste für das Dashboard kurz (ADR-0028: "automatische
+				// TÜV-Erinnerung" heißt hier proaktives Sichtbarmachen,
+				// kein Push-/E-Mail-Versand, siehe ADR für die Begründung).
+				$vehicleInspections[] = [
+					'id' => $vehicle->getId(),
+					'licensePlate' => $vehicle->getLicensePlate(),
+					'nextInspectionDate' => $due,
+					'overdue' => $overdue,
+				];
 			}
 			foreach ($this->fuelLogMapper->findByVehicle($vehicle->getId()) as $log) {
 				if ($log->getEntryDate() >= $monthStart) {
@@ -100,6 +117,7 @@ class ReportingService {
 				}
 			}
 		}
+		usort($vehicleInspections, static fn (array $a, array $b): int => $a['nextInspectionDate'] <=> $b['nextInspectionDate']);
 
 		$currentYear = (int)$today->format('Y');
 		$internalHourlyRate = $this->costService->getYearOverview($currentYear)['internalHourlyRate'];
@@ -125,6 +143,8 @@ class ReportingService {
 			'lowStockCount' => $lowStockCount,
 			'purchaseSuggestionCount' => count($this->purchaseSuggestionService->suggestions()),
 			'vehiclesDueSoon' => $vehiclesDueSoon,
+			'vehiclesOverdue' => $vehiclesOverdue,
+			'vehicleInspections' => $vehicleInspections,
 			'fuelCostsThisMonth' => round($fuelCostsThisMonth, 2),
 			'internalHourlyRate' => $internalHourlyRate,
 			'timeAccount' => $timeAccount,

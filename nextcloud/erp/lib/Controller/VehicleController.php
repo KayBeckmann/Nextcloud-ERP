@@ -134,4 +134,50 @@ class VehicleController extends AbstractResourceController {
 			throw new OCSBadRequestException($e->getMessage());
 		}
 	}
+
+	/** @throws OCSBadRequestException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function addTrip(
+		int $vehicleId,
+		string $tripDate,
+		string $purpose,
+		string $startLocation,
+		string $destination,
+		int $startMileageKm,
+		int $endMileageKm,
+		?string $driverUserId = null,
+		?string $notes = null,
+	): DataResponse {
+		$user = $this->requireLevel(PermissionLevel::Write);
+		try {
+			return new DataResponse($this->vehicleService->recordTrip(
+				$vehicleId,
+				$tripDate,
+				$driverUserId,
+				$purpose,
+				$startLocation,
+				$destination,
+				$startMileageKm,
+				$endMileageKm,
+				$user->getUID(),
+				$notes,
+			));
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Vehicle $vehicleId not found");
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		}
+	}
+
+	/** @throws OCSNotFoundException */
+	#[NoAdminRequired]
+	public function removeTrip(int $vehicleId, int $id): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		try {
+			$this->vehicleService->removeTrip($vehicleId, $id);
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Trip $id not found for vehicle $vehicleId");
+		}
+		return new DataResponse([]);
+	}
 }
