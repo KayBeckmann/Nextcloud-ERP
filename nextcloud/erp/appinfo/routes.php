@@ -14,6 +14,9 @@ return [
 		// nachfolgenden Pfad abfangen (Routen werden in
 		// Registrierungsreihenfolge geprüft).
 		['name' => 'reportExport#invoicesCsv', 'url' => '/export/invoices.csv', 'verb' => 'GET'],
+		// DATEV-Buchungsstapel-Export für den Steuerberater (ADR-0026),
+		// derselbe Nicht-OCS-Download-Grund wie invoicesCsv.
+		['name' => 'reportExport#datevBuchungsstapelCsv', 'url' => '/export/datev-buchungsstapel.csv', 'verb' => 'GET'],
 		// Inline-PDF-Anzeige für <iframe>-Einbettung in Beleg-Detailansichten
 		// (Nachtrag zu Phase 12, ADR-0021) — aus demselben Grund außerhalb
 		// des 'ocs'-Blocks wie reportExport#invoicesCsv.
