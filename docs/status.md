@@ -840,9 +840,13 @@ sind per API editierbar, aber ohne UI dafür.
 - ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
   verbaut (Projekt, Angebot, Auftrag, Rechnung) — Lieferanten-Auswahl bei
   Artikelpreisen und Kundenverträge (Phase 6) nutzen weiterhin Freitext.
-- Keine automatische Verrechnung/Subtraktion von Teilrechnungsbeträgen in
-  der Schlussrechnung (`relatedInvoices` ist reine Auflistung) — echte
-  Abschlagsrechnungs-Arithmetik nach § 14 UStG bleibt offen (ADR-0016).
+- ~~Keine automatische Verrechnung/Subtraktion von Teilrechnungsbeträgen
+  in der Schlussrechnung~~ — seit 2026-10-01 liefert `finalSettlement`
+  (ADR-0027, § 14 Abs. 5 Satz 2 UStG) Gesamtauftragswert, Summe der
+  bereits ausgestellten Teilrechnungen und den verbleibenden Betrag,
+  inkl. Einzelaufstellung; im PDF und Web-UI sichtbar. `relatedInvoices`
+  bleibt unverändert eine reine, nicht verrechnete Auflistung aller
+  Geschwister-Rechnungen (inkl. Entwürfe/Stornos).
 - Kein Locking gegen doppeltes Verplanen von Auftragspositions-Mengen bei
   gleichzeitiger Bearbeitung — "bereits berechnet/geliefert" ist
   informativ (ADR-0016).
@@ -1107,3 +1111,38 @@ Spaltenstruktur, Standard-/Exoten-MwSt.-Sätze, Entwurf-/Storno-
 Ausschluss, Datumsfilter, konfigurierbares Debitorenkonto).
 Frontend-Build fehlerfrei. Nur gegen die lokale Docker-Testumgebung
 verifiziert, kein echter Import in eine DATEV-Installation getestet.
+
+## 2026-10-01 — Schlussrechnung verrechnet Teilrechnungen ([ADR-0027](adr/0027-schlussrechnung-verrechnung-teilrechnungen.md))
+
+**Erledigt:** Dritte der offen dokumentierten Positionen geschlossen.
+`GET /invoices/{id}` liefert für Schlussrechnungen (`type === 'final'`)
+jetzt `finalSettlement` (§ 14 Abs. 5 Satz 2 UStG): Gesamtauftragswert
+(diese Rechnung + alle ausgestellten Geschwister-Rechnungen desselben
+Auftrags), Summe der bereits berechneten Teilrechnungen, verbleibender
+Betrag, sowie eine Einzelaufstellung jeder Teilrechnung (Nummer, Datum,
+Netto, MwSt., Brutto) — die vom Gesetz geforderte "besondere
+Aufstellung". Im PDF (neuer Abschnitt in `DocumentHtmlBuilder`) und im
+Web-UI sichtbar.
+
+**Wichtige Designentscheidung:** `remainingDue` ist rechnerisch immer
+identisch mit der eigenen `calculation` der Rechnung (kürzt sich
+algebraisch heraus) — die Gesetzespflicht ist eine *Darstellungspflicht*
+(Herleitung "Gesamt − bereits berechnet = verbleibend" muss sichtbar
+sein), keine Pflicht, den tatsächlich fälligen Betrag zu ändern.
+`InvoiceService::recordPayment()` bleibt deshalb unverändert — prüft
+weiterhin gegen die eigene Rechnungssumme, keine Verhaltensänderung an
+der bestehenden Zahlungslogik.
+
+Nur tatsächlich ausgestellte Teilrechnungen (`issued`/`partially_paid`/
+`paid`) fließen ein — Entwürfe und stornierte Rechnungen nicht (erfüllen
+nicht "Rechnungen mit gesondertem Steuerausweis").
+
+**Getestet:** 361 PHPUnit-Tests grün (358 → 361: Verrechnung über
+mehrere Teilrechnungen, kein Settlement ohne ausgestellte Teilrechnung,
+kein Settlement für Nicht-Schlussrechnungen). Frontend-Build fehlerfrei.
+
+**Noch offen:** Keine Berücksichtigung von Gutschriften auf bereits
+gestellte Teilrechnungen in der Verrechnung; keine Unterscheidung
+zwischen echter Anzahlung und Teilleistungsabrechnung (beide laufen
+identisch über `type='partial'`, siehe ADR-0027 für die Begründung,
+warum das unschädlich ist).
