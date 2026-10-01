@@ -58,7 +58,7 @@
 									</tbody>
 								</table>
 								<form class="erp-articles__inline-form" @submit.prevent="submitPrice(a.id)">
-									<input v-model="newPrice.supplierContactUid" placeholder="Lieferant (Contact-UID)" required>
+									<ContactPicker v-model="newPrice.supplierContactUid" placeholder="Lieferant suchen …" />
 									<input v-model.number="newPrice.purchasePrice" type="number" step="0.01" placeholder="EK-Preis" required>
 									<button type="submit">+ Preis</button>
 								</form>
@@ -74,9 +74,11 @@
 <script>
 import { addSupplierPrice, createArticle, fetchArticle, fetchArticles, removeSupplierPrice } from '../services/articlesApi.js'
 import { fetchVatRates } from '../services/settingsApi.js'
+import ContactPicker from '../components/ContactPicker.vue'
 
 export default {
 	name: 'ArtikelView',
+	components: { ContactPicker },
 	data() {
 		return {
 			articles: [],
@@ -86,7 +88,7 @@ export default {
 			expanded: null,
 			detail: null,
 			newArticle: { name: '', manufacturer: '', manufacturerArticleNo: '', unit: 'Stk', vatRateId: null, sellingPriceNet: null },
-			newPrice: { supplierContactUid: '', purchasePrice: null },
+			newPrice: { supplierContactUid: null, purchasePrice: null },
 		}
 	},
 	async mounted() {
@@ -117,8 +119,12 @@ export default {
 			await this.load()
 		},
 		async submitPrice(articleId) {
+			if (!this.newPrice.supplierContactUid) {
+				this.loadError = 'Bitte einen Lieferanten auswählen.'
+				return
+			}
 			await addSupplierPrice(articleId, this.newPrice)
-			this.newPrice = { supplierContactUid: '', purchasePrice: null }
+			this.newPrice = { supplierContactUid: null, purchasePrice: null }
 			this.detail = await fetchArticle(articleId)
 		},
 		async removePrice(articleId, priceId) {
