@@ -6,6 +6,8 @@ namespace OCA\ERP\Tests\Unit\Service;
 
 use OCA\ERP\Db\CompanyProfileMapper;
 use OCA\ERP\Db\ContactLinkMapper;
+use OCA\ERP\Db\InvoiceDunningStepMapper;
+use OCA\ERP\Db\InvoicePaymentMapper;
 use OCA\ERP\Db\DeliveryNoteGroupMapper;
 use OCA\ERP\Db\DeliveryNoteMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -104,6 +106,8 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 			$projectService,
 			$pdfService,
 			$htmlBuilder,
+			new InvoicePaymentMapper($db),
+			new InvoiceDunningStepMapper($db),
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -263,19 +267,95 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 		$invoice = $this->draftWithOnePosition(100.0, 19.0); // gross = 119.00
 		$issued = $this->service->issue($invoice->getId(), $this->user);
 
-		$partial = $this->service->recordPayment($issued->getId(), 50.0);
+		$partial = $this->service->recordPayment($issued->getId(), 50.0, '2026-10-01', self::TEST_UID, 'Überweisung');
 		$this->assertSame('partially_paid', $partial->getStatus());
 		$this->assertSame(50.0, $partial->getPaidAmount());
 
-		$paid = $this->service->recordPayment($issued->getId(), 69.0);
+		$paid = $this->service->recordPayment($issued->getId(), 69.0, '2026-10-05', self::TEST_UID, 'Restzahlung bar', 'Kunde kam vorbei');
 		$this->assertSame('paid', $paid->getStatus());
 		$this->assertSame(119.0, $paid->getPaidAmount());
+	}
+
+	public function testRecordPaymentBuildsAJournalWithDateAndReference(): void {
+		$invoice = $this->draftWithOnePosition(100.0, 19.0); // gross = 119.00
+		$issued = $this->service->issue($invoice->getId(), $this->user);
+
+		$this->service->recordPayment($issued->getId(), 50.0, '2026-10-01', self::TEST_UID, 'Überweisung Ref-1');
+		$this->service->recordPayment($issued->getId(), 69.0, '2026-10-05', self::TEST_UID, 'Restzahlung bar');
+
+		$payments = $this->service->listPayments($issued->getId());
+		$this->assertCount(2, $payments);
+		$this->assertSame(50.0, $payments[0]->getAmount());
+		$this->assertSame('2026-10-01', $payments[0]->getPaidAt());
+		$this->assertSame('Überweisung Ref-1', $payments[0]->getReference());
+		$this->assertSame(self::TEST_UID, $payments[0]->getRecordedBy());
+		$this->assertSame(69.0, $payments[1]->getAmount());
+
+		// Invoice.paidAmount bleibt die Summe des Journals, kein eigenständig
+		// driftender Zähler.
+		$this->assertSame(119.0, $this->service->getInvoice($issued->getId())->getPaidAmount());
 	}
 
 	public function testRecordPaymentBeforeIssueThrows(): void {
 		$invoice = $this->draftWithOnePosition();
 		$this->expectException(\DomainException::class);
-		$this->service->recordPayment($invoice->getId(), 10.0);
+		$this->service->recordPayment($invoice->getId(), 10.0, '2026-10-01', self::TEST_UID);
+	}
+
+	public function testRecordDunningStepRequiresOverdueInvoice(): void {
+		$invoice = $this->draftWithOnePosition(100.0, 19.0);
+		$issued = $this->service->issue($invoice->getId(), $this->user);
+		// dueDate liegt nicht in der Vergangenheit (kein dueDate gesetzt) -> nicht überfällig.
+		$this->expectException(\DomainException::class);
+		$this->service->recordDunningStep($issued->getId(), 1, self::TEST_UID);
+	}
+
+	public function testRecordDunningStepMustEscalateByExactlyOne(): void {
+		$invoice = $this->draftWithOnePosition(100.0, 19.0);
+		$issued = $this->service->issue($invoice->getId(), $this->user);
+		$this->makeOverdue($issued->getId());
+
+		$afterStep1 = $this->service->recordDunningStep($issued->getId(), 1, self::TEST_UID, 'Zahlungserinnerung versendet');
+		$this->assertSame(1, $afterStep1->getDunningLevel());
+
+		// Stufe 3 direkt nach Stufe 1 ist keine Eskalation um genau 1.
+		$this->expectException(\DomainException::class);
+		$this->service->recordDunningStep($issued->getId(), 3, self::TEST_UID);
+	}
+
+	public function testRecordDunningStepEscalatesAndIsListable(): void {
+		$invoice = $this->draftWithOnePosition(100.0, 19.0);
+		$issued = $this->service->issue($invoice->getId(), $this->user);
+		$this->makeOverdue($issued->getId());
+
+		$this->service->recordDunningStep($issued->getId(), 1, self::TEST_UID, 'Erinnerung');
+		$after = $this->service->recordDunningStep($issued->getId(), 2, self::TEST_UID, 'Erste Mahnung');
+
+		$this->assertSame(2, $after->getDunningLevel());
+		$steps = $this->service->listDunningSteps($issued->getId());
+		$this->assertCount(2, $steps);
+		$this->assertSame(1, $steps[0]->getLevel());
+		$this->assertSame(2, $steps[1]->getLevel());
+		$this->assertSame('Erste Mahnung', $steps[1]->getNotes());
+	}
+
+	public function testFullPaymentResetsDunningLevel(): void {
+		$invoice = $this->draftWithOnePosition(100.0, 19.0); // gross = 119.00
+		$issued = $this->service->issue($invoice->getId(), $this->user);
+		$this->makeOverdue($issued->getId());
+		$this->service->recordDunningStep($issued->getId(), 1, self::TEST_UID);
+
+		$paid = $this->service->recordPayment($issued->getId(), 119.0, '2026-10-10', self::TEST_UID);
+
+		$this->assertSame('paid', $paid->getStatus());
+		$this->assertSame(0, $paid->getDunningLevel());
+	}
+
+	/** Setzt ein Fälligkeitsdatum in der Vergangenheit, damit recordDunningStep() greift. */
+	private function makeOverdue(int $invoiceId): void {
+		$invoice = $this->service->getInvoice($invoiceId);
+		$invoice->setDueDate('2020-01-01');
+		$this->mapper->update($invoice);
 	}
 
 	public function testGetFullInvoiceCalculatesGrossTotal(): void {
