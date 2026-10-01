@@ -785,8 +785,11 @@ sind per API editierbar, aber ohne UI dafür.
   editierbar (Snapshot-Prinzip, ADR-0011 unverändert).
 - Projektordner leben weiterhin im Home-Verzeichnis des anlegenden Users
   (ADR-0009-Einschränkung gilt unverändert für Projektordner).
-- Verantwortlicher User (`responsibleUserId`) ist ein reines Freitextfeld
-  ohne Validierung gegen echte Nextcloud-User — keine Auswahlliste im UI.
+- ~~Verantwortlicher User (`responsibleUserId`) ist ein reines
+  Freitextfeld ohne Validierung — keine Auswahlliste im UI~~ — stale
+  Dokumentation: `ProjektDetailView` nutzt dafür bereits seit ADR-0015
+  (2026-08-21, Commit `60cbe66`) einen `UserPicker`, kein Freitext.
+  Dieser Eintrag wurde nie nachgezogen.
 - Frontend-Bundle ist noch nicht auf Komponentenebene tree-geshaked (Warnung beim
   Build) — für den Skeleton-Stand nicht kritisch, sollte vor Phase 14
   (Web-Reifegrad) angegangen werden.
@@ -844,8 +847,11 @@ sind per API editierbar, aber ohne UI dafür.
   nicht gespeicherter Bericht (ADR-0014), der aus ihnen heraus eine
   `PurchaseOrder` erzeugen kann.
 - ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
-  verbaut (Projekt, Angebot, Auftrag, Rechnung) — Lieferanten-Auswahl bei
-  Artikelpreisen und Kundenverträge (Phase 6) nutzen weiterhin Freitext.
+  verbaut (Projekt, Angebot, Auftrag, Rechnung) — ~~Lieferanten-Auswahl
+  bei Artikelpreisen~~ nutzt seit 2026-10-01 ebenfalls `ContactPicker`
+  (`ArtikelView`, reine Frontend-Änderung, kein neuer Backend-Code);
+  Kundenverträge (Phase 6, noch kein Datenmodell) nutzen weiterhin
+  Freitext.
 - ~~Keine automatische Verrechnung/Subtraktion von Teilrechnungsbeträgen
   in der Schlussrechnung~~ — seit 2026-10-01 liefert `finalSettlement`
   (ADR-0027, § 14 Abs. 5 Satz 2 UStG) Gesamtauftragswert, Summe der
