@@ -87,4 +87,17 @@ final class ArticleServiceTest extends TestCase {
 
 		$this->assertCount(0, $this->priceMapper->findByArticle($article->getId()));
 	}
+
+	public function testCreateAndUpdatePersistSellingPriceNet(): void {
+		$article = $this->service->create('phpunit-article-5', null, null, 'Stk', null, null, null, 12.5);
+		$this->assertSame(12.5, $article->getSellingPriceNet());
+
+		$updated = $this->service->update($article->getId(), 'phpunit-article-5', null, null, 'Stk', null, null, null, 15.0);
+		$this->assertSame(15.0, $updated->getSellingPriceNet());
+	}
+
+	public function testCreateWithoutSellingPriceNetDefaultsToNull(): void {
+		$article = $this->service->create('phpunit-article-6', null, null, 'Stk', null, null, null);
+		$this->assertNull($article->getSellingPriceNet());
+	}
 }
