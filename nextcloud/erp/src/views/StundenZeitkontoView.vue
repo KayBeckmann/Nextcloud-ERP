@@ -60,6 +60,19 @@
 		</section>
 
 		<section v-else-if="tab === 'Urlaub & Abwesenheit'" class="erp-time-account__section">
+			<div v-if="vacationBalance" class="erp-time-account__balance">
+				<div class="erp-time-account__balance-row"><span>Urlaubsanspruch {{ vacationBalance.year }}</span><strong>{{ vacationBalance.entitlementDaysPerYear }} Tage</strong></div>
+				<div class="erp-time-account__balance-row"><span>Bereits genommen</span><strong>{{ vacationBalance.usedDays }} Tage</strong></div>
+				<div class="erp-time-account__balance-row">
+					<span>Resturlaub</span>
+					<strong :class="{ 'is-negative': vacationBalance.remainingDays < 0 }">{{ vacationBalance.remainingDays }} Tage</strong>
+				</div>
+				<p class="erp-time-account__hint">
+					Zählt nur genehmigte Anträge urlaubswirksamer Typen (<code>affectsVacationBalance</code>), ohne
+					Feiertagskalender (Mo–Fr = Werktag, ADR-0012/0033).
+				</p>
+			</div>
+
 			<form class="erp-time-account__form" @submit.prevent="addAbsenceRequest">
 				<label>Typ
 					<select v-model="newAbsence.absenceTypeId" required>
@@ -159,6 +172,7 @@ import {
 	fetchTimeAccount,
 	fetchAbsenceTypes, fetchAbsenceRequests, createAbsenceRequest, approveAbsenceRequest, rejectAbsenceRequest,
 	fetchOvertimeActions, createOvertimeAction, approveOvertimeAction, rejectOvertimeAction,
+	fetchVacationBalance,
 } from '../services/timeAccountApi.js'
 import { fetchWorkTypes } from '../services/settingsApi.js'
 
@@ -188,6 +202,7 @@ export default {
 			absenceTypes: [],
 			absenceRequests: [],
 			pendingAbsenceRequests: null,
+			vacationBalance: null,
 			newAbsence: { absenceTypeId: null, startDate: today(), endDate: today(), notes: '' },
 			overtimeActions: [],
 			pendingOvertimeActions: null,
@@ -219,6 +234,7 @@ export default {
 					this.newAbsence.absenceTypeId = this.absenceTypes[0].id
 				}
 				this.absenceRequests = await fetchAbsenceRequests()
+				this.vacationBalance = await fetchVacationBalance(new Date().getFullYear())
 				this.overtimeActions = await fetchOvertimeActions()
 				await this.loadAccount()
 				// Freigabe-Listen sind optional (erfordern Approve-Recht) —
@@ -362,6 +378,11 @@ export default {
 }
 .erp-time-account__balance .is-positive {
 	color: var(--color-success-text, #2d7d46);
+}
+.erp-time-account__hint {
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
+	margin: 8px 0 0;
 }
 .erp-status-badge {
 	font-size: 11px;

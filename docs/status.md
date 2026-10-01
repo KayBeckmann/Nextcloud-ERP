@@ -801,9 +801,13 @@ sind per API editierbar, aber ohne UI dafür.
   (ADR-0012, bewusster Non-Goal für diese Phase).
 - Keine automatische Herleitung von Überstunden aus dem Zeitkonto-Saldo —
   Anzahl Stunden wird beim Beantragen manuell eingegeben (ADR-0012).
-- Kein Resturlaub-Zähler — `AbsenceType::affectsVacationBalance` ist
-  aktuell nur ein Flag ohne eigene Berechnung/Anzeige des verbleibenden
-  Kontingents.
+- ~~Kein Resturlaub-Zähler~~ — seit 2026-10-01 vorhanden (ADR-0033):
+  `GET /vacation-balance` berechnet live aus Jahresanspruch
+  (`VacationEntitlement`, Default 20 Tage = gesetzlicher Mindesturlaub,
+  § 3 BUrlG) minus genehmigten, urlaubswirksamen Anträgen
+  (`AbsenceType::affectsVacationBalance`). Anzeige im Tab "Urlaub &
+  Abwesenheit"; kein Web-UI-Formular zum Setzen des Anspruchs (wie bei
+  `work-schedule`, nur über die API).
 - Pausenregeln nach ArbZG (§4) sind nicht abgebildet — `breakMinutes` ist
   reine Erfassung ohne automatische Prüfung (ADR-0012).
 - Echter PDF-Export für alle fünf Belegtypen ist seit Phase 12 vorhanden
@@ -1312,3 +1316,32 @@ fehlerfrei.
 Verkaufspreises aus Komponenten/Arbeitszeit; kein Bearbeiten-Formular
 für Artikel/Produkte; Lieferschein-Positionen bewusst ausgenommen
 (keine Preise, ADR-0015).
+
+## 2026-10-01 — Resturlaub-Zähler ([ADR-0033](adr/0033-resturlaub-zaehler.md))
+
+**Erledigt:** Nächste der in "Bekannte Einschränkungen" dokumentierten
+Positionen geschlossen. Neuer Service `VacationBalanceService` berechnet
+live (kein gespeicherter Zähler, analog zum Zeitkonto-Prinzip,
+ADR-0012) den Resturlaub aus einem Jahresanspruch
+(`VacationEntitlement`, neue Tabelle, Default 20 Tage = gesetzlicher
+Mindesturlaub bei 5-Tage-Woche, § 3 BUrlG) minus genehmigten,
+urlaubswirksamen Abwesenheitsanträgen (`AbsenceType::
+affectsVacationBalance`, bestehendes Flag seit ADR-0012, bisher nie
+ausgewertet). Werktage-Zählung (Mo–Fr, kein Feiertagskalender)
+wiederverwendet `TimeAccountCalculator::countWorkdays()` (jetzt
+`public`), keine zweite Implementierung.
+
+`StundenZeitkontoView` zeigt im Tab "Urlaub & Abwesenheit" eine
+Resturlaub-Kachel fürs laufende Jahr. Kein Web-UI-Formular zum Setzen
+des Jahresanspruchs — dieselbe Scope-Entscheidung wie beim strukturell
+identischen `work-schedule`-Feature, nur über die API
+(`PUT /vacation-entitlement`) pflegbar.
+
+**Getestet:** 397 PHPUnit-Tests grün (383 → 397). Frontend-Build
+fehlerfrei.
+
+**Noch offen:** Keine Berücksichtigung offener (nicht genehmigter)
+Anträge im Zähler; kein anteiliges Splitten von Anträgen über den
+Jahreswechsel; kein Übertrag von Resturlaub ins Folgejahr; kein
+Web-UI-Formular für den Jahresanspruch (siehe ADR-0033 "Nicht Teil
+dieser Phase").

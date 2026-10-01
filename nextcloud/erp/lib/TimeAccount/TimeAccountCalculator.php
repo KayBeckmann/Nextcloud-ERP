@@ -30,8 +30,14 @@ final class TimeAccountCalculator {
 		];
 	}
 
-	/** Zählt Werktage (Mo–Fr) im Zeitraum, ohne Feiertagskalender (siehe ADR-0012, "Nicht Teil dieser Phase"). */
-	private static function countWorkdays(string $fromDate, string $toDate): int {
+	/**
+	 * Zählt Werktage (Mo–Fr) im Zeitraum, ohne Feiertagskalender (siehe
+	 * ADR-0012, "Nicht Teil dieser Phase"). Public, da auch von
+	 * {@see \OCA\ERP\Absence\VacationBalanceCalculator} genutzt
+	 * (ADR-0033) — dieselbe Werktage-Definition für Zeitkonto und
+	 * Urlaubsverbrauch, keine zweite Implementierung.
+	 */
+	public static function countWorkdays(string $fromDate, string $toDate): int {
 		$from = new \DateTimeImmutable($fromDate);
 		$to = new \DateTimeImmutable($toDate);
 		if ($from > $to) {

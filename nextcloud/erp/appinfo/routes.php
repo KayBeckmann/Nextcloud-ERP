@@ -141,6 +141,9 @@ return [
 		['name' => 'absence#approve', 'url' => '/api/v1/absence-requests/{id}/approve', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'absence#reject', 'url' => '/api/v1/absence-requests/{id}/reject', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'absence#calendarLinks', 'url' => '/api/v1/absence-requests/{id}/calendar-links', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'absence#vacationBalance', 'url' => '/api/v1/vacation-balance', 'verb' => 'GET'],
+		['name' => 'absence#vacationEntitlement', 'url' => '/api/v1/vacation-entitlement', 'verb' => 'GET'],
+		['name' => 'absence#setVacationEntitlement', 'url' => '/api/v1/vacation-entitlement', 'verb' => 'PUT'],
 		// Überstunden (Roadmap Phase 6, ADR-0012).
 		['name' => 'overtime_action#index', 'url' => '/api/v1/overtime-actions', 'verb' => 'GET'],
 		['name' => 'overtime_action#create', 'url' => '/api/v1/overtime-actions', 'verb' => 'POST'],
