@@ -821,15 +821,17 @@ sind per API editierbar, aber ohne UI dafür.
   Rechnung/Lieferschein) — dieselbe bereits vorher bestehende
   Inkonsistenz wie beim Löschen einzelner Positionen, durch ADR-0022
   nicht neu eingeführt, aber auch nicht behoben.
-- Kein Zahlungsjournal mit Einzelbuchungen (Datum/Referenz je
-  Teilzahlung, Mahnwesen) — nur ein laufender `paid_amount`-Betrag.
 - Kein Steuerberater-Exportformat (z. B. DATEV) implementiert.
 - Keine Offline-Synchronisierung von Materialverbrauch — bewusst eine
   Aufgabe der späteren Flutter-Phasen, nicht des Web-MVP.
 - Keine automatische Reservierungslogik gegen Angebots-/Auftragspositionen
   — `reserve()`/`release()` sind manuelle Aufrufe ohne Automatismus.
-- Keine eigene Bestellungs-/Einkaufs-Entität — Bestellvorschläge bleiben
-  ein reiner, nie gespeicherter Bericht (ADR-0014).
+- ~~Keine eigene Bestellungs-/Einkaufs-Entität~~ — seit 2026-09-11
+  (`feat(purchasing): add supplier purchase orders and receipts`) gibt es
+  `PurchaseOrder` als echte, gespeicherte Entität mit Statusverlauf und
+  Wareneingang; Bestellvorschläge selbst bleiben weiterhin ein reiner,
+  nicht gespeicherter Bericht (ADR-0014), der aus ihnen heraus eine
+  `PurchaseOrder` erzeugen kann.
 - ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
   verbaut (Projekt, Angebot, Auftrag, Rechnung) — Lieferanten-Auswahl bei
   Artikelpreisen und Kundenverträge (Phase 6) nutzen weiterhin Freitext.
@@ -1014,3 +1016,53 @@ Abschnitt in `roadmap.md` — Messprotokolle und geführter Ablauf
 insbesondere waren in der ursprünglichen 16-Phasen-Planung nicht
 vorgesehen und sollten dort nachgetragen werden, damit Roadmap und
 tatsächlicher Funktionsumfang nicht auseinanderlaufen.
+
+## 2026-10-01 — Rechnungs-Zahlungsjournal und Mahnwesen-Grundgerüst ([ADR-0025](adr/0025-rechnungs-zahlungsjournal-mahnwesen.md))
+
+**Erledigt:** Erste der in `status.md` seit Phase 7 offen dokumentierten
+Lücken geschlossen: `InvoiceService::recordPayment()` erfasst Zahlungen
+jetzt als Journal-Einträge (`InvoicePayment`: Betrag, Zahlungsdatum,
+Referenz, Notiz, erfassender User) statt nur eine Summe hochzuzählen.
+`Invoice.paidAmount` wird bei jeder Zahlung neu aus der Journalsumme
+berechnet, kann also nicht mehr vom Journal abdriften. Neues
+Mahnwesen-Grundgerüst: `InvoiceDunningStep`-Historie plus
+`Invoice.dunningLevel` (0–3), manuell ausgelöst (kein Automatikversand,
+keine Mahn-PDF — siehe ADR-0025 "Nicht Teil dieser Phase"), Eskalation
+muss lückenlos um genau 1 steigen, nur für tatsächlich überfällige,
+unbezahlte Rechnungen möglich. Vollständige Zahlung setzt die Mahnstufe
+automatisch zurück.
+
+4 neue API-Endpunkte (`GET`/`POST /invoices/{id}/payments`,
+`GET`/`POST /invoices/{id}/dunning-steps`, dokumentiert in
+`docs/api/v1.md`), neue Migration `Version0021Date20261001120000`
+(Spalte `dunning_level` + zwei neue Tabellen), Web-UI
+(`RechnungDetailView.vue`) zeigt Zahlungsjournal-Tabelle,
+Zahlungsformular mit Datum/Referenz, sowie eine eigene
+Mahnwesen-Sektion mit Historie und "nächste Stufe erfassen"-Button.
+
+**Beim Umbau gefunden:** `InvoiceDunningStep::$level` hatte ursprünglich
+den PHP-Default `1` — Nextclouds `Entity`-Klasse markiert ein Feld nur
+dann als "dirty" für den Insert, wenn `setLevel()` einen vom Default
+abweichenden Wert setzt. Der erste reale Mahnschritt (Level 1) wurde
+dadurch beim Insert stillschweigend weggelassen, die DB-Spalte hat aber
+keinen eigenen Default → NOT-NULL-Verletzung. Fix: PHP-Default auf den
+fachlich ungültigen Wert `0` gesetzt (kein echter Mahnlevel kollidiert
+damit). Gleiches Muster beim Anlegen künftiger Entities mit NOT-NULL-
+Spalten ohne DB-Default beachten.
+
+**Getestet:** 345 PHPUnit-Tests grün (vorher 340, +5 für Journal/Mahnwesen
+plus 2 Migrationstests), inkl. der generischen
+`ControllerRightsGateTest`, die die vier neuen Controller-Methoden
+automatisch mitprüft. Frontend-Build (`npm run build`) fehlerfrei. Nur
+gegen die lokale Docker-Testumgebung verifiziert, kein manueller
+Browser-Smoke-Test.
+
+**Nebenbei:** App-Version auf 0.1.13 angehoben (nötig, damit
+`occ upgrade` die neue Migration überhaupt erkennt und ausführt — reines
+`app:disable`/`app:enable` auf gleicher Versionsnummer reicht dafür
+nicht).
+
+**Noch offen:** Keine Mahn-PDF/E-Mail-Versand (ADR-0025, bewusst nicht
+Teil dieser Phase); kein automatischer Mahnlauf; kein
+Zahlungsjournal-Reporting über alle Rechnungen hinweg (gehört eher zu
+Phase 11).
