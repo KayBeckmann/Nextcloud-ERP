@@ -142,6 +142,8 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			$htmlBuilder,
 			new InvoicePaymentMapper($db),
 			new InvoiceDunningStepMapper($db),
+			new \OCA\ERP\Db\CreditNoteMapper($db),
+			new \OCA\ERP\Db\CreditNotePositionMapper($db),
 		);
 
 		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));

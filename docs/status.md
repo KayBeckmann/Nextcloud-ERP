@@ -1224,3 +1224,25 @@ nach dem Umbau weiterhin korrekt bleibt). **Keine echte
 Mehrprozess-Testabdeckung** — die Sperrwirkung selbst lässt sich im
 PHPUnit-Testharness mit einer einzelnen DB-Verbindung nicht abbilden,
 siehe ADR-0029 "Nicht Teil dieser Phase".
+
+## 2026-10-01 — Gutschriften mindern die Teilrechnungs-Verrechnung ([ADR-0030](adr/0030-gutschriften-verrechnung-schlussrechnung.md))
+
+**Erledigt:** Schließt die in der ADR-0027-Statusmeldung
+(2026-10-01) offen gelassene Lücke. `InvoiceService::finalSettlement()`
+nettet jede vorige Teilrechnung jetzt gegen die Summe ihrer
+tatsächlich ausgestellten Teil-Gutschriften (`creditedAmountForInvoice()`,
+wiederverwendet `sumCalculations()`/`QuoteCalculationService::calculate()`
+aus ADR-0027), bevor sie in `previouslyInvoiced`/`priorInvoices`
+einfließt. Eine Vollstorno-Gutschrift brauchte nie eine Sonderbehandlung
+hierfür — sie setzt die betroffene Rechnung bereits auf `cancelled` und
+nimmt sie damit aus der Verrechnung komplett heraus.
+
+**Getestet:** 375 PHPUnit-Tests grün (374 → 375: Teil-Gutschrift auf
+eine Teilrechnung mindert `previouslyInvoiced`/`totalOrderValue` in der
+nachfolgenden Schlussrechnung korrekt).
+
+**Noch offen:** Keine Berücksichtigung von Gutschriften auf die
+Schlussrechnung selbst (nur auf vorige Teilrechnungen); keine
+gesonderte Behandlung abweichender MwSt.-Sätze zwischen Rechnung und
+Gutschrift über die bestehende `vatBreakdown`-Summierung hinaus (siehe
+ADR-0030 "Nicht Teil dieser Phase").

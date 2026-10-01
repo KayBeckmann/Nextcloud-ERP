@@ -92,6 +92,8 @@ final class CreditNoteServiceTest extends ErpIntegrationTestCase {
 			$htmlBuilder,
 			new InvoicePaymentMapper($db),
 			new InvoiceDunningStepMapper($db),
+			new \OCA\ERP\Db\CreditNoteMapper($db),
+			new \OCA\ERP\Db\CreditNotePositionMapper($db),
 		);
 		$this->service = new CreditNoteService(
 			$this->mapper,

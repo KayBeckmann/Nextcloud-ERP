@@ -88,6 +88,8 @@ final class DatevExportServiceTest extends ErpIntegrationTestCase {
 			$htmlBuilder,
 			new InvoicePaymentMapper($db),
 			new InvoiceDunningStepMapper($db),
+			new \OCA\ERP\Db\CreditNoteMapper($db),
+			new \OCA\ERP\Db\CreditNotePositionMapper($db),
 		);
 		$this->service = new DatevExportService($this->invoiceService);
 
