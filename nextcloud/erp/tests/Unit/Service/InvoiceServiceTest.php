@@ -58,6 +58,8 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 	private DeliveryNoteMapper $deliveryNoteMapper;
 	private DeliveryNotePositionMapper $deliveryNotePositionMapper;
 	private DeliveryNoteGroupMapper $deliveryNoteGroupMapper;
+	private \OCA\ERP\Db\CreditNoteMapper $creditNoteMapper;
+	private \OCA\ERP\Db\CreditNotePositionMapper $creditNotePositionMapper;
 	private IUser $user;
 	private int $projectId;
 	private string $projectNumber;
@@ -87,6 +89,8 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 		$this->deliveryNoteMapper = new DeliveryNoteMapper($db);
 		$this->deliveryNotePositionMapper = new DeliveryNotePositionMapper($db);
 		$this->deliveryNoteGroupMapper = new DeliveryNoteGroupMapper($db);
+		$this->creditNoteMapper = new \OCA\ERP\Db\CreditNoteMapper($db);
+		$this->creditNotePositionMapper = new \OCA\ERP\Db\CreditNotePositionMapper($db);
 
 		$this->service = new InvoiceService(
 			$this->mapper,
@@ -108,6 +112,8 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 			$htmlBuilder,
 			new InvoicePaymentMapper($db),
 			new InvoiceDunningStepMapper($db),
+			$this->creditNoteMapper,
+			$this->creditNotePositionMapper,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -124,6 +130,12 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 	}
 
 	protected function tearDown(): void {
+		foreach ($this->creditNoteMapper->findByProject($this->projectId) as $creditNote) {
+			foreach ($this->creditNotePositionMapper->findByCreditNote($creditNote->getId()) as $p) {
+				$this->creditNotePositionMapper->delete($p);
+			}
+			$this->creditNoteMapper->delete($creditNote);
+		}
 		foreach ($this->mapper->findAll() as $invoice) {
 			if (str_starts_with($invoice->getTitle(), 'phpunit-')) {
 				foreach ($this->positionMapper->findByInvoice($invoice->getId()) as $p) {
@@ -514,6 +526,60 @@ final class InvoiceServiceTest extends ErpIntegrationTestCase {
 		$this->assertSame(80.0, $settlement['priorInvoices'][0]['netSubtotal']);
 		$this->assertSame(15.2, $settlement['priorInvoices'][0]['vatAmount']);
 		$this->assertSame(95.2, $settlement['priorInvoices'][0]['grossTotal']);
+	}
+
+	/**
+	 * ADR-0030: Eine Teil-Gutschrift auf eine bereits gestellte
+	 * Teilrechnung muss die Verrechnung in der Schlussrechnung mindern,
+	 * sonst zählt previouslyInvoiced den ursprünglichen, nicht
+	 * korrigierten Betrag.
+	 */
+	public function testFinalSettlementDeductsIssuedCreditNoteOnPriorInvoice(): void {
+		[$order, $position] = $this->createOrderWithPosition('article', 10.0, 20.0); // Gesamt 200,00 netto
+
+		$partial = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-teil-gutschrift', 'partial', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 4.0], // 80,00 netto
+		]);
+		$partial = $this->service->issue($partial->getId(), $this->user);
+
+		// Teil-Gutschrift über 1 Stk. (20,00 netto, 23,80 brutto) auf die
+		// Teilrechnung — status bewusst direkt 'issued' gesetzt, ohne über
+		// CreditNoteService zu gehen (kein Dokumenten-Schreibvorgang nötig
+		// für diesen Test).
+		$creditNote = new \OCA\ERP\Db\CreditNote();
+		$creditNote->setInvoiceId($partial->getId());
+		$creditNote->setProjectId($this->projectId);
+		$creditNote->setStatus('issued');
+		$creditNote->setCancelsInvoice(false);
+		$creditNote->setIssuedAt(time());
+		$creditNote->setCreatedAt(time());
+		$creditNote->setUpdatedAt(time());
+		$creditNote = $this->creditNoteMapper->insert($creditNote);
+
+		$creditPosition = new \OCA\ERP\Db\CreditNotePosition();
+		$creditPosition->setCreditNoteId($creditNote->getId());
+		$creditPosition->setDescription('Korrektur');
+		$creditPosition->setQuantity(1.0);
+		$creditPosition->setUnit('Stk');
+		$creditPosition->setUnitPriceNet(20.0);
+		$creditPosition->setVatRatePercent(19.0);
+		$this->creditNotePositionMapper->insert($creditPosition);
+
+		$final = $this->service->createFromOrder($order->getId(), 'phpunit-invoice-schluss-gutschrift', 'final', null, null, [
+			['orderPositionId' => $position->getId(), 'quantity' => 6.0], // 120,00 netto (Restmenge)
+		]);
+		$final = $this->service->issue($final->getId(), $this->user);
+
+		$settlement = $this->service->getFullInvoice($final->getId())['finalSettlement'];
+
+		// Teilrechnung netto 80,00 − Gutschrift netto 20,00 = 60,00 netto
+		// (71,40 brutto) effektiv bereits berechnet.
+		$this->assertSame(60.0, $settlement['previouslyInvoiced']['netSubtotal']);
+		$this->assertSame(71.4, $settlement['previouslyInvoiced']['grossTotal']);
+		$this->assertSame(60.0, $settlement['priorInvoices'][0]['netSubtotal']);
+		$this->assertSame(71.4, $settlement['priorInvoices'][0]['grossTotal']);
+		// Gesamtauftragswert sinkt entsprechend: 238,00 − 23,80 = 214,20.
+		$this->assertSame(214.2, $settlement['totalOrderValue']['grossTotal']);
 	}
 
 	public function testFinalSettlementIsNullWithoutIssuedPriorInvoices(): void {
