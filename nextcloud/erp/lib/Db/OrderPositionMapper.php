@@ -37,6 +37,26 @@ class OrderPositionMapper extends QBMapper {
 		}
 	}
 
+	/**
+	 * Wie findOne(), aber mit `SELECT ... FOR UPDATE` — sperrt die Zeile bis
+	 * zum Ende der umgebenden Transaktion (ADR-0029). Eine zweite
+	 * gleichzeitige Transaktion, die dieselbe Auftragsposition sperren
+	 * will, blockiert hier, statt mit einer potenziell veralteten
+	 * Mengen-Summe weiterzurechnen.
+	 */
+	public function findOneForUpdate(int $orderId, int $id): ?OrderPosition {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \PDO::PARAM_INT)))
+			->andWhere($qb->expr()->eq('order_id', $qb->createNamedParameter($orderId, \PDO::PARAM_INT)))
+			->forUpdate();
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+
 	public function findById(int $id): ?OrderPosition {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
