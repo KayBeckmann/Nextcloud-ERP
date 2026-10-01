@@ -96,7 +96,18 @@
 			<section v-else-if="tab === 'Termine'" class="erp-project-detail__section">
 				<ul class="erp-project-detail__events">
 					<li v-for="l in calendarLinks" :key="l.id">
-						{{ l.summary }} <small>({{ l.calendarUri }}{{ l.assignedUserId ? ` — ${l.assignedUserId}` : '' }})</small>
+						<template v-if="editingEventId === l.id">
+							<input v-model="editEvent.summary" placeholder="Termintitel">
+							<input v-model="editEvent.start" type="datetime-local">
+							<input v-model="editEvent.end" type="datetime-local">
+							<button @click="saveEventEdit(l.id)">Speichern</button>
+							<button @click="cancelEventEdit">Abbrechen</button>
+						</template>
+						<template v-else>
+							{{ l.summary }} <small>({{ l.calendarUri }}{{ l.assignedUserId ? ` — ${l.assignedUserId}` : '' }})</small>
+							<button @click="startEventEdit(l)">Bearbeiten</button>
+							<button @click="removeEvent(l.id)">✕</button>
+						</template>
 					</li>
 				</ul>
 				<p v-if="eventError" class="erp-project-detail__error">{{ eventError }}</p>
@@ -134,7 +145,7 @@ import {
 	fetchProject, updateProject,
 	fetchTasks, createTask, updateTask, deleteTask,
 } from '../services/projectsApi.js'
-import { fetchCalendarLinks, createCalendarEvent } from '../services/calendarApi.js'
+import { fetchCalendarLinks, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../services/calendarApi.js'
 import { fetchCreditNotes } from '../services/invoicesApi.js'
 import { fetchProjectProfitLoss } from '../services/reportingApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
@@ -179,6 +190,8 @@ export default {
 			newEventEnd: '',
 			newEventAssignedUserId: null,
 			eventError: null,
+			editingEventId: null,
+			editEvent: { summary: '', start: '', end: '' },
 		}
 	},
 	async mounted() {
@@ -284,6 +297,51 @@ export default {
 			}
 			this.newEventSummary = ''
 			this.newEventAssignedUserId = null
+			this.calendarLinks = await fetchCalendarLinks('projekte', String(this.id))
+		},
+		toLocalDateTimeInput(unixSeconds) {
+			if (!unixSeconds) {
+				return ''
+			}
+			const d = new Date(unixSeconds * 1000)
+			const pad = (n) => String(n).padStart(2, '0')
+			return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+		},
+		startEventEdit(link) {
+			this.eventError = null
+			this.editingEventId = link.id
+			this.editEvent = {
+				summary: link.summary ?? '',
+				start: this.toLocalDateTimeInput(link.startAt),
+				end: this.toLocalDateTimeInput(link.endAt),
+			}
+		},
+		cancelEventEdit() {
+			this.editingEventId = null
+		},
+		async saveEventEdit(id) {
+			this.eventError = null
+			try {
+				await updateCalendarEvent(id, {
+					summary: this.editEvent.summary,
+					start: this.editEvent.start,
+					end: this.editEvent.end,
+				})
+			} catch (e) {
+				this.eventError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+				return
+			}
+			this.editingEventId = null
+			this.calendarLinks = await fetchCalendarLinks('projekte', String(this.id))
+		},
+		async removeEvent(id) {
+			this.eventError = null
+			try {
+				await deleteCalendarEvent(id)
+			} catch (e) {
+				this.eventError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+				return
+			}
 			this.calendarLinks = await fetchCalendarLinks('projekte', String(this.id))
 		},
 	},
