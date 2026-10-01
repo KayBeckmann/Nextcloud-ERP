@@ -51,6 +51,7 @@ class ArticleService {
 		?string $category,
 		?int $vatRateId,
 		?string $notes,
+		?float $sellingPriceNet = null,
 	): Article {
 		$now = time();
 		$article = new Article();
@@ -60,6 +61,7 @@ class ArticleService {
 		$article->setUnit($unit !== '' ? $unit : 'Stk');
 		$article->setCategory($category);
 		$article->setVatRateId($vatRateId);
+		$article->setSellingPriceNet($sellingPriceNet);
 		$article->setNotes($notes);
 		$article->setCreatedAt($now);
 		$article->setUpdatedAt($now);
@@ -76,6 +78,7 @@ class ArticleService {
 		?string $category,
 		?int $vatRateId,
 		?string $notes,
+		?float $sellingPriceNet = null,
 	): Article {
 		$article = $this->get($id);
 		$article->setName($name);
@@ -84,6 +87,7 @@ class ArticleService {
 		$article->setUnit($unit !== '' ? $unit : 'Stk');
 		$article->setCategory($category);
 		$article->setVatRateId($vatRateId);
+		$article->setSellingPriceNet($sellingPriceNet);
 		$article->setNotes($notes);
 		$article->setUpdatedAt(time());
 		return $this->mapper->update($article);

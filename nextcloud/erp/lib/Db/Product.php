@@ -13,6 +13,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDescription(?string $description)
  * @method int|null getVatRateId()
  * @method void setVatRateId(?int $vatRateId)
+ * @method float|null getSellingPriceNet()
+ * @method void setSellingPriceNet(?float $sellingPriceNet)
  * @method string|null getNotes()
  * @method void setNotes(?string $notes)
  * @method int getCreatedAt()
@@ -24,6 +26,10 @@ class Product extends Entity implements \JsonSerializable {
 	protected string $name = '';
 	protected ?string $description = null;
 	protected ?int $vatRateId = null;
+	// Verkaufspreis (ADR-0032) — Produkte sind Bündel aus Komponenten/
+	// Arbeitsleistungen (ADR-0011), aber keine automatische Kalkulation
+	// daraus; dies ist ein manuell gepflegter Festpreis.
+	protected ?float $sellingPriceNet = null;
 	protected ?string $notes = null;
 	protected int $createdAt = 0;
 	protected int $updatedAt = 0;
@@ -31,6 +37,7 @@ class Product extends Entity implements \JsonSerializable {
 	public function __construct() {
 		$this->addType('id', 'integer');
 		$this->addType('vatRateId', 'integer');
+		$this->addType('sellingPriceNet', 'float');
 		$this->addType('createdAt', 'integer');
 		$this->addType('updatedAt', 'integer');
 	}
@@ -41,6 +48,7 @@ class Product extends Entity implements \JsonSerializable {
 			'name' => $this->getName(),
 			'description' => $this->getDescription(),
 			'vatRateId' => $this->getVatRateId(),
+			'sellingPriceNet' => $this->getSellingPriceNet(),
 			'notes' => $this->getNotes(),
 		];
 	}
