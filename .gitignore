@@ -8,6 +8,8 @@ composer.lock
 
 # Docker env (secrets/local overrides — .env.example is committed instead)
 docker/.env
+# Lokaler Compose-Override (maschinenspezifisch, z. B. abweichende Port-Bindung)
+docker/docker-compose.override.yml
 
 # Sparse-Checkout des nextcloud/server-Testbootstraps für lokale PHPUnit-Läufe
 # (offizielle Docker-Images enthalten kein tests/-Verzeichnis) — siehe docker/README.md
