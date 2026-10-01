@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ERP\Tests\Unit\Service;
 
 use DateTimeImmutable;
+use OCA\DAV\CalDAV\CalDavBackend;
 use OCA\ERP\Db\CalendarLinkMapper;
 use OCA\ERP\Service\CalendarProvisioningService;
 use OCA\ERP\Service\CalendarService;
@@ -25,6 +26,7 @@ final class CalendarServiceTest extends TestCase {
 	private IUser $user;
 	private ICalendarManager&MockObject $calendarManager;
 	private CalendarProvisioningService&MockObject $provisioning;
+	private CalDavBackend&MockObject $calDavBackend;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -40,7 +42,11 @@ final class CalendarServiceTest extends TestCase {
 		// unabhängig davon, für welchen User provisioniert wird — einzelne
 		// Tests überschreiben das bei Bedarf mit einer abweichenden URI.
 		$this->provisioning->method('ensureErpCalendarUri')->willReturn('erp');
-		$this->service = new CalendarService($this->mapper, $this->calendarManager, $this->provisioning);
+		// CalDavBackend (ADR-0031) wird gemockt statt real aufgelöst — wie
+		// die anderen Kalender-Abhängigkeiten hier, damit dieser Test ohne
+		// echten CalDAV-Unterbau läuft.
+		$this->calDavBackend = $this->createMock(CalDavBackend::class);
+		$this->service = new CalendarService($this->mapper, $this->calendarManager, $this->provisioning, $this->calDavBackend);
 	}
 
 	protected function tearDown(): void {
@@ -49,6 +55,11 @@ final class CalendarServiceTest extends TestCase {
 		}
 		foreach (['10', '11', '12', '13'] as $resourceId) {
 			foreach ($this->mapper->findByResource('phpunit-resource-assign', $resourceId) as $link) {
+				$this->mapper->delete($link);
+			}
+		}
+		foreach (['20', '21', '22', '23'] as $resourceId) {
+			foreach ($this->mapper->findByResource('phpunit-resource-edit', $resourceId) as $link) {
 				$this->mapper->delete($link);
 			}
 		}
@@ -265,5 +276,176 @@ final class CalendarServiceTest extends TestCase {
 		);
 
 		$this->assertSame('mitarbeiter-adjazent', $link->getAssignedUserId());
+	}
+
+	private function mockEventBuilderForUpdate(string $ics): ICalendarEventBuilder&MockObject {
+		$builder = $this->createMock(ICalendarEventBuilder::class);
+		$builder->method('setStartDate')->willReturnSelf();
+		$builder->method('setEndDate')->willReturnSelf();
+		$builder->method('setSummary')->willReturnSelf();
+		$builder->method('setDescription')->willReturnSelf();
+		$builder->method('toIcs')->willReturn($ics);
+		return $builder;
+	}
+
+	public function testUpdateEventRewritesCalendarObjectOfCreatorForUnassignedLink(): void {
+		$calendar = $this->mockWritableCalendar('personal');
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
+		// Erster Aufruf von createEventBuilder() während createEvent(),
+		// zweiter während updateEvent() — willReturnOnConsecutiveCalls()
+		// macht die Reihenfolge explizit, statt sich auf die
+		// Override-Reihenfolge mehrerer method()-Stubs zu verlassen.
+		$this->calendarManager->method('createEventBuilder')->willReturnOnConsecutiveCalls(
+			$this->mockEventBuilder('edit-event.ics'),
+			$this->mockEventBuilderForUpdate('BEGIN:VCALENDAR...'),
+		);
+
+		$link = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-edit',
+			'20',
+			'Alter Titel',
+			new DateTimeImmutable('2026-09-10T08:00:00'),
+			new DateTimeImmutable('2026-09-10T09:00:00'),
+		);
+
+		$this->calDavBackend->method('getCalendarByUri')
+			->with('principals/users/phpunit-cal-user', 'personal')
+			->willReturn(['id' => 42]);
+		$this->calDavBackend->expects($this->once())
+			->method('updateCalendarObject')
+			->with(42, 'edit-event.ics', 'BEGIN:VCALENDAR...');
+
+		$updated = $this->service->updateEvent(
+			$link->getId(),
+			'Neuer Titel',
+			new DateTimeImmutable('2026-09-10T10:00:00'),
+			new DateTimeImmutable('2026-09-10T11:00:00'),
+		);
+
+		$this->assertSame('Neuer Titel', $updated->getSummary());
+		$this->assertSame((new DateTimeImmutable('2026-09-10T10:00:00'))->getTimestamp(), $updated->getStartAt());
+	}
+
+	public function testUpdateEventRejectsCollisionWithOtherAssignedTerm(): void {
+		$calendar = $this->mockWritableCalendar('erp');
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
+		$this->calendarManager->method('createEventBuilder')->willReturnOnConsecutiveCalls(
+			$this->mockEventBuilder('blocker-event.ics'),
+			$this->mockEventBuilder('movable-event.ics'),
+		);
+
+		$this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-edit',
+			'21',
+			'Blockierender Termin',
+			new DateTimeImmutable('2026-09-11T08:00:00'),
+			new DateTimeImmutable('2026-09-11T12:00:00'),
+			null,
+			'mitarbeiter-update-kollision',
+		);
+
+		$movable = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-edit',
+			'21',
+			'Verschiebbarer Termin',
+			new DateTimeImmutable('2026-09-12T08:00:00'),
+			new DateTimeImmutable('2026-09-12T12:00:00'),
+			null,
+			'mitarbeiter-update-kollision',
+		);
+
+		$this->expectException(\DomainException::class);
+		// In den Zeitraum des blockierenden Termins verschieben.
+		$this->service->updateEvent(
+			$movable->getId(),
+			'Verschiebbarer Termin',
+			new DateTimeImmutable('2026-09-11T10:00:00'),
+			new DateTimeImmutable('2026-09-11T14:00:00'),
+		);
+	}
+
+	public function testUpdateEventAllowsMovingWithinOwnUnchangedSlot(): void {
+		// Verschieben auf denselben Zeitraum, den der Termin selbst schon
+		// belegt, darf nicht an der eigenen (jetzt veralteten) DB-Zeile
+		// scheitern — findOverlapping() muss den bearbeiteten Termin selbst
+		// ausschließen (ADR-0031).
+		$calendar = $this->mockWritableCalendar('erp');
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
+		$this->calendarManager->method('createEventBuilder')->willReturnOnConsecutiveCalls(
+			$this->mockEventBuilder('self-event.ics'),
+			$this->mockEventBuilderForUpdate('BEGIN:VCALENDAR...'),
+		);
+
+		$link = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-edit',
+			'22',
+			'Eigener Termin',
+			new DateTimeImmutable('2026-09-13T08:00:00'),
+			new DateTimeImmutable('2026-09-13T12:00:00'),
+			null,
+			'mitarbeiter-update-selbst',
+		);
+
+		$this->calDavBackend->method('getCalendarByUri')->willReturn(['id' => 7]);
+
+		$updated = $this->service->updateEvent(
+			$link->getId(),
+			'Eigener Termin',
+			new DateTimeImmutable('2026-09-13T08:00:00'),
+			new DateTimeImmutable('2026-09-13T12:00:00'),
+		);
+
+		$this->assertSame($link->getId(), $updated->getId());
+	}
+
+	public function testUpdateEventOnLegacyLinkWithoutKnownOwnerThrows(): void {
+		// Simuliert eine Zeile aus der Zeit vor ADR-0031: weder
+		// assignedUserId noch createdByUserId bekannt.
+		$link = new \OCA\ERP\Db\CalendarLink();
+		$link->setResourceType('phpunit-resource-edit');
+		$link->setResourceId('23');
+		$link->setCalendarUri('personal');
+		$link->setEventUri('legacy-event.ics');
+		$link->setCreatedAt(time());
+		$link = $this->mapper->insert($link);
+
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->updateEvent($link->getId(), 'Titel', new DateTimeImmutable(), new DateTimeImmutable('+1 hour'));
+	}
+
+	public function testDeleteEventRemovesCalendarObjectAndLink(): void {
+		$calendar = $this->mockWritableCalendar('personal');
+		$this->calendarManager->method('getCalendarsForPrincipal')->willReturn([$calendar]);
+		$this->calendarManager->method('createEventBuilder')->willReturn($this->mockEventBuilder('delete-event.ics'));
+
+		$link = $this->service->createEvent(
+			$this->user,
+			'personal',
+			'phpunit-resource-edit',
+			'20',
+			'Zu löschen',
+			new DateTimeImmutable('2026-09-14T08:00:00'),
+			new DateTimeImmutable('2026-09-14T09:00:00'),
+		);
+
+		$this->calDavBackend->method('getCalendarByUri')
+			->with('principals/users/phpunit-cal-user', 'personal')
+			->willReturn(['id' => 42]);
+		$this->calDavBackend->expects($this->once())
+			->method('deleteCalendarObject')
+			->with(42, 'delete-event.ics');
+
+		$this->service->deleteEvent($link->getId());
+
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->getLink($link->getId());
 	}
 }

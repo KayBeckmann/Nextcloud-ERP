@@ -169,6 +169,7 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			new \OCA\ERP\Db\CalendarLinkMapper($db),
 			\OC::$server->get(ICalendarManager::class),
 			\OC::$server->get(CalendarProvisioningService::class),
+			\OC::$server->get(\OCA\DAV\CalDAV\CalDavBackend::class),
 		);
 		$absenceRequestService = new AbsenceRequestService(
 			new \OCA\ERP\Db\AbsenceRequestMapper($db),

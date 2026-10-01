@@ -43,6 +43,7 @@ final class AbsenceRequestServiceTest extends TestCase {
 			new CalendarLinkMapper($db),
 			\OC::$server->get(ICalendarManager::class),
 			\OC::$server->get(CalendarProvisioningService::class),
+			\OC::$server->get(\OCA\DAV\CalDAV\CalDavBackend::class),
 		);
 		$this->service = new AbsenceRequestService($this->mapper, $this->absenceTypeMapper, $calendarService, \OC::$server->get(IUserManager::class));
 
