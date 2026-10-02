@@ -46,10 +46,11 @@
 									<td>{{ p.discountPercent > 0 ? p.discountPercent + ' %' : '—' }}</td>
 									<td>{{ p.vatRatePercent }}%</td>
 									<td>{{ formatMoney(p.netTotal) }}</td>
-									<td>
+									<td v-if="quote.status === 'draft'">
 										<button @click="startEditPos(p)">✎</button>
 										<button @click="removePos(p.id)">✕</button>
 									</td>
+									<td v-else></td>
 								</tr>
 								<tr v-else class="erp-quote-detail__edit-row">
 									<td>{{ typeLabel(p.positionType) }}</td>
@@ -74,6 +75,7 @@
 					</table>
 				</div>
 
+				<template v-if="quote.status === 'draft'">
 				<h3>+ Position hinzufügen</h3>
 				<form class="erp-quote-detail__position-form" @submit.prevent="submitPosition">
 					<select v-model="newPosition.groupId">
@@ -112,6 +114,10 @@
 					<input v-model="newGroupTitle" placeholder="Neue Positionsgruppe" required>
 					<button type="submit">+ Gruppe</button>
 				</form>
+				</template>
+				<p v-else class="erp-quote-detail__hint">
+					Positionen sind nur im Entwurf änderbar — dieses Angebot ist bereits {{ statusLabel(quote.status).toLowerCase() }}.
+				</p>
 
 				<button v-if="quote.status === 'draft'" class="erp-quote-detail__issue" @click="generateDocument">PDF erstellen</button>
 			</section>

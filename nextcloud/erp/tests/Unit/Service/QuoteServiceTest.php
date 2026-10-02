@@ -181,4 +181,36 @@ final class QuoteServiceTest extends ErpIntegrationTestCase {
 		$full = $this->service->getFullQuote($quote->getId());
 		$this->assertCount(0, $full['positions']);
 	}
+
+	/**
+	 * ADR-0035: Positionen eines Angebots sind nur im Entwurf änderbar —
+	 * ein bereits versendetes Angebot zeigt dem Kunden einen bestimmten
+	 * Preis, nachträgliche Änderung ohne dessen Wissen widerspräche dem
+	 * Zweck des Versendens.
+	 */
+	public function testAddPositionAfterSentThrows(): void {
+		$quote = $this->service->createQuote('phpunit-quote-8', $this->projectId, null, null);
+		$this->service->updateQuote($quote->getId(), 'phpunit-quote-8', 'sent', $this->projectId, null, null, null);
+
+		$this->expectException(\DomainException::class);
+		$this->service->addPosition($quote->getId(), null, 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
+	}
+
+	public function testUpdatePositionAfterSentThrows(): void {
+		$quote = $this->service->createQuote('phpunit-quote-9', $this->projectId, null, null);
+		$position = $this->service->addPosition($quote->getId(), null, 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
+		$this->service->updateQuote($quote->getId(), 'phpunit-quote-9', 'sent', $this->projectId, null, null, null);
+
+		$this->expectException(\DomainException::class);
+		$this->service->updatePosition($quote->getId(), $position->getId(), 'y', 2.0, 'Stk', 2.0, 19.0);
+	}
+
+	public function testRemovePositionAfterSentThrows(): void {
+		$quote = $this->service->createQuote('phpunit-quote-10', $this->projectId, null, null);
+		$position = $this->service->addPosition($quote->getId(), null, 'custom', null, 'x', 1.0, 'Stk', 1.0, 19.0);
+		$this->service->updateQuote($quote->getId(), 'phpunit-quote-10', 'sent', $this->projectId, null, null, null);
+
+		$this->expectException(\DomainException::class);
+		$this->service->removePosition($quote->getId(), $position->getId());
+	}
 }
