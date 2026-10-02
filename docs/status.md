@@ -829,11 +829,12 @@ sind per API editierbar, aber ohne UI dafür.
   aus. **Verhaltensänderung:** kein automatisches Sofort-Ausstellen der
   Teilkorrektur mehr. Vollstorno-Gutschriften bleiben unverändert beim
   Sofort-Ausstellen.
-- Editierbare Positionen (Menge/Preis/Rabatt) sind bei Angebot/Auftrag
-  serverseitig nicht auf den Entwurfsstatus beschränkt (anders als bei
-  Rechnung/Lieferschein) — dieselbe bereits vorher bestehende
-  Inkonsistenz wie beim Löschen einzelner Positionen, durch ADR-0022
-  nicht neu eingeführt, aber auch nicht behoben.
+- ~~Editierbare Positionen (Menge/Preis/Rabatt) sind bei Angebot/Auftrag
+  serverseitig nicht auf den Entwurfsstatus beschränkt~~ — seit
+  2026-10-02 für **Angebote** behoben (ADR-0035, `412` außerhalb von
+  `draft`). Für **Aufträge** bewusst unverändert — ADR-0016 hatte den
+  fehlenden Entwurfs-Zwang bei Aufträgen explizit als bewusste
+  Vereinfachung festgelegt, keine offene Inkonsistenz.
 - ~~Kein Steuerberater-Exportformat (z. B. DATEV) implementiert~~ — seit
   2026-10-01 gibt es `GET /export/datev-buchungsstapel.csv`
   (ADR-0026). **Vor produktivem Einsatz mit dem Steuerberater
@@ -1380,3 +1381,21 @@ fehlerfrei.
 der Gutschriftposition gegen die Original-Rechnungsposition; keine
 Lösch-Funktion für einen leeren/nie ausgestellten Entwurf selbst (nur
 seine Positionen) — siehe ADR-0034 "Nicht Teil dieser Phase".
+
+## 2026-10-02 — Angebotspositionen nur im Entwurf änderbar ([ADR-0035](adr/0035-angebot-positionen-entwurfsstatus.md))
+
+**Erledigt:** Nächste der in "Bekannte Einschränkungen" dokumentierten
+Positionen geschlossen — für Angebote. `QuoteService::addPosition()`/
+`updatePosition()`/`removePosition()` lehnen jetzt mit `412` ab, sobald
+das Angebot nicht mehr `status = draft` ist (Begründung: geschäftlich,
+nicht GoBD — ein versendetes Angebot zeigt dem Kunden einen bestimmten
+Preis). `AngebotDetailView` blendet die entsprechenden Formulare/
+Buttons außerhalb von `draft` aus.
+
+**Bewusst nur Angebote, nicht Aufträge:** ADR-0016 hatte den fehlenden
+Entwurfs-Zwang bei Aufträgen bereits als eigene, abgewogene Entscheidung
+festgelegt ("bewusste Vereinfachung") — das wird hier nicht revidiert.
+
+**Getestet:** 403 PHPUnit-Tests grün (400 → 403: Hinzufügen/Bearbeiten/
+Löschen einer Position nach Versenden wirft jeweils). Frontend-Build
+fehlerfrei.
