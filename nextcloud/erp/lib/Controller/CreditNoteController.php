@@ -118,6 +118,20 @@ class CreditNoteController extends AbstractResourceController {
 
 	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
+	public function removePosition(int $creditNoteId, int $id): DataResponse {
+		$this->requireLevel(PermissionLevel::Write);
+		try {
+			$this->creditNoteService->removePosition($creditNoteId, $id);
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Position $id not found in credit note $creditNoteId");
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
+		}
+		return new DataResponse([]);
+	}
+
+	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
+	#[NoAdminRequired]
 	public function issue(int $id): DataResponse {
 		$user = $this->requireLevel(PermissionLevel::Write);
 		try {

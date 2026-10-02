@@ -226,4 +226,32 @@ final class CreditNoteServiceTest extends ErpIntegrationTestCase {
 		$this->expectException(\OutOfBoundsException::class);
 		$this->service->createPartial(999999999, 'phpunit-cn-unknown');
 	}
+
+	public function testRemovePositionFromDraft(): void {
+		$invoice = $this->issuedInvoice();
+		$creditNote = $this->service->createPartial($invoice->getId(), 'phpunit-cn-remove');
+		$position = $this->service->addPosition($creditNote->getId(), 'x', 1.0, 'Stk', 1.0, 19.0);
+
+		$this->service->removePosition($creditNote->getId(), $position->getId());
+
+		$this->assertCount(0, $this->positionMapper->findByCreditNote($creditNote->getId()));
+	}
+
+	public function testRemovePositionAfterIssueThrows(): void {
+		$invoice = $this->issuedInvoice();
+		$creditNote = $this->service->createFullCancellation($invoice->getId(), 'phpunit-cn-remove-issued');
+		$this->service->issue($creditNote->getId());
+		$position = $this->positionMapper->findByCreditNote($creditNote->getId())[0];
+
+		$this->expectException(\DomainException::class);
+		$this->service->removePosition($creditNote->getId(), $position->getId());
+	}
+
+	public function testRemoveUnknownPositionThrows(): void {
+		$invoice = $this->issuedInvoice();
+		$creditNote = $this->service->createPartial($invoice->getId(), 'phpunit-cn-remove-unknown');
+
+		$this->expectException(\OutOfBoundsException::class);
+		$this->service->removePosition($creditNote->getId(), 999999999);
+	}
 }

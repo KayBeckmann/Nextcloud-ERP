@@ -113,6 +113,10 @@ export async function updateCreditNotePosition(creditNoteId, id, payload) {
 	return data.ocs.data
 }
 
+export async function removeCreditNotePosition(creditNoteId, id) {
+	await axios.delete(generateOcsUrl('apps/erp/api/v1/credit-notes/{creditNoteId}/positions/{id}', { creditNoteId, id }))
+}
+
 export async function issueCreditNote(id) {
 	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/credit-notes/{id}/issue', { id }))
 	return data.ocs.data
