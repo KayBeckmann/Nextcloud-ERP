@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Tests\Unit\Service;
 
+use OCA\ERP\Db\ArticleMapper;
+use OCA\ERP\Db\ArticleSupplierPriceMapper;
 use OCA\ERP\Db\CompanyProfileMapper;
 use OCA\ERP\Db\ContactLinkMapper;
 use OCA\ERP\Db\DeliveryNotePositionMapper;
@@ -15,7 +17,11 @@ use OCA\ERP\Db\ProjectMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Db\StockLevelMapper;
+use OCA\ERP\Db\StockMovementMapper;
+use OCA\ERP\Db\WarehouseMapper;
 use OCA\ERP\Projects\OrderStatus;
+use OCA\ERP\Service\ArticleService;
 use OCA\ERP\Service\CompanyProfileService;
 use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\DocumentHtmlBuilder;
@@ -24,6 +30,8 @@ use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\OrderService;
 use OCA\ERP\Service\ProjectService;
 use OCA\ERP\Service\QuoteService;
+use OCA\ERP\Service\StockService;
+use OCA\ERP\Service\WarehouseService;
 use OCP\Contacts\IManager as IContactsManager;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
@@ -49,8 +57,15 @@ final class OrderServiceTest extends ErpIntegrationTestCase {
 	private QuoteMapper $quoteMapper;
 	private QuotePositionMapper $quotePositionMapper;
 	private QuoteGroupMapper $quoteGroupMapper;
+	private StockService $stockService;
+	private StockLevelMapper $stockLevelMapper;
+	private WarehouseMapper $warehouseMapper;
+	private ArticleService $articleService;
+	private ArticleMapper $articleMapper;
 	private IUser $user;
 	private int $realProjectId;
+	private int $warehouseId;
+	private int $articleId;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -69,6 +84,11 @@ final class OrderServiceTest extends ErpIntegrationTestCase {
 		);
 		$this->quoteService = new QuoteService($this->quoteMapper, $this->quoteGroupMapper, $this->quotePositionMapper, $folderService, $projectService, $pdfService, $htmlBuilder);
 		$this->groupMapper = new OrderGroupMapper($db);
+		$this->stockLevelMapper = new StockLevelMapper($db);
+		$this->stockService = new StockService($this->stockLevelMapper, new StockMovementMapper($db));
+		$this->warehouseMapper = new WarehouseMapper($db);
+		$this->articleMapper = new ArticleMapper($db);
+		$this->articleService = new ArticleService($this->articleMapper, new ArticleSupplierPriceMapper($db), new ContactLinkMapper($db));
 		$this->service = new OrderService(
 			$this->mapper,
 			$this->positionMapper,
@@ -82,6 +102,7 @@ final class OrderServiceTest extends ErpIntegrationTestCase {
 			$projectService,
 			$pdfService,
 			$htmlBuilder,
+			$this->stockService,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -94,6 +115,10 @@ final class OrderServiceTest extends ErpIntegrationTestCase {
 
 		$project = $projectService->createProject($this->user, 'phpunit-order-project', null, null, null);
 		$this->realProjectId = $project->getId();
+
+		$warehouseService = new WarehouseService($this->warehouseMapper, new ProjectMapper($db));
+		$this->warehouseId = $warehouseService->create('phpunit-order-warehouse', 'central', null, null)->getId();
+		$this->articleId = $this->articleService->create('phpunit-order-article', null, null, 'Stk', null, null, null)->getId();
 	}
 
 	protected function tearDown(): void {
@@ -127,6 +152,24 @@ final class OrderServiceTest extends ErpIntegrationTestCase {
 		if (isset($this->user)) {
 			$this->removeFromErpGroup($this->user);
 			$this->user->delete();
+		}
+		if (isset($this->warehouseId, $this->articleId)) {
+			$level = $this->stockLevelMapper->findOne($this->articleId, $this->warehouseId);
+			if ($level !== null) {
+				$this->stockLevelMapper->delete($level);
+			}
+		}
+		if (isset($this->warehouseId)) {
+			$warehouse = $this->warehouseMapper->findById($this->warehouseId);
+			if ($warehouse !== null) {
+				$this->warehouseMapper->delete($warehouse);
+			}
+		}
+		if (isset($this->articleId)) {
+			$article = $this->articleMapper->findById($this->articleId);
+			if ($article !== null) {
+				$this->articleMapper->delete($article);
+			}
 		}
 		parent::tearDown();
 	}
@@ -248,5 +291,78 @@ final class OrderServiceTest extends ErpIntegrationTestCase {
 	public function testCreateFromUnknownQuoteThrows(): void {
 		$this->expectException(\OutOfBoundsException::class);
 		$this->service->createFromQuote(999999999);
+	}
+
+	/**
+	 * ADR-0039: Eine Auftragsposition vom Typ 'article' mit Lagerauswahl
+	 * reserviert automatisch Bestand.
+	 */
+	public function testAddArticlePositionWithWarehouseReservesStock(): void {
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-reserve-1', null);
+		$this->service->addPosition($order->getId(), null, 'article', $this->articleId, 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+
+		$level = $this->stockLevelMapper->findOne($this->articleId, $this->warehouseId);
+		$this->assertSame(5.0, $level->getQuantityReserved());
+	}
+
+	public function testAddPositionWithWarehouseOnNonArticleTypeThrows(): void {
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-reserve-2', null);
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->addPosition($order->getId(), null, 'custom', null, 'Pauschale', 1.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+	}
+
+	public function testUpdatePositionChangesReservationQuantity(): void {
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-reserve-3', null);
+		$position = $this->service->addPosition($order->getId(), null, 'article', $this->articleId, 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+
+		$this->service->updatePosition($order->getId(), $position->getId(), 'Kabel', 8.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+
+		$level = $this->stockLevelMapper->findOne($this->articleId, $this->warehouseId);
+		$this->assertSame(8.0, $level->getQuantityReserved());
+	}
+
+	public function testUpdatePositionRemovingWarehouseReleasesReservation(): void {
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-reserve-4', null);
+		$position = $this->service->addPosition($order->getId(), null, 'article', $this->articleId, 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+
+		$this->service->updatePosition($order->getId(), $position->getId(), 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, null);
+
+		$level = $this->stockLevelMapper->findOne($this->articleId, $this->warehouseId);
+		$this->assertSame(0.0, $level->getQuantityReserved());
+	}
+
+	public function testRemovePositionReleasesReservation(): void {
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-reserve-5', null);
+		$position = $this->service->addPosition($order->getId(), null, 'article', $this->articleId, 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+
+		$this->service->removePosition($order->getId(), $position->getId());
+
+		$level = $this->stockLevelMapper->findOne($this->articleId, $this->warehouseId);
+		$this->assertSame(0.0, $level->getQuantityReserved());
+	}
+
+	public function testUpdatePositionMovingToDifferentWarehouseTransfersReservation(): void {
+		$warehouseService = new WarehouseService($this->warehouseMapper, new ProjectMapper(\OC::$server->get(IDBConnection::class)));
+		$secondWarehouseId = $warehouseService->create('phpunit-order-warehouse-2', 'central', null, null)->getId();
+
+		$order = $this->service->createOrder($this->realProjectId, 'phpunit-order-reserve-6', null);
+		$position = $this->service->addPosition($order->getId(), null, 'article', $this->articleId, 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, $this->warehouseId);
+
+		$this->service->updatePosition($order->getId(), $position->getId(), 'Kabel', 5.0, 'Stk', 10.0, 19.0, 0.0, $secondWarehouseId);
+
+		$oldLevel = $this->stockLevelMapper->findOne($this->articleId, $this->warehouseId);
+		$newLevel = $this->stockLevelMapper->findOne($this->articleId, $secondWarehouseId);
+		$this->assertSame(0.0, $oldLevel->getQuantityReserved());
+		$this->assertSame(5.0, $newLevel->getQuantityReserved());
+
+		$newLevelRow = $this->stockLevelMapper->findOne($this->articleId, $secondWarehouseId);
+		if ($newLevelRow !== null) {
+			$this->stockLevelMapper->delete($newLevelRow);
+		}
+		$secondWarehouse = $this->warehouseMapper->findById($secondWarehouseId);
+		if ($secondWarehouse !== null) {
+			$this->warehouseMapper->delete($secondWarehouse);
+		}
 	}
 }
