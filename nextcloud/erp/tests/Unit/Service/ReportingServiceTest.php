@@ -90,8 +90,9 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 		$this->projectMapper = new ProjectMapper($db);
 		$this->projectService = new ProjectService($this->projectMapper, $folderService);
 		$pdfService = new DocumentPdfService();
+		$companyProfileService = new CompanyProfileService(new CompanyProfileMapper($db));
 		$htmlBuilder = new DocumentHtmlBuilder(
-			new CompanyProfileService(new CompanyProfileMapper($db)),
+			$companyProfileService,
 			new ContactsService(new ContactLinkMapper($db), \OC::$server->get(IContactsManager::class)),
 		);
 
@@ -194,6 +195,7 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			$articleSupplierPriceMapper,
 			$absenceRequestService,
 			$overtimeActionService,
+			$companyProfileService,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
