@@ -178,15 +178,74 @@
 			<section v-if="['issued', 'partially_paid', 'paid'].includes(invoice.status)" class="erp-invoice-detail__credit-notes">
 				<h3>Gutschriften</h3>
 				<table v-if="creditNotes.length">
-					<thead><tr><th>Nr.</th><th>Grund</th><th>Vollstorno</th><th>Status</th><th>Dokument</th></tr></thead>
+					<thead><tr><th>Nr.</th><th>Grund</th><th>Vollstorno</th><th>Status</th><th>Dokument</th><th></th></tr></thead>
 					<tbody>
-						<tr v-for="cn in creditNotes" :key="cn.id">
-							<td>{{ cn.creditNoteNumber || '(Entwurf)' }}</td>
-							<td>{{ cn.reason }}</td>
-							<td>{{ cn.cancelsInvoice ? 'ja' : 'nein' }}</td>
-							<td><span class="erp-status-badge" :class="`is-${cn.status}`">{{ cn.status }}</span></td>
-							<td><a v-if="cn.documentFileId" :href="openInFilesUrl(cn.documentFileId)" target="_blank" rel="noopener">öffnen</a></td>
-						</tr>
+						<template v-for="cn in creditNotes" :key="cn.id">
+							<tr :class="{ 'erp-invoice-detail__cn-row': cn.status === 'draft' }" @click="cn.status === 'draft' && toggleCreditNote(cn)">
+								<td>{{ cn.creditNoteNumber || '(Entwurf)' }}</td>
+								<td>{{ cn.reason }}</td>
+								<td>{{ cn.cancelsInvoice ? 'ja' : 'nein' }}</td>
+								<td><span class="erp-status-badge" :class="`is-${cn.status}`">{{ cn.status }}</span></td>
+								<td><a v-if="cn.documentFileId" :href="openInFilesUrl(cn.documentFileId)" target="_blank" rel="noopener">öffnen</a></td>
+								<td>{{ cn.status === 'draft' ? (expandedCreditNoteId === cn.id ? '▲' : '▼') : '' }}</td>
+							</tr>
+							<tr v-if="expandedCreditNoteId === cn.id && creditNoteDetail">
+								<td colspan="6">
+									<div class="erp-invoice-detail__cn-detail">
+										<table v-if="creditNoteDetail.positions.length">
+											<thead><tr><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>MwSt.</th><th></th></tr></thead>
+											<tbody>
+												<tr v-for="p in creditNoteDetail.positions" :key="p.id">
+													<template v-if="editingCnPositionId === p.id">
+														<td><input v-model="editCnPosition.description"></td>
+														<td><input v-model.number="editCnPosition.quantity" type="number" step="0.01" style="max-width:70px"></td>
+														<td><input v-model="editCnPosition.unit" style="max-width:60px"></td>
+														<td><input v-model.number="editCnPosition.unitPriceNet" type="number" step="0.01" style="max-width:80px"></td>
+														<td>
+															<select v-model.number="editCnPosition.vatRatePercent">
+																<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
+															</select>
+														</td>
+														<td>
+															<button @click="saveEditCnPosition(cn.id, p.id)">✓</button>
+															<button @click="editingCnPositionId = null">✕</button>
+														</td>
+													</template>
+													<template v-else>
+														<td>{{ p.description }}</td>
+														<td>{{ p.quantity }}</td>
+														<td>{{ p.unit }}</td>
+														<td>{{ formatMoney(p.unitPriceNet) }}</td>
+														<td>{{ p.vatRatePercent }}%</td>
+														<td>
+															<button @click="startEditCnPosition(p)">Bearbeiten</button>
+															<button @click="removeCnPosition(cn.id, p.id)">✕</button>
+														</td>
+													</template>
+												</tr>
+											</tbody>
+										</table>
+										<p v-else>Noch keine Positionen — eine Gutschrift ohne Position kann nicht ausgestellt werden.</p>
+
+										<form class="erp-invoice-detail__inline-form" @submit.prevent="addCnPosition(cn.id)">
+											<input v-model="newCnPosition.description" placeholder="Beschreibung" required>
+											<input v-model.number="newCnPosition.quantity" type="number" step="0.01" placeholder="Menge" required>
+											<input v-model="newCnPosition.unit" placeholder="Einheit" style="max-width:70px">
+											<input v-model.number="newCnPosition.unitPriceNet" type="number" step="0.01" placeholder="EP netto" required>
+											<select v-model.number="newCnPosition.vatRatePercent">
+												<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
+											</select>
+											<button type="submit">+ Position</button>
+										</form>
+
+										<button
+											:disabled="!creditNoteDetail.positions.length"
+											@click="issueDraftCreditNote(cn.id)"
+										>Gutschrift ausstellen</button>
+									</div>
+								</td>
+							</tr>
+						</template>
 					</tbody>
 				</table>
 				<p v-else>Keine Gutschriften.</p>
@@ -195,11 +254,12 @@
 
 				<form class="erp-invoice-detail__credit-note-form" @submit.prevent="submitPartialCreditNote">
 					<input v-model="partialCreditNote.reason" placeholder="Grund der Teilkorrektur" required>
-					<input v-model="partialCreditNote.description" placeholder="Beschreibung" required>
-					<input v-model.number="partialCreditNote.quantity" type="number" step="0.01" placeholder="Menge" required>
-					<input v-model.number="partialCreditNote.unitPriceNet" type="number" step="0.01" placeholder="Betrag netto" required>
-					<button type="submit">Teilkorrektur ausstellen</button>
+					<button type="submit">Entwurf anlegen</button>
 				</form>
+				<p class="erp-invoice-detail__hint">
+					Legt einen Entwurf an — Positionen werden anschließend in der Zeile des Entwurfs oben
+					hinzugefügt/bearbeitet, bevor er ausgestellt wird.
+				</p>
 			</section>
 
 			<section v-if="invoice.finalSettlement" class="erp-invoice-detail__settlement">
@@ -251,7 +311,8 @@ import { generateUrl } from '@nextcloud/router'
 import {
 	fetchInvoice, addInvoiceGroup, addInvoicePosition, updateInvoicePosition, removeInvoicePosition, issueInvoice, recordInvoicePayment,
 	recordInvoiceDunningStep,
-	fetchCreditNotes, createFullCancellation, createPartialCreditNote, addCreditNotePosition, issueCreditNote, updateInvoiceDiscount,
+	fetchCreditNotes, fetchCreditNote, createFullCancellation, createPartialCreditNote,
+	addCreditNotePosition, updateCreditNotePosition, removeCreditNotePosition, issueCreditNote, updateInvoiceDiscount,
 } from '../services/invoicesApi.js'
 import { fetchVatRates, fetchWorkTypes } from '../services/settingsApi.js'
 import { fetchArticles } from '../services/articlesApi.js'
@@ -281,7 +342,12 @@ export default {
 			newPosition: { groupId: null, positionType: 'custom', referenceId: null, description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
 			newGroupTitle: '',
 			payment: { amount: null, paidAt: todayIso(), reference: '' },
-			partialCreditNote: { reason: '', description: '', quantity: 1, unitPriceNet: 0 },
+			partialCreditNote: { reason: '' },
+			expandedCreditNoteId: null,
+			creditNoteDetail: null,
+			newCnPosition: { description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			editingCnPositionId: null,
+			editCnPosition: {},
 			editingPositionId: null,
 			editPosition: {},
 			discountPercent: 0,
@@ -310,7 +376,9 @@ export default {
 			fetchWorkTypes(),
 		])
 		if (this.vatRates.length) {
-			this.newPosition.vatRatePercent = this.vatRates.find((v) => v.isDefault)?.percentage ?? this.vatRates[0].percentage
+			const def = this.vatRates.find((v) => v.isDefault)?.percentage ?? this.vatRates[0].percentage
+			this.newPosition.vatRatePercent = def
+			this.newCnPosition.vatRatePercent = def
 		}
 	},
 	watch: {
@@ -501,15 +569,69 @@ export default {
 		},
 		async submitPartialCreditNote() {
 			try {
-				const creditNote = await createPartialCreditNote(this.id, this.partialCreditNote.reason)
-				await addCreditNotePosition(creditNote.id, {
-					description: this.partialCreditNote.description,
-					quantity: this.partialCreditNote.quantity,
-					unitPriceNet: this.partialCreditNote.unitPriceNet,
-					vatRatePercent: 19,
-				})
-				await issueCreditNote(creditNote.id)
-				this.partialCreditNote = { reason: '', description: '', quantity: 1, unitPriceNet: 0 }
+				await createPartialCreditNote(this.id, this.partialCreditNote.reason)
+				this.partialCreditNote = { reason: '' }
+				this.creditNotes = await fetchCreditNotes(this.id)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async toggleCreditNote(cn) {
+			if (this.expandedCreditNoteId === cn.id) {
+				this.expandedCreditNoteId = null
+				this.creditNoteDetail = null
+				return
+			}
+			this.expandedCreditNoteId = cn.id
+			this.editingCnPositionId = null
+			try {
+				this.creditNoteDetail = await fetchCreditNote(cn.id)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async addCnPosition(creditNoteId) {
+			try {
+				await addCreditNotePosition(creditNoteId, { ...this.newCnPosition, unit: this.newCnPosition.unit || 'Stk' })
+				this.newCnPosition = { ...this.newCnPosition, description: '', quantity: 1, unitPriceNet: 0 }
+				this.creditNoteDetail = await fetchCreditNote(creditNoteId)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		startEditCnPosition(p) {
+			this.editingCnPositionId = p.id
+			this.editCnPosition = {
+				description: p.description,
+				quantity: p.quantity,
+				unit: p.unit,
+				unitPriceNet: p.unitPriceNet,
+				vatRatePercent: p.vatRatePercent,
+			}
+		},
+		async saveEditCnPosition(creditNoteId, id) {
+			try {
+				await updateCreditNotePosition(creditNoteId, id, this.editCnPosition)
+				this.editingCnPositionId = null
+				this.creditNoteDetail = await fetchCreditNote(creditNoteId)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async removeCnPosition(creditNoteId, id) {
+			try {
+				await removeCreditNotePosition(creditNoteId, id)
+				this.creditNoteDetail = await fetchCreditNote(creditNoteId)
+			} catch (e) {
+				this.loadError = this.errorMessage(e)
+			}
+		},
+		async issueDraftCreditNote(creditNoteId) {
+			try {
+				await issueCreditNote(creditNoteId)
+				this.expandedCreditNoteId = null
+				this.creditNoteDetail = null
+				this.creditNotes = await fetchCreditNotes(this.id)
 				await this.load()
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -550,4 +672,9 @@ header { display: flex; align-items: center; gap: 12px; }
 .erp-invoice-detail__related-note { color: var(--color-text-maxcontrast); font-size: 12px; }
 .erp-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--color-background-dark); }
 .erp-status-badge.is-overdue { background: var(--color-error, #c00); color: #fff; }
+.erp-invoice-detail__cn-row { cursor: pointer; }
+.erp-invoice-detail__cn-row:hover { background: var(--color-background-hover); }
+.erp-invoice-detail__cn-detail { padding: 10px; background: var(--color-background-dark); }
+.erp-invoice-detail__inline-form { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; align-items: center; }
+.erp-invoice-detail__hint { font-size: 12px; color: var(--color-text-maxcontrast); }
 </style>
