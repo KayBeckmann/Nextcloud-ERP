@@ -21,6 +21,10 @@ return [
 		// (Nachtrag zu Phase 12, ADR-0021) — aus demselben Grund außerhalb
 		// des 'ocs'-Blocks wie reportExport#invoicesCsv.
 		['name' => 'documents#show', 'url' => '/documents/{fileId}', 'verb' => 'GET', 'requirements' => ['fileId' => '\d+']],
+		// XRechnung/ZUGFeRD-Download (ADR-0040) — roher Datei-Download,
+		// deshalb außerhalb des 'ocs'-Blocks wie documents#show.
+		['name' => 'e_invoice#xml', 'url' => '/export/invoices/{id}/xrechnung.xml', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'e_invoice#pdf', 'url' => '/export/invoices/{id}/zugferd.pdf', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		// PDF retrieval is bound to an authorized purchase-order record; clients never pass a file ID.
 		['name' => 'purchase_order#document', 'url' => '/purchase-orders/{id}/document', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		// Eine einzige Route mit optionalem Pfad (Default '') statt zweier
