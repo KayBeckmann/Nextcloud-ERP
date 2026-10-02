@@ -821,10 +821,14 @@ sind per API editierbar, aber ohne UI dafür.
   Firmenprofil pflegen, es gibt aber keine automatische Vollständigkeits-
   kontrolle) — siehe ADR-0013. **Vor produktivem Rechnungsversand an
   Kunden zwingend gegenzuprüfen.**
-- Gutschrift-Positionen sind zwar per API editierbar (`updatePosition`,
-  ADR-0022), aber ohne UI dafür — die Rechnungsansicht bietet für
-  Gutschriften bislang nur das Anlegen, kein Bearbeiten einzelner
-  Positionen.
+- ~~Gutschrift-Positionen sind zwar per API editierbar, aber ohne UI
+  dafür~~ — seit 2026-10-02 vorhanden (ADR-0034): die Teilkorrektur-
+  Maske legt nur noch den Entwurf an, eine neue Entwurf-Review-Zeile
+  erlaubt Positionen hinzuzufügen/zu bearbeiten/zu löschen (neuer
+  `DELETE`-Endpunkt nachgerüstet) und stellt erst auf expliziten Klick
+  aus. **Verhaltensänderung:** kein automatisches Sofort-Ausstellen der
+  Teilkorrektur mehr. Vollstorno-Gutschriften bleiben unverändert beim
+  Sofort-Ausstellen.
 - Editierbare Positionen (Menge/Preis/Rabatt) sind bei Angebot/Auftrag
   serverseitig nicht auf den Entwurfsstatus beschränkt (anders als bei
   Rechnung/Lieferschein) — dieselbe bereits vorher bestehende
@@ -1351,3 +1355,28 @@ Anträge im Zähler; kein anteiliges Splitten von Anträgen über den
 Jahreswechsel; kein Übertrag von Resturlaub ins Folgejahr; kein
 Web-UI-Formular für den Jahresanspruch (siehe ADR-0033 "Nicht Teil
 dieser Phase").
+
+## 2026-10-02 — Gutschrift-Entwurf-Review mit editierbaren Positionen ([ADR-0034](adr/0034-gutschrift-positionen-bearbeiten-ui.md))
+
+**Erledigt:** Nächste der in "Bekannte Einschränkungen" dokumentierten
+Positionen geschlossen. Die Teilkorrektur-Maske (Rechnungsansicht)
+legte bisher einen Entwurf an, fügte eine Position hinzu und stellte
+sofort automatisch aus — kein Zwischenschritt zum Review/Bearbeiten.
+Mit Kay abgestimmt: echter Entwurf-Review-Schritt eingeführt.
+`CreditNoteService::removePosition()` nachgerüstet (fehlte komplett,
+neue Route `DELETE /credit-notes/{creditNoteId}/positions/{id}`).
+
+**Verhaltensänderung:** "Teilkorrektur ausstellen" heißt jetzt nur noch
+"Entwurf anlegen" — Positionen werden anschließend in einer
+aufklappbaren Entwurf-Zeile hinzugefügt/bearbeitet/gelöscht, erst ein
+expliziter "Gutschrift ausstellen"-Button stellt aus. Vollstorno bleibt
+unverändert beim Sofort-Ausstellen (kopiert ohnehin 1:1 alle
+Rechnungspositionen, kein sinnvoller Review-Schritt dort).
+
+**Getestet:** 400 PHPUnit-Tests grün (397 → 400). Frontend-Build
+fehlerfrei.
+
+**Noch offen:** Kein Review-Schritt für Vollstorno; keine Validierung
+der Gutschriftposition gegen die Original-Rechnungsposition; keine
+Lösch-Funktion für einen leeren/nie ausgestellten Entwurf selbst (nur
+seine Positionen) — siehe ADR-0034 "Nicht Teil dieser Phase".
