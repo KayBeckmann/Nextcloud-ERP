@@ -790,9 +790,13 @@ sind per API editierbar, aber ohne UI dafür.
   Dokumentation: `ProjektDetailView` nutzt dafür bereits seit ADR-0015
   (2026-08-21, Commit `60cbe66`) einen `UserPicker`, kein Freitext.
   Dieser Eintrag wurde nie nachgezogen.
-- Frontend-Bundle ist noch nicht auf Komponentenebene tree-geshaked (Warnung beim
-  Build) — für den Skeleton-Stand nicht kritisch, sollte vor Phase 14
-  (Web-Reifegrad) angegangen werden.
+- ~~Frontend-Bundle ist noch nicht auf Komponentenebene tree-geshaked~~ —
+  seit 2026-10-02 behoben (ADR-0036): Deep-Imports statt Paket-Barrel
+  für `@nextcloud/vue` in `App.vue`, `erp-main.js` 3,55 MiB → 1,06 MiB.
+  Weiterhin über dem Webpack-Richtwert (244 KiB), aber das ist jetzt
+  größtenteils eigene Anwendungslogik, kein Library-Ballast mehr —
+  routenbasiertes Code-Splitting wäre der nächste, separate Schritt
+  (siehe ADR-0036 "Nicht Teil dieser Phase").
 - Alle offenen Punkte aus der Roadmap ("Offene Klärungen vor Implementierung")
   sind über ADRs entschieden, mit Ausnahme von Themen, die erst in späteren
   Phasen konkret werden (Standard-MwSt.-Sätze, initiale Rollen, Angebotsschema,
@@ -1399,3 +1403,23 @@ festgelegt ("bewusste Vereinfachung") — das wird hier nicht revidiert.
 **Getestet:** 403 PHPUnit-Tests grün (400 → 403: Hinzufügen/Bearbeiten/
 Löschen einer Position nach Versenden wirft jeweils). Frontend-Build
 fehlerfrei.
+
+## 2026-10-02 — Frontend-Bundle-Tree-Shaking ([ADR-0036](adr/0036-frontend-bundle-tree-shaking.md))
+
+**Erledigt:** Letzte der länger offenen "Bekannte Einschränkungen"-
+Positionen aus der Skeleton-Phase geschlossen. Einzige Ursache: `App.vue`
+importierte vier `Nc*`-Komponenten aus dem `@nextcloud/vue`-Paket-
+Barrel statt aus den offiziellen Deep-Import-Subpaths — dadurch landeten
+komplett ungenutzte Komponenten (`NcDateTimePicker`, `NcColorPicker`,
+`NcSelect`) und deren transitive Abhängigkeiten (`emoji-mart-vue-fast`,
+`rehype-highlight`) im produktiven Bundle. Fix: vier Import-Zeilen auf
+`@nextcloud/vue/components/<Name>` umgestellt.
+
+**Ergebnis:** `erp-main.js` 3,55 MiB → 1,06 MiB (≈ 70 % kleiner). Keine
+Verhaltensänderung, keine Webpack-Konfigurationsänderung nötig.
+
+**Noch offen:** Bundle liegt weiterhin über dem Webpack-Richtwert
+(244 KiB) — jetzt aber überwiegend eigene Anwendungslogik (30+ Views in
+einem Bundle). Routenbasiertes Code-Splitting (Lazy-Loading je View)
+wäre der nächste, separate Schritt, siehe ADR-0036 "Nicht Teil dieser
+Phase".

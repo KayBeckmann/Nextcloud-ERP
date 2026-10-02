@@ -17,7 +17,15 @@
 </template>
 
 <script>
-import { NcAppContent, NcAppNavigation, NcAppNavigationItem, NcContent } from '@nextcloud/vue'
+// Direkte Deep-Imports statt des Pakets-Barrels (ADR-0036) — @nextcloud/vue
+// stellt dafür offizielle Subpath-Exports bereit (`"./components/*"` in
+// package.json), damit Webpack jede Komponente für sich tree-shaken kann,
+// statt den gesamten Komponenten-Index (inkl. transitiver Abhängigkeiten
+// ungenutzter Komponenten wie Emoji-Picker/Markdown-Highlighting) zu laden.
+import NcAppContent from '@nextcloud/vue/components/NcAppContent'
+import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
+import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
+import NcContent from '@nextcloud/vue/components/NcContent'
 import router from './router/index.js'
 
 export default {
