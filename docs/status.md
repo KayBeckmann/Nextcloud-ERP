@@ -852,8 +852,15 @@ sind per API editierbar, aber ohne UI dafür.
   Buchungen).
 - Keine Offline-Synchronisierung von Materialverbrauch — bewusst eine
   Aufgabe der späteren Flutter-Phasen, nicht des Web-MVP.
-- Keine automatische Reservierungslogik gegen Angebots-/Auftragspositionen
-  — `reserve()`/`release()` sind manuelle Aufrufe ohne Automatismus.
+- ~~Keine automatische Reservierungslogik gegen Angebots-/
+  Auftragspositionen~~ — seit 2026-10-02 für **Auftrags**-Artikel-
+  Positionen mit Lagerauswahl vorhanden (ADR-0039):
+  `OrderPosition::warehouseId` löst automatisches `reserve()`/
+  `release()` bei Anlegen/Ändern/Löschen aus; eine Lieferschein-
+  Erstellung wandelt die gelieferte Menge in einen echten, gebuchten
+  Warenabgang um (erste automatische Bestandsbuchung im Projekt
+  überhaupt). Bewusst nicht für Angebote (unverbindlich) und nicht für
+  `product`-Positionen (keine automatische Komponenten-Auflösung).
 - ~~Keine eigene Bestellungs-/Einkaufs-Entität~~ — seit 2026-09-11
   (`feat(purchasing): add supplier purchase orders and receipts`) gibt es
   `PurchaseOrder` als echte, gespeicherte Entität mit Statusverlauf und
@@ -1484,3 +1491,31 @@ vorhandenen Zeile).
 
 **Getestet:** 407 PHPUnit-Tests grün (403 → 407). Frontend-Build
 fehlerfrei.
+
+## 2026-10-02 — Automatische Lagerreservierung für Auftragspositionen ([ADR-0039](adr/0039-automatische-lagerreservierung-auftragspositionen.md))
+
+**Erledigt:** Letzte der in dieser Runde dokumentierten Positionen
+geschlossen — die größte Architektur-Erweiterung: `OrderPosition`
+bekommt ein neues optionales `warehouseId`-Feld (Migration 0026, nur
+für `positionType = 'article'` erlaubt, sonst `400`). Anlegen/Ändern/
+Löschen einer Artikel-Position mit Lager löst automatisch `StockService::
+reserve()`/`release()` aus; `updatePosition()` gibt die alte
+`(warehouseId, quantity)`-Kombination frei und reserviert die neue —
+funktioniert unverändert korrekt bei Mengen-, Lager- oder
+Kombi-Änderungen.
+
+**Lieferschein-Erstellung wandelt Reservierung in echten Warenabgang
+um:** `DeliveryNoteService::createFromOrder()` gibt die gelieferte
+Teilmenge aus der Reservierung frei und bucht sie (mit dem
+anfragenden User attribuiert) als `consumption`-Bewegung — die **erste
+automatische Bestandsbuchung im gesamten Projekt**; bisher lief jede
+`StockMovement`-Buchung ausschließlich manuell über die Lager-Ansicht.
+
+**Bewusst nicht Teil dieser ADR:** Reservierung für Angebote
+(unverbindlich); automatische Komponenten-Auflösung für
+`product`-Positionen (Bestand wird nur je Artikel geführt); Prüfung der
+Verfügbarkeit vor dem Reservieren (Überbuchung war schon vorher
+möglich, unverändert).
+
+**Getestet:** 414 PHPUnit-Tests grün (407 → 414). Frontend-Build
+fehlerfrei (neue Lager-Spalte + Dropdown in `AuftragDetailView`).
