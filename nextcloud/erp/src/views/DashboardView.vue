@@ -52,6 +52,11 @@
 				<h3>Fuhrparkkosten Monat</h3>
 				<p class="erp-tile__value">{{ formatCurrency(summary.fuelCostsThisMonth) }}</p>
 			</div>
+			<div v-if="summary.companyProfileMissingFields.length" class="erp-tile is-warning">
+				<h3>Firmenprofil unvollständig</h3>
+				<p>Pflichtangaben nach § 14 Abs. 4 UStG fehlen: {{ summary.companyProfileMissingFields.join(', ') }}.</p>
+				<router-link :to="{ name: 'einstellungen' }">Zu den Einstellungen →</router-link>
+			</div>
 			<div class="erp-tile">
 				<h3>Gemeinkostenrate</h3>
 				<p class="erp-tile__value">{{ formatCurrency(summary.internalHourlyRate) }}/h</p>

@@ -9,6 +9,11 @@
 				<code>Fußzeile</code> ist ein freies Mehrzeilenfeld für alles, was hier nicht
 				als eigenes Feld modelliert ist (Bankverbindung, Handelsregister, Geschäftsführer, …).
 			</p>
+			<p v-if="companyProfileMissingFields.length" class="erp-settings__warning">
+				Pflichtangaben nach § 14 Abs. 4 UStG fehlen noch: {{ companyProfileMissingFields.join(', ') }}.
+				Rein informativ (ADR-0038) — verhindert nicht das Ausstellen von Rechnungen, sollte aber vor
+				produktivem Rechnungsversand ergänzt werden.
+			</p>
 			<form class="erp-settings__company-form" @submit.prevent="submitCompanyProfile">
 				<label>Firmenname <input v-model="companyProfile.name" placeholder="Musterfirma GmbH"></label>
 				<label>Straße/Hausnummer <input v-model="companyProfile.addressLine"></label>
@@ -135,6 +140,7 @@ export default {
 			companyProfile: {
 				name: '', addressLine: '', postalCode: '', city: '', country: '', taxId: '', email: '', phone: '', headerText: '', legalForm: '', managingDirector: '', commercialRegister: '', vatId: '', taxNumber: '', bankName: '', iban: '', bic: '', footerText: '', logoFileId: null,
 			},
+			companyProfileMissingFields: [],
 			documentTypeLabels: { quote: 'Angebot', order: 'Auftrag', delivery_note: 'Lieferschein', invoice: 'Rechnung', credit_note: 'Gutschrift' },
 			documentLayouts: [],
 			companyProfileSaved: false,
@@ -161,6 +167,7 @@ export default {
 				headerText: p.headerText ?? '', legalForm: p.legalForm ?? '', managingDirector: p.managingDirector ?? '', commercialRegister: p.commercialRegister ?? '', vatId: p.vatId ?? '', taxNumber: p.taxNumber ?? '', bankName: p.bankName ?? '', iban: p.iban ?? '', bic: p.bic ?? '',
 				footerText: p.footerText ?? '', logoFileId: p.logoFileId ?? null,
 			}
+			this.companyProfileMissingFields = p.missingMandatoryFields ?? []
 		},
 		async loadDocumentLayouts() {
 			const stored = await fetchDocumentLayouts()
@@ -233,6 +240,14 @@ export default {
 }
 .erp-settings__error {
 	color: var(--color-error-text, #c00);
+}
+.erp-settings__warning {
+	color: var(--color-warning-text, #b36b00);
+	background: var(--color-background-dark);
+	padding: 8px 12px;
+	border-radius: var(--border-radius, 4px);
+	max-width: 720px;
+	margin-bottom: 12px;
 }
 .erp-settings__folders {
 	list-style: none;

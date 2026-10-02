@@ -42,6 +42,7 @@ class ReportingService {
 		private ArticleSupplierPriceMapper $supplierPriceMapper,
 		private AbsenceRequestService $absenceRequestService,
 		private OvertimeActionService $overtimeActionService,
+		private CompanyProfileService $companyProfileService,
 	) {
 	}
 
@@ -149,6 +150,9 @@ class ReportingService {
 			'internalHourlyRate' => $internalHourlyRate,
 			'timeAccount' => $timeAccount,
 			'ownPendingRequests' => $ownPendingRequests,
+			// Rein informativ (ADR-0038) — kein Blocker für das Ausstellen
+			// von Rechnungen, nur eine Dashboard-Erinnerung.
+			'companyProfileMissingFields' => $this->companyProfileService->missingMandatoryFields(),
 		];
 	}
 
