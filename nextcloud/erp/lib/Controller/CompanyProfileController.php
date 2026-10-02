@@ -32,7 +32,11 @@ class CompanyProfileController extends AbstractResourceController {
 	#[NoAdminRequired]
 	public function index(): DataResponse {
 		$this->requireLevel(PermissionLevel::Read);
-		return new DataResponse($this->companyProfileService->get());
+		$profile = $this->companyProfileService->get();
+		return new DataResponse([
+			...$profile->jsonSerialize(),
+			'missingMandatoryFields' => $this->companyProfileService->missingMandatoryFields($profile),
+		]);
 	}
 
 	#[NoAdminRequired]
@@ -63,7 +67,7 @@ class CompanyProfileController extends AbstractResourceController {
 		?string $bic = null,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
-		return new DataResponse($this->companyProfileService->update(
+		$profile = $this->companyProfileService->update(
 			$name,
 			$addressLine,
 			$postalCode,
@@ -82,6 +86,10 @@ class CompanyProfileController extends AbstractResourceController {
 			$bankName,
 			$iban,
 			$bic,
-		));
+		);
+		return new DataResponse([
+			...$profile->jsonSerialize(),
+			'missingMandatoryFields' => $this->companyProfileService->missingMandatoryFields($profile),
+		]);
 	}
 }

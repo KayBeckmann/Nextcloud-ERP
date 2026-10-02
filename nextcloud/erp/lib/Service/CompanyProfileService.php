@@ -94,4 +94,33 @@ class CompanyProfileService {
 		}
 		return $value;
 	}
+
+	/**
+	 * Prüft die Absender-Pflichtangaben nach § 14 Abs. 4 UStG auf
+	 * Vollständigkeit (ADR-0038) — rein informativ, **blockiert nicht**
+	 * das Ausstellen einer Rechnung. Deckt nur die hier strukturiert
+	 * erfassten Felder ab; weitergehende Prüfungen (z. B. Leistungsdatum
+	 * je Rechnung, korrekte Steuersatz-Aufschlüsselung) sind nicht Teil
+	 * dieser Methode, siehe ADR-0038 "Nicht Teil dieser Phase".
+	 *
+	 * @return list<string> deutsche Bezeichnungen der fehlenden Angaben,
+	 *         leer wenn alles vorhanden ist
+	 */
+	public function missingMandatoryFields(?CompanyProfile $profile = null): array {
+		$profile ??= $this->get();
+		$missing = [];
+		if ($profile->getName() === null) {
+			$missing[] = 'Name/Firma';
+		}
+		if ($profile->getAddressLine() === null) {
+			$missing[] = 'Anschrift';
+		}
+		if ($profile->getPostalCode() === null || $profile->getCity() === null) {
+			$missing[] = 'PLZ/Ort';
+		}
+		if ($profile->getTaxNumber() === null && $profile->getVatId() === null) {
+			$missing[] = 'Steuernummer oder USt-IdNr.';
+		}
+		return $missing;
+	}
 }
