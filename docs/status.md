@@ -801,9 +801,10 @@ sind per API editierbar, aber ohne UI dafür.
   sind über ADRs entschieden, mit Ausnahme von Themen, die erst in späteren
   Phasen konkret werden (Standard-MwSt.-Sätze, initiale Rollen, Angebotsschema,
   Rechnungsumfang) — die bleiben bewusst bis zur jeweiligen Phase offen.
-- Kein Web-UI für Verrechnungssätze/Kundenverträge (Phase 6) — aktuell nur
-  über die API v1 bedienbar. Die Web-UI-Erweiterung von "Berechtigungen &
-  Sätze" um diesen Bereich ist zurückgestellt und nicht Teil dieser Phase.
+- ~~Kein Web-UI für Verrechnungssätze/Kundenverträge~~ — seit
+  2026-10-02 vorhanden (ADR-0037): zwei neue Tabs in "Berechtigungen &
+  Sätze". Das Backend war entgegen der alten "Phase 6"-Formulierung
+  bereits seit ADR-0012 vollständig vorhanden, es fehlte nur das UI.
 - Kein Feiertagskalender im Zeitkonto — Werktage sind einfach Mo–Fr
   (ADR-0012, bewusster Non-Goal für diese Phase).
 - Keine automatische Herleitung von Überstunden aus dem Zeitkonto-Saldo —
@@ -856,11 +857,12 @@ sind per API editierbar, aber ohne UI dafür.
   nicht gespeicherter Bericht (ADR-0014), der aus ihnen heraus eine
   `PurchaseOrder` erzeugen kann.
 - ContactPicker/UserPicker sind nur an den explizit angeforderten Stellen
-  verbaut (Projekt, Angebot, Auftrag, Rechnung) — ~~Lieferanten-Auswahl
-  bei Artikelpreisen~~ nutzt seit 2026-10-01 ebenfalls `ContactPicker`
-  (`ArtikelView`, reine Frontend-Änderung, kein neuer Backend-Code);
-  Kundenverträge (Phase 6, noch kein Datenmodell) nutzen weiterhin
-  Freitext.
+  verbaut — ~~Lieferanten-Auswahl bei Artikelpreisen~~ nutzt seit
+  2026-10-01 ebenfalls `ContactPicker` (`ArtikelView`); ~~Kundenverträge~~
+  nutzen seit 2026-10-02 ebenfalls `ContactPicker` zur Kundenauswahl
+  (ADR-0037, Tab "Kundenverträge" in "Berechtigungen & Sätze") — entgegen
+  der alten Annahme "Phase 6, noch kein Datenmodell" existierte das
+  Datenmodell bereits.
 - ~~Keine automatische Verrechnung/Subtraktion von Teilrechnungsbeträgen
   in der Schlussrechnung~~ — seit 2026-10-01 liefert `finalSettlement`
   (ADR-0027, § 14 Abs. 5 Satz 2 UStG) Gesamtauftragswert, Summe der
@@ -1423,3 +1425,32 @@ Verhaltensänderung, keine Webpack-Konfigurationsänderung nötig.
 einem Bundle). Routenbasiertes Code-Splitting (Lazy-Loading je View)
 wäre der nächste, separate Schritt, siehe ADR-0036 "Nicht Teil dieser
 Phase".
+
+## 2026-10-02 — Web-UI für Verrechnungssätze und Kundenverträge ([ADR-0037](adr/0037-verrechnungssaetze-kundenvertraege-ui.md))
+
+**Erledigt:** Nächste der in "Bekannte Einschränkungen" dokumentierten
+Positionen geschlossen. **Überraschender Befund beim Umsetzen:** Das
+Backend für Standard-Verrechnungssätze und Kundenverträge existierte
+entgegen der alten Formulierung ("Phase 6") bereits vollständig seit
+ADR-0012 (`RateService`/`CustomerContractService` inkl. der
+6-stufigen Satz-Auflösungspriorität) — es fehlte ausschließlich das
+Web-UI, keine neue Backend-Entwicklung nötig.
+
+"Berechtigungen & Sätze" (`BerechtigungenView`) bekam zwei neue Tabs:
+"Standard-Verrechnungssätze" (Sätze je Arbeitsart, optional auf einen
+User/eine Gruppe eingeschränkt — Auswahl wiederverwendet die bereits
+geladene Principals-Liste der Rechte-Matrix, kein neuer Picker) und
+"Kundenverträge" (`ContactPicker` zur Kundenauswahl, aufklappbare
+Vertragszeilen mit Satz-Verwaltung, Muster aus ADR-0034).
+
+**Getestet:** Keine Backend-Änderung, 403 PHPUnit-Tests weiterhin grün.
+Frontend-Build fehlerfrei.
+
+**Nebenbefund, nicht behoben:** `RateService`/`CustomerContractService`
+haben (anders als die reine `RateResolutionService`-Logik) keine
+eigenen PHPUnit-Tests — vorbestehende Testlücke, durch diese rein
+frontend-seitige ADR nicht verursacht und nicht geschlossen.
+
+**Noch offen:** Kein Bearbeiten/Löschen eines ganzen Vertrags (API
+bietet dafür keinen Endpunkt); keine Live-Vorschau der Satz-Auflösung
+in dieser UI — siehe ADR-0037 "Nicht Teil dieser Phase".
