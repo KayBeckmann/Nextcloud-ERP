@@ -783,8 +783,15 @@ sind per API editierbar, aber ohne UI dafür.
   Produkt den neuen `sellingPriceNet`, bei Arbeitstyp den bestehenden
   `hourlyRate`) vorbefüllt. Reine Vorbefüllung, alle Felder bleiben
   editierbar (Snapshot-Prinzip, ADR-0011 unverändert).
-- Projektordner leben weiterhin im Home-Verzeichnis des anlegenden Users
-  (ADR-0009-Einschränkung gilt unverändert für Projektordner).
+- ~~Projektordner leben im Home-Verzeichnis des anlegenden Users~~ —
+  stale Dokumentation: seit ADR-0024 (2026-09-04, Commit `0bbceac`) legt
+  `ErpFolderService` die gesamte `ERP/`-Struktur im gemeinsamen Group
+  Folder "ERP-Firma" an, nicht mehr im persönlichen Home-Verzeichnis.
+  Dieser Eintrag wurde nie nachgezogen. Auf der lokalen Docker-Umgebung
+  verifiziert: Group Folder "ERP-Firma" existiert
+  (`oc_group_folders`/`oc_group_folders_groups`), `erp-projektleiter`
+  mit Vollzugriff (Permission 31), `erp-monteure` mit Lesen+Schreiben
+  ohne Löschen (Permission 7) — exakt wie in ADR-0024 festgelegt.
 - ~~Verantwortlicher User (`responsibleUserId`) ist ein reines
   Freitextfeld ohne Validierung — keine Auswahlliste im UI~~ — stale
   Dokumentation: `ProjektDetailView` nutzt dafür bereits seit ADR-0015
