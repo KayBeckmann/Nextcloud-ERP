@@ -161,6 +161,26 @@ class CreditNoteService {
 	}
 
 	/**
+	 * Position aus einem Gutschrift-Entwurf entfernen (ADR-0034) — wie
+	 * addPosition()/updatePosition() nur solange die Gutschrift im Entwurf
+	 * ist.
+	 *
+	 * @throws \OutOfBoundsException wenn die Gutschrift oder die Position nicht existiert
+	 * @throws \DomainException wenn nicht mehr im Entwurf
+	 */
+	public function removePosition(int $creditNoteId, int $id): void {
+		$creditNote = $this->get($creditNoteId);
+		if ($creditNote->getStatus() !== 'draft') {
+			throw new \DomainException("Credit note $creditNoteId is not in status 'draft'");
+		}
+		$position = $this->positionMapper->findOne($creditNoteId, $id);
+		if ($position === null) {
+			throw new \OutOfBoundsException("Position $id not found in credit note $creditNoteId");
+		}
+		$this->positionMapper->delete($position);
+	}
+
+	/**
 	 * Vergibt die Gutschriftnummer atomar. Bei `cancelsInvoice = true` wird
 	 * zusätzlich die referenzierte Rechnung storniert.
 	 *

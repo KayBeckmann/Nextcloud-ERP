@@ -174,6 +174,7 @@ return [
 		['name' => 'credit_note#createPartial', 'url' => '/api/v1/credit-notes/partial', 'verb' => 'POST'],
 		['name' => 'credit_note#addPosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions', 'verb' => 'POST', 'requirements' => ['creditNoteId' => '\d+']],
 		['name' => 'credit_note#updatePosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions/{id}', 'verb' => 'PUT', 'requirements' => ['creditNoteId' => '\d+', 'id' => '\d+']],
+		['name' => 'credit_note#removePosition', 'url' => '/api/v1/credit-notes/{creditNoteId}/positions/{id}', 'verb' => 'DELETE', 'requirements' => ['creditNoteId' => '\d+', 'id' => '\d+']],
 		['name' => 'credit_note#issue', 'url' => '/api/v1/credit-notes/{id}/issue', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		// Lieferscheine (ADR-0015).
 		['name' => 'delivery_note#index', 'url' => '/api/v1/delivery-notes', 'verb' => 'GET'],
