@@ -106,6 +106,7 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 		$orderGroupMapper = new OrderGroupMapper($db);
 		$invoicePositionMapper = new InvoicePositionMapper($db);
 		$deliveryNotePositionMapper = new DeliveryNotePositionMapper($db);
+		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));
 		$this->orderService = new OrderService(
 			$orderMapper,
 			$orderPositionMapper,
@@ -119,6 +120,7 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			$this->projectService,
 			$pdfService,
 			$htmlBuilder,
+			$stockService,
 		);
 
 		$this->invoiceMapper = new InvoiceMapper($db);
@@ -147,7 +149,6 @@ final class ReportingServiceTest extends ErpIntegrationTestCase {
 			new \OCA\ERP\Db\CreditNotePositionMapper($db),
 		);
 
-		$stockService = new StockService(new StockLevelMapper($db), new StockMovementMapper($db));
 		$articleSupplierPriceMapper = new ArticleSupplierPriceMapper($db);
 		$this->articleService = new ArticleService(new \OCA\ERP\Db\ArticleMapper($db), $articleSupplierPriceMapper, new \OCA\ERP\Db\ContactLinkMapper($db));
 		$purchaseSuggestionService = new PurchaseSuggestionService(

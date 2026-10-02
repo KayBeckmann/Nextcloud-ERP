@@ -12,7 +12,13 @@ use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
+use OCA\ERP\Db\ArticleMapper;
+use OCA\ERP\Db\ArticleSupplierPriceMapper;
 use OCA\ERP\Db\ProjectMapper;
+use OCA\ERP\Db\StockLevelMapper;
+use OCA\ERP\Db\StockMovementMapper;
+use OCA\ERP\Db\WarehouseMapper;
+use OCA\ERP\Service\ArticleService;
 use OCA\ERP\Service\CompanyProfileService;
 use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\DeliveryNoteService;
@@ -21,6 +27,8 @@ use OCA\ERP\Service\DocumentPdfService;
 use OCA\ERP\Service\ErpFolderService;
 use OCA\ERP\Service\OrderService;
 use OCA\ERP\Service\ProjectService;
+use OCA\ERP\Service\StockService;
+use OCA\ERP\Service\WarehouseService;
 use OCP\Contacts\IManager as IContactsManager;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
@@ -45,6 +53,8 @@ final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 	private OrderPositionMapper $orderPositionMapper;
 	private OrderGroupMapper $orderGroupMapper;
 	private ProjectMapper $projectMapper;
+	private StockService $stockService;
+	private StockLevelMapper $stockLevelMapper;
 	private IUser $user;
 	private int $projectId;
 
@@ -58,6 +68,8 @@ final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 		$this->orderPositionMapper = new OrderPositionMapper($db);
 		$this->orderGroupMapper = new OrderGroupMapper($db);
 		$this->projectMapper = new ProjectMapper($db);
+		$this->stockLevelMapper = new StockLevelMapper($db);
+		$this->stockService = new StockService($this->stockLevelMapper, new StockMovementMapper($db));
 		$folderService = new ErpFolderService(\OC::$server->get(IRootFolder::class));
 		$projectService = new ProjectService($this->projectMapper, $folderService);
 		$htmlBuilder = new DocumentHtmlBuilder(
@@ -76,6 +88,7 @@ final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 			new DocumentPdfService(),
 			$htmlBuilder,
 			$db,
+			$this->stockService,
 		);
 
 		$userManager = \OC::$server->get(IUserManager::class);
@@ -325,5 +338,60 @@ final class DeliveryNoteServiceTest extends ErpIntegrationTestCase {
 
 		$full = $this->service->getFull($deliveryNote->getId());
 		$this->assertSame(2.0, $full['positions'][0]->getQuantity());
+	}
+
+	/**
+	 * ADR-0039: Eine gelieferte Teilmenge einer reservierten Artikel-
+	 * Position wird aus der Reservierung freigegeben und — mit
+	 * übergebenem $createdByUserId — als echter Warenabgang gebucht.
+	 */
+	public function testCreateFromOrderReleasesReservationAndBooksConsumption(): void {
+		$db = \OC::$server->get(IDBConnection::class);
+		$articleMapper = new ArticleMapper($db);
+		$articleService = new ArticleService($articleMapper, new ArticleSupplierPriceMapper($db), new ContactLinkMapper($db));
+		$warehouseMapper = new WarehouseMapper($db);
+		$warehouseService = new WarehouseService($warehouseMapper, $this->projectMapper);
+
+		$article = $articleService->create('phpunit-dn-reserve-article', null, null, 'Stk', null, null, null);
+		$warehouse = $warehouseService->create('phpunit-dn-reserve-warehouse', 'central', null, null);
+
+		$order = new \OCA\ERP\Db\Order();
+		$order->setProjectId($this->projectId);
+		$order->setTitle('phpunit-order-reserve-for-dn');
+		$order->setStatus('draft');
+		$order->setCreatedAt(time());
+		$order->setUpdatedAt(time());
+		$order = $this->orderMapper->insert($order);
+
+		$position = new \OCA\ERP\Db\OrderPosition();
+		$position->setOrderId($order->getId());
+		$position->setPositionType('article');
+		$position->setReferenceId($article->getId());
+		$position->setDescription('Testposition');
+		$position->setQuantity(5.0);
+		$position->setUnit('Stk');
+		$position->setUnitPriceNet(10.0);
+		$position->setVatRatePercent(19.0);
+		$position->setWarehouseId($warehouse->getId());
+		$position = $this->orderPositionMapper->insert($position);
+
+		$this->stockService->recordMovement($article->getId(), $warehouse->getId(), 5.0, 'receipt', null, null, self::TEST_UID, null);
+		$this->stockService->reserve($article->getId(), $warehouse->getId(), 5.0);
+
+		$this->service->createFromOrder($order->getId(), [
+			['orderPositionId' => $position->getId(), 'quantity' => 3.0],
+		], null, self::TEST_UID);
+
+		$level = $this->stockLevelMapper->findOne($article->getId(), $warehouse->getId());
+		$this->assertSame(2.0, $level->getQuantityReserved());
+		$this->assertSame(2.0, $level->getQuantityOnHand());
+
+		// Aufräumen der zusätzlichen, hier lokal angelegten Entitäten.
+		$this->stockLevelMapper->delete($level);
+		foreach ((new \OCA\ERP\Db\StockMovementMapper($db))->findByArticleAndWarehouse($article->getId(), $warehouse->getId()) as $movement) {
+			(new \OCA\ERP\Db\StockMovementMapper($db))->delete($movement);
+		}
+		$warehouseMapper->delete($warehouse);
+		$articleMapper->delete($article);
 	}
 }

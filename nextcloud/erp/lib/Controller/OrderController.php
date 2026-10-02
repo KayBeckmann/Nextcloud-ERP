@@ -14,6 +14,7 @@ use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSBadRequestException;
 use OCP\AppFramework\OCS\OCSForbiddenException;
 use OCP\AppFramework\OCS\OCSNotFoundException;
+use OCP\AppFramework\OCS\OCSPreconditionFailedException;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUser;
@@ -137,13 +138,14 @@ class OrderController extends OCSController {
 		?int $referenceId = null,
 		string $unit = 'Stk',
 		float $discountPercent = 0.0,
+		?int $warehouseId = null,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($description) === '') {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->orderService->addPosition($orderId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
+			return new DataResponse($this->orderService->addPosition($orderId, $groupId, $positionType, $referenceId, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent, $warehouseId));
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Order $orderId not found");
 		} catch (\InvalidArgumentException $e) {
@@ -162,19 +164,22 @@ class OrderController extends OCSController {
 		float $vatRatePercent,
 		string $unit = 'Stk',
 		float $discountPercent = 0.0,
+		?int $warehouseId = null,
 	): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
 		if (trim($description) === '') {
 			throw new OCSBadRequestException('description must not be empty');
 		}
 		try {
-			return new DataResponse($this->orderService->updatePosition($orderId, $id, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
+			return new DataResponse($this->orderService->updatePosition($orderId, $id, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent, $warehouseId));
 		} catch (\OutOfBoundsException $e) {
 			throw new OCSNotFoundException($e->getMessage());
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
 		}
 	}
 
-	/** @throws OCSNotFoundException */
+	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function removePosition(int $orderId, int $id): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
@@ -182,6 +187,8 @@ class OrderController extends OCSController {
 			$this->orderService->removePosition($orderId, $id);
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Position $id not found in order $orderId");
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
 		}
 		return new DataResponse([]);
 	}

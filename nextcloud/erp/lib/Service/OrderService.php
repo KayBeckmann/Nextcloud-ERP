@@ -42,6 +42,7 @@ class OrderService {
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
+		private StockService $stockService,
 	) {
 	}
 
@@ -246,6 +247,11 @@ class OrderService {
 	 * @throws \OutOfBoundsException wenn der Auftrag oder die Gruppe nicht existiert
 	 * @throws \InvalidArgumentException wenn positionType unbekannt ist
 	 */
+	/**
+	 * @throws \OutOfBoundsException
+	 * @throws \InvalidArgumentException wenn positionType unbekannt ist oder
+	 *         $warehouseId bei einem Nicht-Artikel-Typ gesetzt ist
+	 */
 	public function addPosition(
 		int $orderId,
 		?int $groupId,
@@ -257,6 +263,7 @@ class OrderService {
 		float $unitPriceNet,
 		float $vatRatePercent,
 		float $discountPercent = 0.0,
+		?int $warehouseId = null,
 	): OrderPosition {
 		$this->getOrder($orderId);
 		if ($groupId !== null && $this->groupMapper->findOne($orderId, $groupId) === null) {
@@ -264,6 +271,13 @@ class OrderService {
 		}
 		if (!in_array($positionType, self::VALID_POSITION_TYPES, true)) {
 			throw new \InvalidArgumentException('positionType must be one of: ' . implode(', ', self::VALID_POSITION_TYPES));
+		}
+		// Reservierung (ADR-0039) ergibt nur für echte Artikel Sinn — ein
+		// 'product' bündelt mehrere Artikel/Arbeitszeit (ADR-0011), deren
+		// Bestand hier nicht automatisch aufgelöst wird (siehe ADR-0039
+		// "Nicht Teil dieser Phase"); 'labor'/'custom' haben nie Bestand.
+		if ($warehouseId !== null && $positionType !== 'article') {
+			throw new \InvalidArgumentException("warehouseId is only valid for positionType 'article'");
 		}
 
 		$position = new OrderPosition();
@@ -277,14 +291,27 @@ class OrderService {
 		$position->setUnitPriceNet($unitPriceNet);
 		$position->setVatRatePercent($vatRatePercent);
 		$position->setDiscountPercent($discountPercent);
+		$position->setWarehouseId($warehouseId);
 		$position->setPositionOrder(count($this->positionMapper->findByOrder($orderId)));
-		return $this->positionMapper->insert($position);
+		$position = $this->positionMapper->insert($position);
+
+		if ($warehouseId !== null && $referenceId !== null) {
+			$this->stockService->reserve($referenceId, $warehouseId, $quantity);
+		}
+
+		return $position;
 	}
 
 	/**
-	 * Bereits angelegte Position korrigieren (ADR-0022).
+	 * Bereits angelegte Position korrigieren (ADR-0022). `warehouseId`
+	 * folgt der üblichen PUT-Ersetzungs-Semantik dieser API (wie bei
+	 * anderen optionalen Feldern, z. B. CompanyProfileService::update()):
+	 * weglassen/`null` ersetzt eine ggf. bestehende Lagerauswahl durch
+	 * "keine" und gibt die bisherige Reservierung frei (ADR-0039).
 	 *
 	 * @throws \OutOfBoundsException
+	 * @throws \InvalidArgumentException wenn $warehouseId bei einem
+	 *         Nicht-Artikel-Typ gesetzt ist
 	 */
 	public function updatePosition(
 		int $orderId,
@@ -295,18 +322,38 @@ class OrderService {
 		float $unitPriceNet,
 		float $vatRatePercent,
 		float $discountPercent = 0.0,
+		?int $warehouseId = null,
 	): OrderPosition {
 		$position = $this->positionMapper->findOne($orderId, $id);
 		if ($position === null) {
 			throw new \OutOfBoundsException("Position $id not found in order $orderId");
 		}
+		if ($warehouseId !== null && $position->getPositionType() !== 'article') {
+			throw new \InvalidArgumentException("warehouseId is only valid for positionType 'article'");
+		}
+
+		$previousWarehouseId = $position->getWarehouseId();
+		$previousQuantity = $position->getQuantity();
+
 		$position->setDescription($description);
 		$position->setQuantity($quantity);
 		$position->setUnit($unit !== '' ? $unit : 'Stk');
 		$position->setUnitPriceNet($unitPriceNet);
 		$position->setVatRatePercent($vatRatePercent);
 		$position->setDiscountPercent($discountPercent);
-		return $this->positionMapper->update($position);
+		$position->setWarehouseId($warehouseId);
+		$position = $this->positionMapper->update($position);
+
+		if ($position->getReferenceId() !== null) {
+			if ($previousWarehouseId !== null) {
+				$this->stockService->release($position->getReferenceId(), $previousWarehouseId, $previousQuantity);
+			}
+			if ($warehouseId !== null) {
+				$this->stockService->reserve($position->getReferenceId(), $warehouseId, $quantity);
+			}
+		}
+
+		return $position;
 	}
 
 	/** @throws \OutOfBoundsException */
@@ -314,6 +361,9 @@ class OrderService {
 		$position = $this->positionMapper->findOne($orderId, $id);
 		if ($position === null) {
 			throw new \OutOfBoundsException("Position $id not found in order $orderId");
+		}
+		if ($position->getWarehouseId() !== null && $position->getReferenceId() !== null) {
+			$this->stockService->release($position->getReferenceId(), $position->getWarehouseId(), $position->getQuantity());
 		}
 		$this->positionMapper->delete($position);
 	}

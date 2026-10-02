@@ -32,7 +32,7 @@
 					<h3>{{ g.title }}</h3>
 					<table>
 						<thead>
-							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>Rabatt</th><th>MwSt.</th><th>Berechnet</th><th>Geliefert</th><th></th></tr>
+							<tr><th>Typ</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>EP netto</th><th>Rabatt</th><th>MwSt.</th><th>Lager</th><th>Berechnet</th><th>Geliefert</th><th></th></tr>
 						</thead>
 						<tbody>
 							<template v-for="p in g.positions" :key="p.id">
@@ -44,6 +44,7 @@
 									<td>{{ formatMoney(p.unitPriceNet) }}</td>
 									<td>{{ p.discountPercent > 0 ? p.discountPercent + ' %' : '—' }}</td>
 									<td>{{ p.vatRatePercent }}%</td>
+									<td>{{ warehouseName(p.warehouseId) }}</td>
 									<td>{{ p.invoicedQuantity }} / {{ p.quantity }}</td>
 									<td>{{ p.deliveredQuantity }} / {{ p.quantity }}</td>
 									<td>
@@ -63,6 +64,13 @@
 											<option v-for="v in vatRates" :key="v.id" :value="v.percentage">{{ v.name }}</option>
 										</select>
 									</td>
+									<td>
+										<select v-if="p.positionType === 'article'" v-model.number="editPosition.warehouseId">
+											<option :value="null">Kein Lager</option>
+											<option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+										</select>
+										<span v-else>—</span>
+									</td>
 									<td>—</td>
 									<td>—</td>
 									<td>
@@ -81,7 +89,7 @@
 						<option :value="null">Ohne Gruppe</option>
 						<option v-for="grp in order.groups" :key="grp.id" :value="grp.id">{{ grp.title }}</option>
 					</select>
-					<select v-model="newPosition.positionType" @change="newPosition.referenceId = null">
+					<select v-model="newPosition.positionType" @change="newPosition.referenceId = null; newPosition.warehouseId = null">
 						<option value="custom">Freitext</option>
 						<option value="article">Artikel</option>
 						<option value="product">Produkt</option>
@@ -90,6 +98,10 @@
 					<select v-if="newPosition.positionType === 'article'" v-model.number="newPosition.referenceId" @change="applyReferencePrefill">
 						<option :value="null">Artikel wählen …</option>
 						<option v-for="a in articles" :key="a.id" :value="a.id">{{ a.name }}</option>
+					</select>
+					<select v-if="newPosition.positionType === 'article'" v-model.number="newPosition.warehouseId">
+						<option :value="null">Kein Lager (keine Reservierung)</option>
+						<option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
 					</select>
 					<select v-if="newPosition.positionType === 'product'" v-model.number="newPosition.referenceId" @change="applyReferencePrefill">
 						<option :value="null">Produkt wählen …</option>
@@ -184,6 +196,7 @@ import { createInvoice, createInvoiceFromOrder, addInvoicePosition } from '../se
 import { fetchVatRates, fetchWorkTypes } from '../services/settingsApi.js'
 import { fetchArticles } from '../services/articlesApi.js'
 import { fetchProducts } from '../services/productsApi.js'
+import { fetchWarehouses } from '../services/warehouseApi.js'
 import ContactPicker from '../components/ContactPicker.vue'
 import UserPicker from '../components/UserPicker.vue'
 import { generateUrl } from '@nextcloud/router'
@@ -205,12 +218,13 @@ export default {
 			articles: [],
 			products: [],
 			workTypes: [],
+			warehouses: [],
 			loadError: null,
 			convertError: null,
 			convertSuccess: null,
 			edit: { title: '', status: 'draft', customerContactUid: null, assignedUserId: null, description: '', discountPercent: 0 },
 			statusOptions: Object.keys(STATUS_LABELS),
-			newPosition: { groupId: null, positionType: 'custom', referenceId: null, description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19 },
+			newPosition: { groupId: null, positionType: 'custom', referenceId: null, description: '', quantity: 1, unit: 'Stk', unitPriceNet: 0, vatRatePercent: 19, warehouseId: null },
 			newGroupTitle: '',
 			editingPositionId: null,
 			editPosition: {},
@@ -243,11 +257,12 @@ export default {
 	},
 	async mounted() {
 		await this.load()
-		;[this.vatRates, this.articles, this.products, this.workTypes] = await Promise.all([
+		;[this.vatRates, this.articles, this.products, this.workTypes, this.warehouses] = await Promise.all([
 			fetchVatRates(),
 			fetchArticles(),
 			fetchProducts(),
 			fetchWorkTypes(),
+			fetchWarehouses(),
 		])
 		if (this.vatRates.length) {
 			const def = this.vatRates.find((v) => v.isDefault)?.percentage ?? this.vatRates[0].percentage
@@ -276,6 +291,12 @@ export default {
 		},
 		errorMessage(e) {
 			return e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+		},
+		warehouseName(id) {
+			if (!id) {
+				return '—'
+			}
+			return this.warehouses.find((w) => w.id === id)?.name ?? id
 		},
 		applyReferencePrefill() {
 			const { positionType, referenceId } = this.newPosition
@@ -350,7 +371,7 @@ export default {
 		async submitPosition() {
 			try {
 				await addOrderPosition(this.id, this.newPosition)
-				this.newPosition = { ...this.newPosition, referenceId: null, description: '', quantity: 1, unitPriceNet: 0 }
+				this.newPosition = { ...this.newPosition, referenceId: null, description: '', quantity: 1, unitPriceNet: 0, warehouseId: null }
 				await this.load()
 			} catch (e) {
 				this.loadError = this.errorMessage(e)
@@ -378,6 +399,7 @@ export default {
 				unitPriceNet: p.unitPriceNet,
 				vatRatePercent: p.vatRatePercent,
 				discountPercent: p.discountPercent || 0,
+				warehouseId: p.warehouseId ?? null,
 			}
 		},
 		cancelEditPos() {

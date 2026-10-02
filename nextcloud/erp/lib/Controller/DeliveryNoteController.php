@@ -69,9 +69,9 @@ class DeliveryNoteController extends AbstractResourceController {
 	 */
 	#[NoAdminRequired]
 	public function createFromOrder(int $orderId, array $positions, ?string $notes = null): DataResponse {
-		$this->requireLevel(PermissionLevel::Write);
+		$user = $this->requireLevel(PermissionLevel::Write);
 		try {
-			return new DataResponse($this->deliveryNoteService->createFromOrder($orderId, $positions, $notes));
+			return new DataResponse($this->deliveryNoteService->createFromOrder($orderId, $positions, $notes, $user->getUID()));
 		} catch (\OutOfBoundsException $e) {
 			throw new OCSNotFoundException($e->getMessage());
 		} catch (\InvalidArgumentException $e) {

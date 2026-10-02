@@ -41,6 +41,7 @@ class DeliveryNoteService {
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
 		private IDBConnection $db,
+		private StockService $stockService,
 	) {
 	}
 
@@ -108,12 +109,20 @@ class DeliveryNoteService {
 	 * veraltete Summe zu prüfen (TOCTOU-Lücke, ADR-0016 "Nicht Teil dieser
 	 * Phase").
 	 *
+	 * Löst seit ADR-0039 zusätzlich die automatische Reservierung auf: für
+	 * Artikel-Positionen mit Lagerauswahl (`OrderPosition::warehouseId`)
+	 * wird die gelieferte Menge aus der Reservierung freigegeben und — nur
+	 * wenn `$createdByUserId` übergeben wird — als echter Warenabgang
+	 * (`consumption`) gebucht. `$createdByUserId` ist bewusst optional
+	 * (Default `null`), damit bestehende Aufrufer ohne Bezug zu
+	 * Lager-Reservierungen unverändert funktionieren.
+	 *
 	 * @param array<int, array{orderPositionId: int, quantity: float}> $positions
 	 * @throws \OutOfBoundsException wenn Auftrag oder Auftragsposition nicht existiert
 	 * @throws \InvalidArgumentException wenn positions leer ist oder eine Menge <= 0 ist
 	 * @throws \DomainException wenn eine Position keine Ware ist oder die Restmenge überschritten wird
 	 */
-	public function createFromOrder(int $orderId, array $positions, ?string $notes): DeliveryNote {
+	public function createFromOrder(int $orderId, array $positions, ?string $notes, ?string $createdByUserId = null): DeliveryNote {
 		$order = $this->orderMapper->findById($orderId);
 		if ($order === null) {
 			throw new \OutOfBoundsException("Order $orderId not found");
@@ -193,6 +202,28 @@ class DeliveryNoteService {
 				$position->setPositionOrder(count($this->positionMapper->findByDeliveryNote($deliveryNote->getId())));
 				$position->setOrderPositionId($orderPosition->getId());
 				$this->positionMapper->insert($position);
+
+				// ADR-0039: gelieferte Menge aus der Reservierung freigeben
+				// und — sofern ein User zum Attribuieren übergeben wurde —
+				// als echten Warenabgang buchen.
+				if ($orderPosition->getPositionType() === 'article'
+					&& $orderPosition->getWarehouseId() !== null
+					&& $orderPosition->getReferenceId() !== null
+				) {
+					$this->stockService->release($orderPosition->getReferenceId(), $orderPosition->getWarehouseId(), $quantity);
+					if ($createdByUserId !== null) {
+						$this->stockService->recordMovement(
+							$orderPosition->getReferenceId(),
+							$orderPosition->getWarehouseId(),
+							-$quantity,
+							'consumption',
+							'delivery_note',
+							$deliveryNote->getId(),
+							$createdByUserId,
+							null,
+						);
+					}
+				}
 			}
 			$this->db->commit();
 		} catch (\Throwable $e) {
