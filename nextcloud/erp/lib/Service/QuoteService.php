@@ -186,7 +186,10 @@ class QuoteService {
 		return $this->groupMapper->insert($group);
 	}
 
-	/** @throws \OutOfBoundsException */
+	/**
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn das Angebot nicht mehr im Entwurf ist
+	 */
 	public function addPosition(
 		int $quoteId,
 		?int $groupId,
@@ -199,7 +202,7 @@ class QuoteService {
 		float $vatRatePercent,
 		float $discountPercent = 0.0,
 	): QuotePosition {
-		$this->getQuote($quoteId);
+		$this->requireDraft($this->getQuote($quoteId));
 		if ($groupId !== null && $this->groupMapper->findOne($quoteId, $groupId) === null) {
 			throw new \OutOfBoundsException("Group $groupId not found in quote $quoteId");
 		}
@@ -226,6 +229,7 @@ class QuoteService {
 	 * Korrekturwerte.
 	 *
 	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn das Angebot nicht mehr im Entwurf ist
 	 */
 	public function updatePosition(
 		int $quoteId,
@@ -237,6 +241,7 @@ class QuoteService {
 		float $vatRatePercent,
 		float $discountPercent = 0.0,
 	): QuotePosition {
+		$this->requireDraft($this->getQuote($quoteId));
 		$position = $this->positionMapper->findOne($quoteId, $id);
 		if ($position === null) {
 			throw new \OutOfBoundsException("Position $id not found in quote $quoteId");
@@ -250,12 +255,30 @@ class QuoteService {
 		return $this->positionMapper->update($position);
 	}
 
-	/** @throws \OutOfBoundsException */
+	/**
+	 * @throws \OutOfBoundsException
+	 * @throws \DomainException wenn das Angebot nicht mehr im Entwurf ist
+	 */
 	public function removePosition(int $quoteId, int $id): void {
+		$this->requireDraft($this->getQuote($quoteId));
 		$position = $this->positionMapper->findOne($quoteId, $id);
 		if ($position === null) {
 			throw new \OutOfBoundsException("Position $id not found in quote $quoteId");
 		}
 		$this->positionMapper->delete($position);
+	}
+
+	/**
+	 * Positionen eines Angebots sind nur im Entwurf änderbar (ADR-0035) —
+	 * analog zu InvoiceService::requireDraft(), hier aber kein
+	 * GoBD-Grund (Angebote sind keine GoBD-relevanten Belege, ADR-0013),
+	 * sondern eine Workflow-Integritätsregel: ein bereits versendetes
+	 * Angebot zeigt dem Kunden einen bestimmten Preis — nachträgliches
+	 * Ändern ohne dessen Wissen widerspräche dem Zweck des Versendens.
+	 */
+	private function requireDraft(Quote $quote): void {
+		if ($quote->getStatus() !== 'draft') {
+			throw new \DomainException("Quote {$quote->getId()} is not in status 'draft' — positions can only be changed while the quote is a draft");
+		}
 	}
 }

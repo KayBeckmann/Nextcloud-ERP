@@ -12,6 +12,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSBadRequestException;
 use OCP\AppFramework\OCS\OCSNotFoundException;
+use OCP\AppFramework\OCS\OCSPreconditionFailedException;
 use OCP\IRequest;
 use OCP\IUserSession;
 
@@ -106,7 +107,7 @@ class QuoteController extends AbstractResourceController {
 		}
 	}
 
-	/** @throws OCSBadRequestException|OCSNotFoundException */
+	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function addPosition(
 		int $quoteId,
@@ -142,10 +143,12 @@ class QuoteController extends AbstractResourceController {
 			));
 		} catch (\OutOfBoundsException $e) {
 			throw new OCSNotFoundException($e->getMessage());
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
 		}
 	}
 
-	/** @throws OCSBadRequestException|OCSNotFoundException */
+	/** @throws OCSBadRequestException|OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function updatePosition(
 		int $quoteId,
@@ -165,10 +168,12 @@ class QuoteController extends AbstractResourceController {
 			return new DataResponse($this->quoteService->updatePosition($quoteId, $id, $description, $quantity, $unit, $unitPriceNet, $vatRatePercent, $discountPercent));
 		} catch (\OutOfBoundsException $e) {
 			throw new OCSNotFoundException($e->getMessage());
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
 		}
 	}
 
-	/** @throws OCSNotFoundException */
+	/** @throws OCSNotFoundException|OCSPreconditionFailedException */
 	#[NoAdminRequired]
 	public function removePosition(int $quoteId, int $id): DataResponse {
 		$this->requireLevel(PermissionLevel::Write);
@@ -176,6 +181,8 @@ class QuoteController extends AbstractResourceController {
 			$this->quoteService->removePosition($quoteId, $id);
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Position $id not found");
+		} catch (\DomainException $e) {
+			throw new OCSPreconditionFailedException($e->getMessage());
 		}
 		return new DataResponse([]);
 	}
