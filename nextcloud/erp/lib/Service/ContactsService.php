@@ -285,6 +285,39 @@ class ContactsService {
 	}
 
 	/**
+	 * Strukturierte Anschrift für den EN16931/XRechnung-Käuferblock
+	 * (ADR-0040). Anders als detailsFor() werden Straße/PLZ/Ort/Land nicht zu
+	 * Anzeigezeilen zusammengefasst, sondern einzeln zurückgegeben, wie es das
+	 * EN16931-Datenmodell verlangt. Nutzt dieselbe vCard-ADR-Quelle wie
+	 * detailsFor() — keine eigene Adress-Datenhaltung im ERP-Schema.
+	 *
+	 * Bewusst ohne den ContactHistorySnapshotService-Fallback von
+	 * detailsFor(): ein gelöschter Kontakt liefert leere Felder, die die
+	 * nachgelagerte XRechnung-Validierung dann klar ablehnt, statt eine
+	 * unvollständige E-Rechnung aus einer historischen Anzeigezeile zu raten.
+	 *
+	 * @return array{displayName: string, street: string, postalCode: string, city: string, country: string}
+	 */
+	public function structuredAddressFor(string $contactUid): array {
+		foreach ($this->contactsManager->search($contactUid, ['UID']) as $r) {
+			if (($r['UID'] ?? null) !== $contactUid) {
+				continue;
+			}
+			$adr = $r['ADR'] ?? [];
+			$values = is_array($adr) ? $adr : [$adr];
+			$parts = $values === [] ? [] : explode(';', (string) $values[0]);
+			return [
+				'displayName' => $r['FN'] ?? $contactUid,
+				'street' => trim($parts[2] ?? ''),
+				'postalCode' => trim($parts[5] ?? ''),
+				'city' => trim($parts[3] ?? ''),
+				'country' => trim($parts[6] ?? ''),
+			];
+		}
+		return ['displayName' => $contactUid, 'street' => '', 'postalCode' => '', 'city' => '', 'country' => ''];
+	}
+
+	/**
 	 * @param list<string> $adrValues Rohe vCard-ADR-Werte, je Eintrag
 	 *     "Postfach;Zusatz;Straße;Ort;Region;PLZ;Land" (vCard-3/4-Struktur)
 	 * @return list<string>

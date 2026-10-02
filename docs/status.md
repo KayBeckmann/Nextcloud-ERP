@@ -828,9 +828,11 @@ sind per API editierbar, aber ohne UI dafür.
 - Echter PDF-Export für alle fünf Belegtypen ist seit Phase 12 vorhanden
   (ADR-0021), seit Phase 13 mit Firmenkopf, Kundenanschrift, Datum,
   Bindefrist (Angebot), gruppierten Positionen und Rabattzeilen (ADR-0022).
-  Weiterhin offen: kein XRechnung/ZUGFeRD (eigenes E-Rechnungsformat,
-  deutlich größeres Feature, siehe ADR-0038). ~~Keine vollständige § 14
-  UStG-Pflichtangaben-*Prüfung*~~ — seit 2026-10-02 vorhanden
+  ~~Kein XRechnung/ZUGFeRD~~ — seit 2026-10-02 vorhanden (ADR-0040):
+  `XRechnungService` erzeugt EN16931/XRechnung-XML und ein
+  ZUGFeRD-Hybrid-PDF für ausgestellte Rechnungen (`GET /export/
+  invoices/{id}/xrechnung.xml` bzw. `.../zugferd.pdf`).
+  ~~Keine vollständige § 14 UStG-Pflichtangaben-*Prüfung*~~ — seit 2026-10-02 vorhanden
   (ADR-0038): `missingMandatoryFields` prüft Name/Anschrift/PLZ-Ort/
   Steuernummer-oder-USt-IdNr. im Firmenprofil, rein informativ (Warnung
   in Firmenprofil + Dashboard, **kein Blocker** beim Ausstellen). Deckt
@@ -1486,7 +1488,8 @@ und als Dashboard-Kachel (`companyProfileMissingFields`, Muster wie
 bei fälligen TÜV-Terminen, ADR-0028).
 
 **Bewusst nicht Teil dieser ADR:** XRechnung/ZUGFeRD (eigenes,
-deutlich größeres E-Rechnungsformat-Feature); kein Leistungsdatum-Feld
+deutlich größeres E-Rechnungsformat-Feature — seit 2026-10-02
+umgesetzt, siehe ADR-0040); kein Leistungsdatum-Feld
 je Rechnung (fehlt als Feld komplett, keine Vollständigkeitsprüfung
 eines bestehenden Felds); keine Steuerbefreiungs-Angaben (§ 19 UStG).
 
@@ -1526,3 +1529,50 @@ möglich, unverändert).
 
 **Getestet:** 414 PHPUnit-Tests grün (407 → 414). Frontend-Build
 fehlerfrei (neue Lager-Spalte + Dropdown in `AuftragDetailView`).
+
+## 2026-10-02 — XRechnung/ZUGFeRD-Export ([ADR-0040](adr/0040-xrechnung-zugferd-export.md))
+
+**Erledigt:** für ein marktfähiges ERP zwingend benötigtes Feature,
+bei ADR-0038 bewusst ausgegrenzt und nun umgesetzt. Neuer
+`XRechnungService` erzeugt aus einer ausgestellten Rechnung
+EN16931/XRechnung-konforme CII-XML (Profil `PROFILE_XRECHNUNG_3`,
+Bibliothek `horstoeko/zugferd`) und ein ZUGFeRD-Hybrid-PDF (bettet die
+XML in die bereits gespeicherte Rechnungs-PDF ein, ADR-0013/0022).
+Neue, nicht-blockierende Download-Links in `RechnungDetailView`:
+"XRechnung (XML)" / "ZUGFeRD (PDF)", sichtbar sobald die Rechnung
+ausgestellt ist.
+
+**Nutzt ADR-0038 erstmals aktiv als Vorbedingung:**
+`CompanyProfileService::missingMandatoryFields()` war bisher rein
+informativ — der neue Export lehnt jetzt tatsächlich ab, wenn das
+Firmenprofil unvollständig ist, ebenso wenn der Kundenkontakt keine
+vollständige Straße/PLZ/Ort-Adresse hinterlegt hat. Neue, additive
+`ContactsService::structuredAddressFor()` liefert diese Felder einzeln
+statt als fertige Anzeigezeilen.
+
+**Nextclouds globales XXE-Hardening** (`lib/base.php`,
+`libxml_set_external_entity_loader`) blockierte zunächst auch die
+legitimen `xsd:import`-Verweise innerhalb der mitgelieferten
+EN16931-XSD-Dateien bei der Strukturvalidierung — `generateXml()`
+schaltet dafür kurz auf PHPs Standardverhalten zurück und stellt
+Nextclouds Sperre danach exakt wieder her (kein Sicherheitsrisiko, da
+nur selbst erzeugte XML gegen mitgelieferte Schema-Dateien geprüft
+wird).
+
+**Bewusst nicht Teil dieser ADR:** volle KoSIT-Schematron-
+Geschäftsregelprüfung (benötigt eine Java-Laufzeit, hier nur
+XSD-Strukturvalidierung); Beleg-Rabatt als eigene `AllowanceCharge`-
+Elemente je MwSt.-Satz auf Belegebene; unabhängige PDF/A-3-
+Zertifizierung; CreditNote-Export; echte §19-UStG-Kleinunternehmer-
+Befreiungsgründe.
+
+**Der reale Dev-DB-Testdatensatz des Firmenprofils fehlt** `country`,
+`vat_id`, `tax_number`, `iban`, `bic` — ohne diese Felder lehnt der
+Export mit klarer Fehlermeldung ab. Beabsichtigtes Verhalten; vor
+produktivem Einsatz muss das echte Firmenprofil vollständig gepflegt
+werden.
+
+**Getestet:** 433 PHPUnit-Tests grün (414 → 433, davon 19 neu: zwei
+Resolver-Unit-Tests sowie ein Integrationstest, der die erzeugte XML
+tatsächlich gegen die echte EN16931-XSD validiert). Frontend-Build
+fehlerfrei.
