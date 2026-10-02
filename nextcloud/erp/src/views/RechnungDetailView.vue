@@ -16,6 +16,10 @@
 				<p v-if="invoice.quoteId"><strong>Aus Angebot:</strong> #{{ invoice.quoteId }}</p>
 				<p><strong>Bezahlt:</strong> {{ formatMoney(invoice.paidAmount) }} / {{ invoice.calculation ? formatMoney(invoice.calculation.grossTotal) : '—' }}</p>
 				<p v-if="invoice.documentFileId"><a :href="openInFilesUrl(invoice.documentFileId)" target="_blank" rel="noopener">Rechnungsdokument öffnen</a></p>
+				<p v-if="invoice.status !== 'draft'" class="erp-invoice-detail__einvoice">
+					<a :href="xRechnungXmlUrl(invoice.id)" target="_blank" rel="noopener">XRechnung (XML)</a>
+					<span v-if="invoice.documentFileId"> · <a :href="zugferdPdfUrl(invoice.id)" target="_blank" rel="noopener">ZUGFeRD (PDF)</a></span>
+				</p>
 				<p v-if="invoice.status === 'draft'" class="erp-invoice-detail__discount">
 					<label>Rabatt auf gesamte Rechnung
 						<input v-model.number="discountPercent" type="number" step="0.01" min="0" max="100" style="max-width:100px"> %
@@ -411,6 +415,12 @@ export default {
 		},
 		documentPreviewUrl(fileId) {
 			return generateUrl(`/apps/erp/documents/${fileId}`)
+		},
+		xRechnungXmlUrl(invoiceId) {
+			return generateUrl(`/apps/erp/export/invoices/${invoiceId}/xrechnung.xml`)
+		},
+		zugferdPdfUrl(invoiceId) {
+			return generateUrl(`/apps/erp/export/invoices/${invoiceId}/zugferd.pdf`)
 		},
 		applyReferencePrefill() {
 			const { positionType, referenceId } = this.newPosition
