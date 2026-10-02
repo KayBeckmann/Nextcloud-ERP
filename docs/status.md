@@ -821,11 +821,15 @@ sind per API editierbar, aber ohne UI dafür.
 - Echter PDF-Export für alle fünf Belegtypen ist seit Phase 12 vorhanden
   (ADR-0021), seit Phase 13 mit Firmenkopf, Kundenanschrift, Datum,
   Bindefrist (Angebot), gruppierten Positionen und Rabattzeilen (ADR-0022).
-  Weiterhin offen: kein XRechnung/ZUGFeRD, keine vollständige § 14
-  UStG-Pflichtangaben-*Prüfung* (die Felder lassen sich zwar im
-  Firmenprofil pflegen, es gibt aber keine automatische Vollständigkeits-
-  kontrolle) — siehe ADR-0013. **Vor produktivem Rechnungsversand an
-  Kunden zwingend gegenzuprüfen.**
+  Weiterhin offen: kein XRechnung/ZUGFeRD (eigenes E-Rechnungsformat,
+  deutlich größeres Feature, siehe ADR-0038). ~~Keine vollständige § 14
+  UStG-Pflichtangaben-*Prüfung*~~ — seit 2026-10-02 vorhanden
+  (ADR-0038): `missingMandatoryFields` prüft Name/Anschrift/PLZ-Ort/
+  Steuernummer-oder-USt-IdNr. im Firmenprofil, rein informativ (Warnung
+  in Firmenprofil + Dashboard, **kein Blocker** beim Ausstellen). Deckt
+  nicht das fehlende Leistungsdatum-Feld und keine
+  Steuerbefreiungs-Angaben ab. **Vor produktivem Rechnungsversand an
+  Kunden weiterhin zwingend gegenzuprüfen.**
 - ~~Gutschrift-Positionen sind zwar per API editierbar, aber ohne UI
   dafür~~ — seit 2026-10-02 vorhanden (ADR-0034): die Teilkorrektur-
   Maske legt nur noch den Entwurf an, eine neue Entwurf-Review-Zeile
@@ -1454,3 +1458,29 @@ frontend-seitige ADR nicht verursacht und nicht geschlossen.
 **Noch offen:** Kein Bearbeiten/Löschen eines ganzen Vertrags (API
 bietet dafür keinen Endpunkt); keine Live-Vorschau der Satz-Auflösung
 in dieser UI — siehe ADR-0037 "Nicht Teil dieser Phase".
+
+## 2026-10-02 — Vollständigkeitsprüfung der § 14 UStG-Pflichtangaben ([ADR-0038](adr/0038-firmenprofil-pflichtangaben-pruefung.md))
+
+**Erledigt:** Nächste der in "Bekannte Einschränkungen" dokumentierten
+Positionen geschlossen — den Prüfungs-Teil. `CompanyProfileService::
+missingMandatoryFields()` prüft Name/Anschrift/PLZ-Ort sowie
+Steuernummer-oder-USt-IdNr. im Firmenprofil. **Rein informativ, kein
+Blocker** beim Ausstellen — bewusst kein Hard-Block in
+`InvoiceService::issue()`, um Kays laufende Rechnungsstellung nicht
+ungefragt zu unterbrechen. Warnung erscheint im Firmenprofil-Formular
+und als Dashboard-Kachel (`companyProfileMissingFields`, Muster wie
+bei fälligen TÜV-Terminen, ADR-0028).
+
+**Bewusst nicht Teil dieser ADR:** XRechnung/ZUGFeRD (eigenes,
+deutlich größeres E-Rechnungsformat-Feature); kein Leistungsdatum-Feld
+je Rechnung (fehlt als Feld komplett, keine Vollständigkeitsprüfung
+eines bestehenden Felds); keine Steuerbefreiungs-Angaben (§ 19 UStG).
+
+**Nebenbefund, nicht behoben:** `CompanyProfileService` hatte (wie
+`RateService`/`CustomerContractService`, ADR-0037) bisher keine
+eigenen Tests — jetzt mit `CompanyProfileServiceTest.php` nachgerüstet
+(als Singleton-Tabelle mit Sicherung/Wiederherstellung der real
+vorhandenen Zeile).
+
+**Getestet:** 407 PHPUnit-Tests grün (403 → 407). Frontend-Build
+fehlerfrei.
