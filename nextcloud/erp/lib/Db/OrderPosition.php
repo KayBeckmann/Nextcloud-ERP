@@ -29,6 +29,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setPositionOrder(int $positionOrder)
  * @method float getDiscountPercent()
  * @method void setDiscountPercent(float $discountPercent)
+ * @method int|null getWarehouseId()
+ * @method void setWarehouseId(?int $warehouseId)
  */
 class OrderPosition extends Entity implements \JsonSerializable {
 	protected int $orderId = 0;
@@ -47,6 +49,9 @@ class OrderPosition extends Entity implements \JsonSerializable {
 	protected int $positionOrder = 0;
 	// Rabatt auf diese Position (ADR-0022), wirkt vor der MwSt.-Berechnung.
 	protected float $discountPercent = 0.0;
+	// Lager für die automatische Reservierung (ADR-0039) — nur für
+	// positionType='article' fachlich relevant, siehe OrderService.
+	protected ?int $warehouseId = null;
 
 	public function __construct() {
 		$this->addType('id', 'integer');
@@ -58,6 +63,7 @@ class OrderPosition extends Entity implements \JsonSerializable {
 		$this->addType('vatRatePercent', 'float');
 		$this->addType('positionOrder', 'integer');
 		$this->addType('discountPercent', 'float');
+		$this->addType('warehouseId', 'integer');
 	}
 
 	public function jsonSerialize(): array {
@@ -74,6 +80,7 @@ class OrderPosition extends Entity implements \JsonSerializable {
 			'vatRatePercent' => $this->getVatRatePercent(),
 			'positionOrder' => $this->getPositionOrder(),
 			'discountPercent' => $this->getDiscountPercent(),
+			'warehouseId' => $this->getWarehouseId(),
 			'netTotal' => round($this->getQuantity() * $this->getUnitPriceNet() * (1 - $this->getDiscountPercent() / 100), 2),
 		];
 	}
