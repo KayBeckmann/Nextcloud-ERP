@@ -73,6 +73,22 @@
 								<input v-model="newPerson.phone" placeholder="Telefon">
 								<button :disabled="savingPerson">Ansprechpartner hinzufügen</button>
 							</form>
+
+							<template v-if="(personsByLinkId[card.link.id] || []).length">
+								<h4>Standard je Belegtyp</h4>
+								<p class="erp-contacts__hint">Wer bekommt welchen Belegtyp dieser Firma standardmäßig zugesendet (z. Hd.) — im einzelnen Projekt überschreibbar.</p>
+								<ul class="erp-contacts__person-defaults">
+									<li v-for="type in documentTypes" :key="type.value">
+										<label>
+											{{ type.label }}
+											<select :value="personDefaultsByLinkId[card.link.id]?.[type.value] ?? ''" :disabled="savingPerson" @change="setPersonDefault(card.link.id, type.value, $event.target.value)">
+												<option value="">— kein Standard —</option>
+												<option v-for="person in personsByLinkId[card.link.id]" :key="person.id" :value="person.id">{{ person.name }}</option>
+											</select>
+										</label>
+									</li>
+								</ul>
+							</template>
 						</li>
 					</template>
 				</ul>
@@ -110,11 +126,12 @@
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import { createContactCard, createContactLink, createContactPerson, deleteContactCard, deleteContactLink, deleteContactPerson, fetchContactCards, fetchContactLinks, fetchContactPersons, searchContacts, updateContactCard, updateContactLink, updateContactPerson } from '../services/contactsApi.js'
+import { createContactCard, createContactLink, createContactPerson, deleteContactCard, deleteContactLink, deleteContactPerson, fetchContactCards, fetchContactLinks, fetchContactPersonDefaults, fetchContactPersons, searchContacts, setContactPersonDefault, updateContactCard, updateContactLink, updateContactPerson } from '../services/contactsApi.js'
 import { contactCardDraft, contactCardPayload, emptyContactCard, userFacingContactCardError } from '../services/contactCards.mjs'
 import { acceptsContactRoleReload, beginContactRoleReload } from '../services/contactRoleReload.mjs'
 import { mergeRoleContacts } from '../services/contactRoleList.mjs'
 import { contactRoleFields } from '../services/contactRoleFields.mjs'
+import { DOCUMENT_TYPES } from '../services/documentTypes.mjs'
 
 function emptyPerson() {
 	return { name: '', position: '', email: '', phone: '' }
@@ -143,11 +160,13 @@ export default {
 			contactsUrl: generateUrl('/apps/contacts'),
 			newContact: emptyContactCard(),
 			personsByLinkId: {},
+			personDefaultsByLinkId: {},
 			expandedLinkId: null,
 			newPerson: emptyPerson(),
 			editingPersonId: null,
 			editPerson: emptyPerson(),
 			savingPerson: false,
+			documentTypes: DOCUMENT_TYPES,
 		}
 	},
 	async mounted() {
@@ -173,6 +192,7 @@ export default {
 			this.isForbidden = false
 			this.cancelEdit()
 			this.personsByLinkId = {}
+			this.personDefaultsByLinkId = {}
 			this.expandedLinkId = null
 			this.cancelEditPerson()
 			await Promise.all([this.loadCards(revision), this.loadLinks(revision)])
@@ -307,6 +327,7 @@ export default {
 			}
 			this.expandedLinkId = linkId
 			if (!this.personsByLinkId[linkId]) await this.loadPersons(linkId)
+			if (!this.personDefaultsByLinkId[linkId]) await this.loadPersonDefaults(linkId)
 		},
 		async loadPersons(linkId) {
 			try {
@@ -314,6 +335,25 @@ export default {
 				this.personsByLinkId = { ...this.personsByLinkId, [linkId]: persons }
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		async loadPersonDefaults(linkId) {
+			try {
+				const defaults = await fetchContactPersonDefaults(linkId)
+				this.personDefaultsByLinkId = { ...this.personDefaultsByLinkId, [linkId]: defaults }
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		async setPersonDefault(linkId, documentType, contactPersonId) {
+			this.savingPerson = true
+			try {
+				const defaults = await setContactPersonDefault(linkId, documentType, contactPersonId === '' ? null : Number(contactPersonId))
+				this.personDefaultsByLinkId = { ...this.personDefaultsByLinkId, [linkId]: defaults }
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			} finally {
+				this.savingPerson = false
 			}
 		},
 		async addPerson(linkId) {
@@ -472,6 +512,20 @@ export default {
 }
 .erp-contacts__new-person input {
 	flex: 1 1 140px;
+}
+.erp-contacts__person-defaults {
+	list-style: none;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 8px 0 0;
+}
+.erp-contacts__person-defaults label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 13px;
 }
 .erp-contacts__results li {
 	display: flex;

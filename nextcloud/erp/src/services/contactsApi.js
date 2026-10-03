@@ -67,3 +67,13 @@ export async function updateContactPerson(id, payload) {
 export async function deleteContactPerson(id) {
 	await axios.delete(generateOcsUrl('apps/erp/api/v1/contacts/links/persons/{id}', { id }))
 }
+
+export async function fetchContactPersonDefaults(contactLinkId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/contacts/links/{contactLinkId}/person-defaults', { contactLinkId }))
+	return data.ocs.data
+}
+
+export async function setContactPersonDefault(contactLinkId, documentType, contactPersonId) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/contacts/links/{contactLinkId}/person-defaults/{documentType}', { contactLinkId, documentType }), { contactPersonId })
+	return data.ocs.data
+}
