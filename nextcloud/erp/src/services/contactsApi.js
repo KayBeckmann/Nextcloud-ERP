@@ -48,3 +48,22 @@ export async function updateContactLink(id, payload) {
 export async function deleteContactLink(id) {
 	await axios.delete(generateOcsUrl('apps/erp/api/v1/contacts/links/{id}', { id }))
 }
+
+export async function fetchContactPersons(contactLinkId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/contacts/links/{contactLinkId}/persons', { contactLinkId }))
+	return data.ocs.data
+}
+
+export async function createContactPerson(contactLinkId, payload) {
+	const { data } = await axios.post(generateOcsUrl('apps/erp/api/v1/contacts/links/{contactLinkId}/persons', { contactLinkId }), payload)
+	return data.ocs.data
+}
+
+export async function updateContactPerson(id, payload) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/contacts/links/persons/{id}', { id }), payload)
+	return data.ocs.data
+}
+
+export async function deleteContactPerson(id) {
+	await axios.delete(generateOcsUrl('apps/erp/api/v1/contacts/links/persons/{id}', { id }))
+}

@@ -28,14 +28,53 @@
 				<h3>{{ title }}</h3>
 				<p v-if="!roleContacts.length">Noch keine Kontakte in diesem {{ title }}-Adressbuch.</p>
 				<ul v-else class="erp-contacts__cards">
-					<li v-for="card in roleContacts" :key="card.uid">
-						<div>
-							<strong>{{ card.displayName }}</strong>
-							<span v-if="card.link" class="erp-contacts__email">{{ card.link.referenceNumber || 'ERP-verknüpft' }}</span>
-						</div>
-						<button :disabled="saving" @click="startEdit(card)">Bearbeiten</button>
-						<button :disabled="saving" @click="confirmDeleteCard(card)">Löschen</button>
-					</li>
+					<template v-for="card in roleContacts" :key="card.uid">
+						<li>
+							<div>
+								<strong>{{ card.displayName }}</strong>
+								<span v-if="card.link" class="erp-contacts__email">{{ card.link.referenceNumber || 'ERP-verknüpft' }}</span>
+							</div>
+							<button :disabled="saving" @click="startEdit(card)">Bearbeiten</button>
+							<button v-if="card.link" :disabled="saving" @click="togglePersons(card)">
+								Ansprechpartner<template v-if="personsByLinkId[card.link.id]"> ({{ personsByLinkId[card.link.id].length }})</template>
+							</button>
+							<button :disabled="saving" @click="confirmDeleteCard(card)">Löschen</button>
+						</li>
+						<li v-if="card.link && expandedLinkId === card.link.id" class="erp-contacts__persons-panel">
+							<h4>Ansprechpartner: {{ card.displayName }}</h4>
+							<p v-if="!(personsByLinkId[card.link.id] || []).length">Noch keine Ansprechpartner erfasst.</p>
+							<ul v-else class="erp-contacts__persons-list">
+								<li v-for="person in personsByLinkId[card.link.id]" :key="person.id">
+									<template v-if="editingPersonId === person.id">
+										<input v-model="editPerson.name" required placeholder="Name">
+										<input v-model="editPerson.position" placeholder="Position (z. B. Geschäftsführer)">
+										<input v-model="editPerson.email" type="email" placeholder="E-Mail">
+										<input v-model="editPerson.phone" placeholder="Telefon">
+										<button type="button" :disabled="savingPerson" @click="saveEditPerson(card.link.id)">Speichern</button>
+										<button type="button" :disabled="savingPerson" @click="cancelEditPerson">Abbrechen</button>
+									</template>
+									<template v-else>
+										<span>
+											<strong>{{ person.name }}</strong>
+											<template v-if="person.position"> — {{ person.position }}</template>
+										</span>
+										<span v-if="person.email || person.phone" class="erp-contacts__email">
+											{{ [person.email, person.phone].filter(Boolean).join(' · ') }}
+										</span>
+										<button type="button" :disabled="savingPerson" @click="startEditPerson(person)">Bearbeiten</button>
+										<button type="button" :disabled="savingPerson" @click="deletePersonConfirm(card.link.id, person)">Löschen</button>
+									</template>
+								</li>
+							</ul>
+							<form class="erp-contacts__new-person" @submit.prevent="addPerson(card.link.id)">
+								<input v-model="newPerson.name" required placeholder="Name">
+								<input v-model="newPerson.position" placeholder="Position (z. B. Geschäftsführer)">
+								<input v-model="newPerson.email" type="email" placeholder="E-Mail">
+								<input v-model="newPerson.phone" placeholder="Telefon">
+								<button :disabled="savingPerson">Ansprechpartner hinzufügen</button>
+							</form>
+						</li>
+					</template>
 				</ul>
 				<form v-if="editingCard" class="erp-contacts__new-card erp-contacts__edit-card" @submit.prevent="saveCard">
 					<h4>Kontakt bearbeiten: {{ editingCard.displayName }}</h4>
@@ -71,11 +110,15 @@
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import { createContactCard, createContactLink, deleteContactCard, deleteContactLink, fetchContactCards, fetchContactLinks, searchContacts, updateContactCard, updateContactLink } from '../services/contactsApi.js'
+import { createContactCard, createContactLink, createContactPerson, deleteContactCard, deleteContactLink, deleteContactPerson, fetchContactCards, fetchContactLinks, fetchContactPersons, searchContacts, updateContactCard, updateContactLink, updateContactPerson } from '../services/contactsApi.js'
 import { contactCardDraft, contactCardPayload, emptyContactCard, userFacingContactCardError } from '../services/contactCards.mjs'
 import { acceptsContactRoleReload, beginContactRoleReload } from '../services/contactRoleReload.mjs'
 import { mergeRoleContacts } from '../services/contactRoleList.mjs'
 import { contactRoleFields } from '../services/contactRoleFields.mjs'
+
+function emptyPerson() {
+	return { name: '', position: '', email: '', phone: '' }
+}
 
 export default {
 	name: 'ContactLinksView',
@@ -99,6 +142,12 @@ export default {
 			reloadRevision: 0,
 			contactsUrl: generateUrl('/apps/contacts'),
 			newContact: emptyContactCard(),
+			personsByLinkId: {},
+			expandedLinkId: null,
+			newPerson: emptyPerson(),
+			editingPersonId: null,
+			editPerson: emptyPerson(),
+			savingPerson: false,
 		}
 	},
 	async mounted() {
@@ -123,6 +172,9 @@ export default {
 			this.loadError = null
 			this.isForbidden = false
 			this.cancelEdit()
+			this.personsByLinkId = {}
+			this.expandedLinkId = null
+			this.cancelEditPerson()
 			await Promise.all([this.loadCards(revision), this.loadLinks(revision)])
 		},
 		async loadCards(revision = this.reloadRevision) {
@@ -244,6 +296,87 @@ export default {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
 		},
+		async togglePersons(card) {
+			if (!card.link) return
+			const linkId = card.link.id
+			this.cancelEditPerson()
+			this.newPerson = emptyPerson()
+			if (this.expandedLinkId === linkId) {
+				this.expandedLinkId = null
+				return
+			}
+			this.expandedLinkId = linkId
+			if (!this.personsByLinkId[linkId]) await this.loadPersons(linkId)
+		},
+		async loadPersons(linkId) {
+			try {
+				const persons = await fetchContactPersons(linkId)
+				this.personsByLinkId = { ...this.personsByLinkId, [linkId]: persons }
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		async addPerson(linkId) {
+			if (!this.newPerson.name.trim()) return
+			this.savingPerson = true
+			try {
+				await createContactPerson(linkId, {
+					name: this.newPerson.name.trim(),
+					position: this.newPerson.position.trim() || null,
+					email: this.newPerson.email.trim() || null,
+					phone: this.newPerson.phone.trim() || null,
+				})
+				this.newPerson = emptyPerson()
+				await this.loadPersons(linkId)
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			} finally {
+				this.savingPerson = false
+			}
+		},
+		startEditPerson(person) {
+			this.editingPersonId = person.id
+			this.editPerson = {
+				name: person.name,
+				position: person.position ?? '',
+				email: person.email ?? '',
+				phone: person.phone ?? '',
+			}
+		},
+		cancelEditPerson() {
+			this.editingPersonId = null
+			this.editPerson = emptyPerson()
+		},
+		async saveEditPerson(linkId) {
+			if (!this.editPerson.name.trim()) return
+			this.savingPerson = true
+			try {
+				await updateContactPerson(this.editingPersonId, {
+					name: this.editPerson.name.trim(),
+					position: this.editPerson.position.trim() || null,
+					email: this.editPerson.email.trim() || null,
+					phone: this.editPerson.phone.trim() || null,
+				})
+				this.cancelEditPerson()
+				await this.loadPersons(linkId)
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			} finally {
+				this.savingPerson = false
+			}
+		},
+		async deletePersonConfirm(linkId, person) {
+			if (!window.confirm(`Ansprechpartner „${person.name}“ löschen?`)) return
+			this.savingPerson = true
+			try {
+				await deleteContactPerson(person.id)
+				await this.loadPersons(linkId)
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			} finally {
+				this.savingPerson = false
+			}
+		},
 	},
 }
 </script>
@@ -305,6 +438,40 @@ export default {
 .erp-contacts__edit-card {
 	padding-top: 12px;
 	border-top: 1px solid var(--color-border);
+}
+.erp-contacts__persons-panel {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+	background: var(--color-background-hover);
+	border-radius: 4px;
+	padding: 12px;
+}
+.erp-contacts__persons-panel h4 {
+	margin: 0;
+}
+.erp-contacts__persons-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.erp-contacts__persons-list li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--color-border);
+}
+.erp-contacts__persons-list li > span:first-child {
+	flex: 1 0 auto;
+}
+.erp-contacts__new-person {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.erp-contacts__new-person input {
+	flex: 1 1 140px;
 }
 .erp-contacts__results li {
 	display: flex;
