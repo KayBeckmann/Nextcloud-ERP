@@ -7,10 +7,12 @@ namespace OCA\ERP\Tests\Unit\Controller;
 use OCA\ERP\Contacts\ContactRole;
 use OCA\ERP\Controller\ContactsController;
 use OCA\ERP\Permissions\PermissionLevel;
+use OCA\ERP\Service\ContactPersonService;
 use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\PermissionService;
 use OCP\AppFramework\OCS\OCSBadRequestException;
 use OCP\AppFramework\OCS\OCSForbiddenException;
+use OCP\AppFramework\OCS\OCSNotFoundException;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -24,12 +26,14 @@ use PHPUnit\Framework\TestCase;
  */
 final class ContactsControllerAccessTest extends TestCase {
 	private ContactsService&MockObject $contactsService;
+	private ContactPersonService&MockObject $contactPersonService;
 	private PermissionService&MockObject $permissionService;
 	private ContactsController $controller;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->contactsService = $this->createMock(ContactsService::class);
+		$this->contactPersonService = $this->createMock(ContactPersonService::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 
 		$user = $this->createMock(IUser::class);
@@ -41,6 +45,7 @@ final class ContactsControllerAccessTest extends TestCase {
 			'erp',
 			$this->createMock(IRequest::class),
 			$this->contactsService,
+			$this->contactPersonService,
 			$this->permissionService,
 			$userSession,
 		);
@@ -154,5 +159,86 @@ final class ContactsControllerAccessTest extends TestCase {
 		$this->contactsService->expects($this->once())->method('deleteCard')->with(ContactRole::Customer, 'native-1');
 
 		$this->assertSame([], $this->controller->deleteCard('customer', 'native-1')->getData());
+	}
+
+	/**
+	 * Ansprechpartner (ADR-0041): listPersons/createPerson prüfen die Rolle
+	 * der zugehörigen Kunden-/Lieferanten-Verknüpfung (wie updateLink/
+	 * deleteLink), nicht eine eigene Ressource.
+	 */
+	public function testListPersonsRejectsUnknownContactLink(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(null);
+		$this->expectException(OCSNotFoundException::class);
+		$this->controller->listPersons(999);
+	}
+
+	public function testListPersonsRejectsWithoutReadPermission(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::None);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->listPersons(1);
+	}
+
+	public function testListPersonsAllowsWithReadPermission(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->contactPersonService->expects($this->once())->method('listForLink')->with(1)->willReturn([]);
+
+		$response = $this->controller->listPersons(1);
+
+		$this->assertSame([], $response->getData());
+	}
+
+	public function testCreatePersonRequiresWriteNotJustRead(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->createPerson(1, 'Lars Zimmermann', 'CEO');
+	}
+
+	public function testCreatePersonSucceedsWithWritePermission(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->contactPersonService->expects($this->once())->method('create')->with(1, 'Lars Zimmermann', 'CEO', null, null, null);
+
+		$this->controller->createPerson(1, 'Lars Zimmermann', 'CEO');
+	}
+
+	public function testUpdatePersonRejectsUnknownPerson(): void {
+		$this->contactPersonService->method('getRoleFor')->willReturn(null);
+		$this->expectException(OCSNotFoundException::class);
+		$this->controller->updatePerson(999, 'Lars Zimmermann');
+	}
+
+	public function testUpdatePersonRequiresWriteNotJustRead(): void {
+		$this->contactPersonService->method('getRoleFor')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->updatePerson(1, 'Lars Zimmermann');
+	}
+
+	public function testDeletePersonRequiresWritePermission(): void {
+		$this->contactPersonService->method('getRoleFor')->willReturn(ContactRole::Supplier);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->deletePerson(1);
+	}
+
+	public function testDeletePersonSucceedsWithWritePermission(): void {
+		$this->contactPersonService->method('getRoleFor')->willReturn(ContactRole::Supplier);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->contactPersonService->expects($this->once())->method('delete')->with(1);
+
+		$this->assertSame([], $this->controller->deletePerson(1)->getData());
+	}
+
+	/** deleteLink räumt die Ansprechpartner dieser Verknüpfung mit auf (ADR-0041) — sie haben keine eigene vCard. */
+	public function testDeleteLinkCascadesToContactPersons(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->contactPersonService->expects($this->once())->method('deleteAllForLink')->with(1);
+		$this->contactsService->expects($this->once())->method('deleteLink')->with(1);
+
+		$this->controller->deleteLink(1);
 	}
 }
