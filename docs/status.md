@@ -1655,3 +1655,36 @@ Service-Tests für `ContactPersonDefaultService`,
 drei neue Fälle in `DocumentHtmlBuilderLayoutTest` (Live-Rendering +
 Snapshot-Einfrieren der "z. Hd."-Zeile) sowie Rechte-Gate-Tests für
 alle vier neuen Controller-Actions). Frontend-Build fehlerfrei.
+
+## 2026-10-03 — Fix: "Kunde"-Feld im Projekt-Schnellanlage-Formular ohne Suche
+
+**Bug (von Kay gemeldet):** Beim Anlegen eines neuen Projekts wurde im
+Feld "Kunde" kein Kontakt angezeigt, Suche funktionierte nicht. Ursache:
+`ProjekteView`s Schnellanlage-Formular (`+ Projekt`-Button) hatte für
+"Kunde" ein rohes Textfeld mit Platzhalter "Kunde (Contact-UID,
+optional)" — erwartete also die exakte Nextcloud-Contact-UID als
+Text statt einer Suche. Alle anderen Stellen im Projekt (`ProjektDetailView`,
+Angebote, Aufträge, Rechnungen, Kontaktverwaltung) nutzen dafür längst
+die `ContactPicker`-Komponente mit Live-Suche — dieser eine Formular
+wurde dabei offenbar übersehen und ist jetzt nachgezogen.
+
+**Backend verifiziert fehlerfrei:** vor dem Fix per echtem,
+authentifiziertem HTTP-Request (App-Passwort, danach wieder entfernt)
+gegen `GET /contacts/search` getestet — fand den Testkontakt
+"Scheunemann" korrekt. Die Rechte-Matrix (`erp_permissions`) ist seit
+dem DB-Reset zwar leer, blockiert Kay als NC-Admin aber nicht (Admins
+umgehen die Matrix) — betrifft aktuell jedoch `jan`,
+`monteur-fixture`, `projektleiter-fixture`, die dadurch bis zur
+Neukonfiguration keine ERP-Rechte mehr haben.
+
+**Nebenbefund:** das Projekt, das Kay beim Reproduzieren angelegt hat,
+hat dadurch den wörtlichen Text `"scheu"` als `customerContactUid`
+gespeichert statt einer echten Contact-UID — rein kosmetisch (zeigt im
+Projekt nur "scheu" statt eines Namens an), aber nicht automatisch
+bereinigt; es gibt bislang keinen Projekt-Löschen-Endpunkt. Über das
+Projekt-Formular (`ProjektDetailView`, jetzt korrekt mit
+`ContactPicker`) lässt sich der Kunde jederzeit nachträglich richtig
+setzen.
+
+**Getestet:** Frontend-Build fehlerfrei. Volle PHPUnit-Suite erneut
+grün (keine Backend-Änderung, nur dieser eine Vue-Fix).
