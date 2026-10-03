@@ -17,7 +17,7 @@
 
 		<form v-if="showCreate" class="erp-projects__create" @submit.prevent="submitCreate">
 			<input v-model="newTitle" placeholder="Projekttitel" required>
-			<input v-model="newCustomerUid" placeholder="Kunde (Contact-UID, optional)">
+			<ContactPicker v-model="newCustomerUid" placeholder="Kunde suchen … (optional)" />
 			<button type="submit">Anlegen</button>
 		</form>
 
@@ -48,6 +48,7 @@
 <script>
 import { createProject, fetchProjects } from '../services/projectsApi.js'
 import { resolveContactName } from '../services/contactsApi.js'
+import ContactPicker from '../components/ContactPicker.vue'
 
 const STATUS_LABELS = {
 	draft: 'Entwurf',
@@ -60,6 +61,7 @@ const STATUS_LABELS = {
 
 export default {
 	name: 'ProjekteView',
+	components: { ContactPicker },
 	data() {
 		return {
 			projects: [],
@@ -68,7 +70,7 @@ export default {
 			filter: null,
 			showCreate: false,
 			newTitle: '',
-			newCustomerUid: '',
+			newCustomerUid: null,
 			statusChips: [
 				{ value: null, label: 'Alle' },
 				{ value: 'draft', label: 'Entwurf' },
@@ -108,7 +110,7 @@ export default {
 			try {
 				await createProject({ title: this.newTitle, customerContactUid: this.newCustomerUid || null })
 				this.newTitle = ''
-				this.newCustomerUid = ''
+				this.newCustomerUid = null
 				this.showCreate = false
 				await this.load()
 			} catch (e) {
