@@ -1610,3 +1610,48 @@ keine eigene vCard/Synchronisation mit Nextcloud Contacts.
 Service-CRUD-Tests für `ContactPersonService` sowie Rechte-Gate-Tests
 für alle vier neuen Controller-Actions und die Cascade-Löschung).
 Frontend-Build fehlerfrei.
+
+## 2026-10-03 — Ansprechpartner-Standards je Belegtyp ([ADR-0042](adr/0042-ansprechpartner-belegstandards.md))
+
+**Erledigt:** direkter Folgewunsch zu ADR-0041 — "Angebote, Auftrags-
+bestätigungen und Lieferscheine gehen meist an den Projektleiter.
+Rechnungen gehen meistens an die Buchhaltung." Zwei neue Ebenen:
+Kundenstandard je Belegtyp (`erp_contact_person_defaults`) und
+projektspezifischer Override (`erp_project_contact_overrides`, fehlt
+die Zeile, gilt der Kundenstandard — kein expliziter
+"niemand"-Zustand). Neuer `DocumentContactPersonResolver` löst beim
+Ausstellen auf: Projekt-Override vor Kundenstandard vor keinem.
+
+**Rendering:** der aufgelöste Ansprechpartner landet als "z. Hd.
+{Name}"-Zeile direkt in der Kundenanschrift
+(`DocumentHtmlBuilder::customer()`), nicht als eigenes Token — läuft
+dadurch automatisch durch denselben Snapshot-Mechanismus wie der Rest
+der Adresse (ADR-0021) und wird beim Ausstellen eingefroren. Betrifft
+alle fünf kundenseitigen Belegtypen: Angebot, Auftrag, Lieferschein,
+Rechnung, Gutschrift.
+
+**Services bleiben rückwärtskompatibel:** `DocumentContactPersonResolver`
+ist in `QuoteService`/`OrderService`/`DeliveryNoteService`/
+`InvoiceService`/`CreditNoteService` ein optionaler, nullable
+Konstruktor-Parameter (wie andere optionale Dienste in diesem
+Projekt) — keiner der sieben bestehenden Service-Tests musste
+angepasst werden.
+
+**Web-UI:** `ContactLinksView` bekommt im Ansprechpartner-Panel einen
+neuen Abschnitt "Standard je Belegtyp"; `ProjektDetailView` (Tab
+"Übersicht") einen neuen Abschnitt "Ansprechpartner je Belegtyp" für
+die projektspezifische Abweichung.
+
+**Bewusst nicht Teil dieser ADR:** kein expliziter
+"niemand-trotz-Kundenstandard"-Zustand auf Projektebene; keine
+Massenpflege über mehrere Projekte hinweg; Löschen eines
+Ansprechpartners räumt bestehende Standard-/Override-Zeilen nicht
+per Cascade auf (Resolver degradiert dabei sauber auf "kein
+Ansprechpartner", aber die Zeile bleibt als Datenleiche stehen).
+
+**Getestet:** 482 PHPUnit-Tests grün (453 → 482, davon 29 neu:
+Service-Tests für `ContactPersonDefaultService`,
+`ProjectContactOverrideService`, `DocumentContactPersonResolver`,
+drei neue Fälle in `DocumentHtmlBuilderLayoutTest` (Live-Rendering +
+Snapshot-Einfrieren der "z. Hd."-Zeile) sowie Rechte-Gate-Tests für
+alle vier neuen Controller-Actions). Frontend-Build fehlerfrei.
