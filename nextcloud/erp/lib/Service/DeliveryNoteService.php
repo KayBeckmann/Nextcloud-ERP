@@ -13,6 +13,7 @@ use OCA\ERP\Db\DeliveryNotePositionMapper;
 use OCA\ERP\Db\OrderGroupMapper;
 use OCA\ERP\Db\OrderMapper;
 use OCA\ERP\Db\OrderPositionMapper;
+use OCA\ERP\Documents\DocumentType;
 use OCP\IDBConnection;
 use OCP\IUser;
 
@@ -42,6 +43,7 @@ class DeliveryNoteService {
 		private DocumentHtmlBuilder $htmlBuilder,
 		private IDBConnection $db,
 		private StockService $stockService,
+		private ?DocumentContactPersonResolver $contactPersonResolver = null,
 	) {
 	}
 
@@ -319,7 +321,8 @@ class DeliveryNoteService {
 		$deliveryNote->setDeliveredAt(time());
 		$deliveryNote->setUpdatedAt(time());
 		$customerContactUid = $deliveryNote->getOrderId() === null ? null : $this->orderMapper->findById($deliveryNote->getOrderId())?->getCustomerContactUid();
-		$deliveryNote->setLayoutSnapshot($this->htmlBuilder->snapshot('delivery_note', (string) $deliveryNote->getDeliveryNoteNumber(), (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid));
+		$contactPersonName = $this->contactPersonResolver?->resolveName($deliveryNote->getProjectId(), $customerContactUid, DocumentType::DeliveryNote);
+		$deliveryNote->setLayoutSnapshot($this->htmlBuilder->snapshot('delivery_note', (string) $deliveryNote->getDeliveryNoteNumber(), (string) ($deliveryNote->getNotes() ?? ''), $deliveryNote->getCreatedAt(), null, $customerContactUid, null, $contactPersonName));
 		$deliveryNote = $this->mapper->update($deliveryNote);
 
 		if ($issuer !== null) {

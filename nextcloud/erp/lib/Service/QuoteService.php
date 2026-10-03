@@ -10,6 +10,7 @@ use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePosition;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Quotes\QuoteCalculationService;
 use OCP\IUser;
 
@@ -27,6 +28,7 @@ class QuoteService {
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
+		private ?DocumentContactPersonResolver $contactPersonResolver = null,
 	) {
 	}
 
@@ -121,7 +123,8 @@ class QuoteService {
 		$becomesSent = $status === 'sent' && $quote->getSentAt() === null;
 		if ($becomesSent) {
 			$quote->setSentAt(time());
-			$quote->setLayoutSnapshot($this->htmlBuilder->snapshot('quote', (string) $quote->getQuoteNumber(), $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid()));
+			$contactPersonName = $this->contactPersonResolver?->resolveName($quote->getProjectId(), $quote->getCustomerContactUid(), DocumentType::Quote);
+			$quote->setLayoutSnapshot($this->htmlBuilder->snapshot('quote', (string) $quote->getQuoteNumber(), $quote->getTitle(), $quote->getCreatedAt(), $quote->getValidUntil(), $quote->getCustomerContactUid(), null, $contactPersonName));
 		}
 		$quote = $this->mapper->update($quote);
 

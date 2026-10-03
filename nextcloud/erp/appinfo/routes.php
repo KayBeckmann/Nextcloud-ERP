@@ -62,6 +62,9 @@ return [
 		['name' => 'contacts#createPerson', 'url' => '/api/v1/contacts/links/{contactLinkId}/persons', 'verb' => 'POST', 'requirements' => ['contactLinkId' => '\d+']],
 		['name' => 'contacts#updatePerson', 'url' => '/api/v1/contacts/links/persons/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'contacts#deletePerson', 'url' => '/api/v1/contacts/links/persons/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+		// Ansprechpartner-Standards je Belegtyp beim Kunden (ADR-0042).
+		['name' => 'contacts#getPersonDefaults', 'url' => '/api/v1/contacts/links/{contactLinkId}/person-defaults', 'verb' => 'GET', 'requirements' => ['contactLinkId' => '\d+']],
+		['name' => 'contacts#setPersonDefault', 'url' => '/api/v1/contacts/links/{contactLinkId}/person-defaults/{documentType}', 'verb' => 'PUT', 'requirements' => ['contactLinkId' => '\d+']],
 		// Calendar-Integration (Roadmap Phase 3, ADR-0009).
 		['name' => 'calendar#calendars', 'url' => '/api/v1/calendar/calendars', 'verb' => 'GET'],
 		['name' => 'calendar#createEvent', 'url' => '/api/v1/calendar/events', 'verb' => 'POST'],
@@ -75,6 +78,9 @@ return [
 		['name' => 'project#create', 'url' => '/api/v1/projects', 'verb' => 'POST'],
 		['name' => 'project#show', 'url' => '/api/v1/projects/{id}', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
 		['name' => 'project#update', 'url' => '/api/v1/projects/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		// Projektspezifische Ansprechpartner-Abweichung je Belegtyp (ADR-0042).
+		['name' => 'project#getContactOverrides', 'url' => '/api/v1/projects/{id}/contact-overrides', 'verb' => 'GET', 'requirements' => ['id' => '\d+']],
+		['name' => 'project#setContactOverride', 'url' => '/api/v1/projects/{id}/contact-overrides/{documentType}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'task#index', 'url' => '/api/v1/projects/{projectId}/tasks', 'verb' => 'GET', 'requirements' => ['projectId' => '\d+']],
 		['name' => 'task#create', 'url' => '/api/v1/projects/{projectId}/tasks', 'verb' => 'POST', 'requirements' => ['projectId' => '\d+']],
 		['name' => 'task#update', 'url' => '/api/v1/projects/{projectId}/tasks/{id}', 'verb' => 'PUT', 'requirements' => ['projectId' => '\d+', 'id' => '\d+']],

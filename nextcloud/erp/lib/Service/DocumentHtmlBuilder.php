@@ -18,11 +18,17 @@ class DocumentHtmlBuilder {
 		$this->snapshotService ??= new DocumentSnapshotService();
 	}
 
-	/** Capture all mutable layout/company/token data before an issued document is written. */
-	public function snapshot(string $documentType, string $documentNumber, string $title, int $createdAt, ?int $validUntil, ?string $customerContactUid, ?string $dueDate = null): string {
+	/**
+	 * Capture all mutable layout/company/token data before an issued document is written.
+	 * `$contactPersonName` ist der aufgelöste Ansprechpartner (ADR-0042,
+	 * `DocumentContactPersonResolver`) — wird als "z. Hd."-Zeile in die
+	 * Kundenanschrift aufgenommen und damit dauerhaft eingefroren, wie der
+	 * Rest der Anschrift auch.
+	 */
+	public function snapshot(string $documentType, string $documentNumber, string $title, int $createdAt, ?int $validUntil, ?string $customerContactUid, ?string $dueDate = null, ?string $contactPersonName = null): string {
 		$profile = $this->companyProfileService->get();
 		$layout = $this->documentLayoutService?->get($documentType);
-		return $this->snapshotService->encode($profile, $layout, $this->tokens($profile, $this->customer($customerContactUid), $documentNumber, $createdAt, $title, $dueDate, $validUntil));
+		return $this->snapshotService->encode($profile, $layout, $this->tokens($profile, $this->customer($customerContactUid, $contactPersonName), $documentNumber, $createdAt, $title, $dueDate, $validUntil));
 	}
 
 	public function header(
@@ -35,10 +41,15 @@ class DocumentHtmlBuilder {
 		?string $documentType = null,
 		?string $dueDate = null,
 		?string $snapshot = null,
+		?string $contactPersonName = null,
 	): string {
 		$context = $this->renderingContext($snapshot);
 		$profile = $context['company'] ?? $this->companyProfileService->get();
-		$customer = $context === null ? $this->customer($customerContactUid) : $this->customerFromTokens($context['tokens']);
+		// Ohne Snapshot (z. B. Live-Vorschau) wirkt $contactPersonName direkt;
+		// mit Snapshot ist die "z. Hd."-Zeile bereits beim Ausstellen
+		// eingefroren worden (siehe snapshot()) und wird nicht erneut
+		// aufgelöst — ein issued document ändert sich nicht rückwirkend.
+		$customer = $context === null ? $this->customer($customerContactUid, $contactPersonName) : $this->customerFromTokens($context['tokens']);
 		$layout = $context['layout'] ?? ($documentType === null ? null : $this->documentLayoutService?->get($documentType));
 		$tokens = $context['tokens'] ?? $this->tokens($profile, $customer, $documentNumber, $createdAt, $title, $dueDate, $validUntil);
 		$companyLines = array_values(array_filter([$this->companyValue($profile, 'name'), $this->companyValue($profile, 'addressLine'), trim($this->companyValue($profile, 'postalCode') . ' ' . $this->companyValue($profile, 'city')), $this->companyValue($profile, 'taxId'), $this->companyValue($profile, 'email'), $this->companyValue($profile, 'phone')], static fn (string $line): bool => trim($line) !== ''));
@@ -187,12 +198,22 @@ class DocumentHtmlBuilder {
 		return ['name' => $name, 'address' => $address, 'lines' => array_values(array_filter(array_merge([$name], preg_split('/\R/', $address) ?: []), static fn (string $line): bool => $line !== ''))];
 	}
 
-	/** @return array{name:string,address:string,lines:list<string>} */
-	private function customer(?string $uid): array {
+	/**
+	 * @return array{name:string,address:string,lines:list<string>}
+	 * `$attentionLine` (ADR-0042) landet als "z. Hd. …"-Zeile direkt in den
+	 * Adresszeilen (nicht als eigenes Token) — so durchläuft sie denselben
+	 * Snapshot-Mechanismus wie Straße/PLZ/Ort, ohne das Token-Format
+	 * anpassen zu müssen.
+	 */
+	private function customer(?string $uid, ?string $attentionLine = null): array {
 		if ($uid === null) return ['name' => '', 'address' => '', 'lines' => []];
 		$details = $this->contactsService->detailsFor($uid);
-		$lines = array_merge([(string) $details['displayName']], $details['addressLines']);
-		return ['name' => (string) $details['displayName'], 'address' => implode("\n", $details['addressLines']), 'lines' => $lines];
+		$addressLines = $details['addressLines'];
+		if ($attentionLine !== null && trim($attentionLine) !== '') {
+			array_unshift($addressLines, 'z. Hd. ' . trim($attentionLine));
+		}
+		$lines = array_merge([(string) $details['displayName']], $addressLines);
+		return ['name' => (string) $details['displayName'], 'address' => implode("\n", $addressLines), 'lines' => $lines];
 	}
 
 	/** @return array<string,string> */

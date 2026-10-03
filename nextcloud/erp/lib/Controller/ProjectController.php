@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace OCA\ERP\Controller;
 
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Permissions\PermissionLevel;
 use OCA\ERP\Permissions\ResourceType;
 use OCA\ERP\Projects\ProjectStatus;
 use OCA\ERP\Service\PermissionService;
+use OCA\ERP\Service\ProjectContactOverrideService;
 use OCA\ERP\Service\ProjectService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
@@ -28,6 +30,7 @@ class ProjectController extends OCSController {
 		string $appName,
 		IRequest $request,
 		private ProjectService $projectService,
+		private ProjectContactOverrideService $contactOverrideService,
 		private PermissionService $permissionService,
 		private IUserSession $userSession,
 	) {
@@ -132,5 +135,46 @@ class ProjectController extends OCSController {
 		}
 
 		return new DataResponse($project);
+	}
+
+	/** @throws OCSBadRequestException */
+	private static function parseDocumentType(string $documentType): DocumentType {
+		$parsed = DocumentType::tryFrom($documentType);
+		if ($parsed === null) {
+			throw new OCSBadRequestException("Unknown document type: $documentType");
+		}
+		return $parsed;
+	}
+
+	/**
+	 * Projektspezifische Abweichung vom Ansprechpartner-Standard des
+	 * Kunden je Belegtyp (ADR-0042), z. B. "in diesem Projekt geht die
+	 * Rechnung ausnahmsweise an Herrn X statt an die Buchhaltung".
+	 *
+	 * @throws OCSForbiddenException
+	 */
+	#[NoAdminRequired]
+	public function getContactOverrides(int $id): DataResponse {
+		$user = $this->requireUser();
+		$this->requireLevel($user, PermissionLevel::Read);
+		return new DataResponse($this->contactOverrideService->getForProject($id));
+	}
+
+	/** @throws OCSBadRequestException|OCSForbiddenException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function setContactOverride(int $id, string $documentType, ?int $contactPersonId = null): DataResponse {
+		$user = $this->requireUser();
+		$this->requireLevel($user, PermissionLevel::Write);
+		$parsedType = self::parseDocumentType($documentType);
+
+		try {
+			$this->contactOverrideService->set($id, $parsedType, $contactPersonId);
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+
+		return new DataResponse($this->contactOverrideService->getForProject($id));
 	}
 }

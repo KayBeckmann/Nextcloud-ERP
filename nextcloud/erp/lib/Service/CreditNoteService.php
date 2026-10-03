@@ -9,6 +9,7 @@ use OCA\ERP\Db\CreditNoteMapper;
 use OCA\ERP\Db\CreditNotePosition;
 use OCA\ERP\Db\CreditNotePositionMapper;
 use OCA\ERP\Db\InvoicePositionMapper;
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Invoices\InvoiceNumberFormatter;
 use OCA\ERP\Quotes\QuoteCalculationService;
 use OCP\IUser;
@@ -29,6 +30,7 @@ class CreditNoteService {
 		private ProjectService $projectService,
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
+		private ?DocumentContactPersonResolver $contactPersonResolver = null,
 	) {
 	}
 
@@ -204,7 +206,8 @@ class CreditNoteService {
 		$creditNote->setIssuedAt(time());
 		$creditNote->setUpdatedAt(time());
 		$customerContactUid = $this->invoiceService->getInvoice($creditNote->getInvoiceId())->getCustomerContactUid();
-		$creditNote->setLayoutSnapshot($this->htmlBuilder->snapshot('credit_note', (string) $creditNote->getCreditNoteNumber(), (string) ($creditNote->getReason() ?? ''), $creditNote->getCreatedAt(), null, $customerContactUid));
+		$contactPersonName = $this->contactPersonResolver?->resolveName($creditNote->getProjectId(), $customerContactUid, DocumentType::CreditNote);
+		$creditNote->setLayoutSnapshot($this->htmlBuilder->snapshot('credit_note', (string) $creditNote->getCreditNoteNumber(), (string) ($creditNote->getReason() ?? ''), $creditNote->getCreatedAt(), null, $customerContactUid, null, $contactPersonName));
 		$creditNote = $this->mapper->update($creditNote);
 
 		if ($creditNote->getCancelsInvoice()) {

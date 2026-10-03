@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace OCA\ERP\Controller;
 
 use OCA\ERP\Contacts\ContactRole;
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Permissions\PermissionLevel;
 use OCA\ERP\Permissions\ResourceType;
+use OCA\ERP\Service\ContactPersonDefaultService;
 use OCA\ERP\Service\ContactPersonService;
 use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\PermissionService;
@@ -32,6 +34,7 @@ class ContactsController extends OCSController {
 		IRequest $request,
 		private ContactsService $contactsService,
 		private ContactPersonService $contactPersonService,
+		private ContactPersonDefaultService $contactPersonDefaultService,
 		private PermissionService $permissionService,
 		private IUserSession $userSession,
 	) {
@@ -363,5 +366,44 @@ class ContactsController extends OCSController {
 		}
 
 		return new DataResponse([]);
+	}
+
+	/** @throws OCSBadRequestException */
+	private static function parseDocumentType(string $documentType): DocumentType {
+		$parsed = DocumentType::tryFrom($documentType);
+		if ($parsed === null) {
+			throw new OCSBadRequestException("Unknown document type: $documentType");
+		}
+		return $parsed;
+	}
+
+	/**
+	 * Ansprechpartner-Standards je Belegtyp eines Firmenkontakts (ADR-0042),
+	 * z. B. "Rechnungen gehen an die Buchhaltung".
+	 *
+	 * @throws OCSForbiddenException|OCSNotFoundException
+	 */
+	#[NoAdminRequired]
+	public function getPersonDefaults(int $contactLinkId): DataResponse {
+		$this->requireReadOnExistingLink($contactLinkId);
+		return new DataResponse($this->contactPersonDefaultService->getForLink($contactLinkId));
+	}
+
+	/** @throws OCSBadRequestException|OCSForbiddenException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function setPersonDefault(int $contactLinkId, string $documentType, ?int $contactPersonId = null): DataResponse {
+		$this->requireReadOnExistingLink($contactLinkId);
+		$this->requireLevel(self::resourceForRole($this->contactsService->getLinkRole($contactLinkId)), PermissionLevel::Write);
+		$parsedType = self::parseDocumentType($documentType);
+
+		try {
+			$this->contactPersonDefaultService->set($contactLinkId, $parsedType, $contactPersonId);
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+
+		return new DataResponse($this->contactPersonDefaultService->getForLink($contactLinkId));
 	}
 }
