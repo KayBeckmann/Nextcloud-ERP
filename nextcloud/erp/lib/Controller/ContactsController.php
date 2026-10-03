@@ -7,6 +7,7 @@ namespace OCA\ERP\Controller;
 use OCA\ERP\Contacts\ContactRole;
 use OCA\ERP\Permissions\PermissionLevel;
 use OCA\ERP\Permissions\ResourceType;
+use OCA\ERP\Service\ContactPersonService;
 use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\PermissionService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -30,6 +31,7 @@ class ContactsController extends OCSController {
 		string $appName,
 		IRequest $request,
 		private ContactsService $contactsService,
+		private ContactPersonService $contactPersonService,
 		private PermissionService $permissionService,
 		private IUserSession $userSession,
 	) {
@@ -260,9 +262,104 @@ class ContactsController extends OCSController {
 		$this->requireWriteOnExistingLink($id);
 
 		try {
+			// Ansprechpartner (ADR-0041) sind reine Metadaten dieser
+			// Verknüpfung ohne eigene vCard — sie verwaisen sonst.
+			$this->contactPersonService->deleteAllForLink($id);
 			$this->contactsService->deleteLink($id);
 		} catch (\OutOfBoundsException) {
 			throw new OCSNotFoundException("Contact link $id not found");
+		}
+
+		return new DataResponse([]);
+	}
+
+	/** @throws OCSNotFoundException|OCSForbiddenException */
+	private function requireReadOnExistingLink(int $contactLinkId): void {
+		$role = $this->contactsService->getLinkRole($contactLinkId);
+		if ($role === null) {
+			throw new OCSNotFoundException("Contact link $contactLinkId not found");
+		}
+		$this->requireLevel(self::resourceForRole($role), PermissionLevel::Read);
+	}
+
+	/** @throws OCSNotFoundException|OCSForbiddenException */
+	private function requireWriteOnExistingPerson(int $personId): void {
+		$role = $this->contactPersonService->getRoleFor($personId);
+		if ($role === null) {
+			throw new OCSNotFoundException("Contact person $personId not found");
+		}
+		$this->requireLevel(self::resourceForRole($role), PermissionLevel::Write);
+	}
+
+	/**
+	 * Ansprechpartner einer Firma (ADR-0041) — z. B. mehrere benannte
+	 * Kontakte (Geschäftsführung, Buchhaltung, Projektleitung) unter
+	 * demselben Kunden-/Lieferanten-Eintrag.
+	 *
+	 * @throws OCSForbiddenException|OCSNotFoundException
+	 */
+	#[NoAdminRequired]
+	public function listPersons(int $contactLinkId): DataResponse {
+		$this->requireReadOnExistingLink($contactLinkId);
+		return new DataResponse($this->contactPersonService->listForLink($contactLinkId));
+	}
+
+	/** @throws OCSBadRequestException|OCSForbiddenException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function createPerson(
+		int $contactLinkId,
+		string $name,
+		?string $position = null,
+		?string $email = null,
+		?string $phone = null,
+		?string $notes = null,
+	): DataResponse {
+		$this->requireReadOnExistingLink($contactLinkId);
+		$this->requireLevel(self::resourceForRole($this->contactsService->getLinkRole($contactLinkId)), PermissionLevel::Write);
+
+		try {
+			$person = $this->contactPersonService->create($contactLinkId, $name, $position, $email, $phone, $notes);
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+
+		return new DataResponse($person);
+	}
+
+	/** @throws OCSBadRequestException|OCSForbiddenException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function updatePerson(
+		int $id,
+		string $name,
+		?string $position = null,
+		?string $email = null,
+		?string $phone = null,
+		?string $notes = null,
+	): DataResponse {
+		$this->requireWriteOnExistingPerson($id);
+
+		try {
+			$person = $this->contactPersonService->update($id, $name, $position, $email, $phone, $notes);
+		} catch (\InvalidArgumentException $e) {
+			throw new OCSBadRequestException($e->getMessage());
+		} catch (\OutOfBoundsException $e) {
+			throw new OCSNotFoundException($e->getMessage());
+		}
+
+		return new DataResponse($person);
+	}
+
+	/** @throws OCSForbiddenException|OCSNotFoundException */
+	#[NoAdminRequired]
+	public function deletePerson(int $id): DataResponse {
+		$this->requireWriteOnExistingPerson($id);
+
+		try {
+			$this->contactPersonService->delete($id);
+		} catch (\OutOfBoundsException) {
+			throw new OCSNotFoundException("Contact person $id not found");
 		}
 
 		return new DataResponse([]);
