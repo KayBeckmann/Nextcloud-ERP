@@ -1576,3 +1576,37 @@ werden.
 Resolver-Unit-Tests sowie ein Integrationstest, der die erzeugte XML
 tatsächlich gegen die echte EN16931-XSD validiert). Frontend-Build
 fehlerfrei.
+
+## 2026-10-03 — Mehrere Ansprechpartner pro Firmenkunde/-lieferant ([ADR-0041](adr/0041-kunden-ansprechpartner.md))
+
+**Erledigt:** Kundenwunsch — ein Firmenkunde (z. B. "Glogau
+Bauunternehmen") kann jetzt beliebig viele benannte Ansprechpartner mit
+Name, Position (z. B. "CEO", "Buchhaltung", "Projektleiter"), E-Mail
+und Telefon erfassen. Neue Tabelle `erp_contact_persons`, hängt am
+`contact_link_id` (nicht an einer eigenen Nextcloud-Contact-UID) —
+Ansprechpartner sind reine ERP-Metadaten ohne eigene vCard, kein
+`addForeignKeyConstraint` (konsistent mit dem Rest des Projekts).
+Neuer, eigenständiger `ContactPersonService` statt Erweiterung von
+`ContactsService` (dasselbe Trennungsmuster wie
+`CustomerContractService`, ADR-0037).
+
+**API:** vier neue Endpunkte unter dem bestehenden `ContactsController`
+(`GET`/`POST /contacts/links/{contactLinkId}/persons`,
+`PUT`/`DELETE /contacts/links/persons/{id}`) — Rechte-Gate folgt der
+Rolle des zugehörigen Firmenkontakts, keine eigene Ressource.
+`deleteLink()` löscht jetzt zusätzlich alle Ansprechpartner der
+Verknüpfung (sonst Datenleiche ohne Elterndatensatz).
+
+**Web-UI:** `ContactLinksView` bekommt pro Firmenkontakt einen
+aufklappbaren "Ansprechpartner"-Button mit Liste + Inline-Bearbeiten +
+Lösch-Bestätigung + Formular zum Hinzufügen.
+
+**Bewusst nicht Teil dieser ADR:** keine Auswahl eines bestimmten
+Ansprechpartners je Angebot/Auftrag/Rechnung (kein "z. Hd."-Feld auf
+Belegen — die bleiben an den einen Firmenkontakt gebunden, ADR-0022);
+keine eigene vCard/Synchronisation mit Nextcloud Contacts.
+
+**Getestet:** 453 PHPUnit-Tests grün (433 → 453, davon 20 neu:
+Service-CRUD-Tests für `ContactPersonService` sowie Rechte-Gate-Tests
+für alle vier neuen Controller-Actions und die Cascade-Löschung).
+Frontend-Build fehlerfrei.

@@ -57,6 +57,11 @@ return [
 		['name' => 'contacts#createLink', 'url' => '/api/v1/contacts/links', 'verb' => 'POST'],
 		['name' => 'contacts#updateLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
 		['name' => 'contacts#deleteLink', 'url' => '/api/v1/contacts/links/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+		// Ansprechpartner je Firma (ADR-0041).
+		['name' => 'contacts#listPersons', 'url' => '/api/v1/contacts/links/{contactLinkId}/persons', 'verb' => 'GET', 'requirements' => ['contactLinkId' => '\d+']],
+		['name' => 'contacts#createPerson', 'url' => '/api/v1/contacts/links/{contactLinkId}/persons', 'verb' => 'POST', 'requirements' => ['contactLinkId' => '\d+']],
+		['name' => 'contacts#updatePerson', 'url' => '/api/v1/contacts/links/persons/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'contacts#deletePerson', 'url' => '/api/v1/contacts/links/persons/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 		// Calendar-Integration (Roadmap Phase 3, ADR-0009).
 		['name' => 'calendar#calendars', 'url' => '/api/v1/calendar/calendars', 'verb' => 'GET'],
 		['name' => 'calendar#createEvent', 'url' => '/api/v1/calendar/events', 'verb' => 'POST'],
