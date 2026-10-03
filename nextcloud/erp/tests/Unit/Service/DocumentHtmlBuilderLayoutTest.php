@@ -87,4 +87,52 @@ final class DocumentHtmlBuilderLayoutTest extends TestCase {
 		self::assertStringNotContainsString('Changed subject', $html);
 		self::assertStringNotContainsString('EP netto', $html);
 	}
+
+	/** ADR-0042: der aufgelöste Ansprechpartner landet als "z. Hd."-Zeile direkt in der Kundenanschrift. */
+	public function testHeaderShowsAttentionLineWhenContactPersonNameGiven(): void {
+		$companyProfiles = $this->createMock(CompanyProfileService::class);
+		$companyProfiles->method('get')->willReturn(new CompanyProfile());
+		$contacts = $this->createMock(ContactsService::class);
+		$contacts->method('detailsFor')->willReturn(['displayName' => 'Glogau Bauunternehmen', 'addressLines' => ['Musterstraße 1', '12345 Musterstadt']]);
+		$builder = new DocumentHtmlBuilder($companyProfiles, $contacts);
+
+		$html = $builder->header('Rechnung', 'R-1', 'Titel', 1780000000, null, 'customer-1', null, null, null, 'Katharina Schmidt');
+
+		self::assertStringContainsString('Glogau Bauunternehmen', $html);
+		self::assertStringContainsString('z. Hd. Katharina Schmidt', $html);
+		$namePos = strpos($html, 'Glogau Bauunternehmen');
+		$attentionPos = strpos($html, 'z. Hd. Katharina Schmidt');
+		self::assertNotFalse($namePos);
+		self::assertNotFalse($attentionPos);
+		self::assertLessThan($attentionPos, $namePos);
+	}
+
+	/** Ohne Ansprechpartner erscheint weiterhin keine "z. Hd."-Zeile (Default-Verhalten unverändert). */
+	public function testHeaderOmitsAttentionLineWhenNoContactPersonGiven(): void {
+		$companyProfiles = $this->createMock(CompanyProfileService::class);
+		$companyProfiles->method('get')->willReturn(new CompanyProfile());
+		$contacts = $this->createMock(ContactsService::class);
+		$contacts->method('detailsFor')->willReturn(['displayName' => 'Glogau Bauunternehmen', 'addressLines' => ['Musterstraße 1']]);
+		$builder = new DocumentHtmlBuilder($companyProfiles, $contacts);
+
+		$html = $builder->header('Rechnung', 'R-1', 'Titel', 1780000000, null, 'customer-1');
+
+		self::assertStringNotContainsString('z. Hd.', $html);
+	}
+
+	/** Die "z. Hd."-Zeile wird beim Ausstellen eingefroren und bleibt im Snapshot erhalten, auch wenn sich der Ansprechpartner danach ändert. */
+	public function testAttentionLineIsFrozenInSnapshot(): void {
+		$companyProfiles = $this->createMock(CompanyProfileService::class);
+		$companyProfiles->method('get')->willReturn(new CompanyProfile());
+		$contacts = $this->createMock(ContactsService::class);
+		$contacts->method('detailsFor')->willReturn(['displayName' => 'Glogau Bauunternehmen', 'addressLines' => ['Musterstraße 1']]);
+		$builder = new DocumentHtmlBuilder($companyProfiles, $contacts);
+
+		$snapshot = $builder->snapshot('invoice', 'R-1', 'Titel', 1780000000, null, 'customer-1', null, 'Katharina Schmidt');
+		// Ein späterer Aufruf ohne (oder mit geändertem) $contactPersonName darf das eingefrorene Ergebnis nicht beeinflussen.
+		$html = $builder->header('Rechnung', 'R-1', 'Titel', 1780000000, null, 'customer-1', 'invoice', null, $snapshot, 'Jemand anders');
+
+		self::assertStringContainsString('z. Hd. Katharina Schmidt', $html);
+		self::assertStringNotContainsString('Jemand anders', $html);
+	}
 }
