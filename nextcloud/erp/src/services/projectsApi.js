@@ -39,3 +39,13 @@ export async function updateTask(projectId, id, payload) {
 export async function deleteTask(projectId, id) {
 	await axios.delete(generateOcsUrl('apps/erp/api/v1/projects/{projectId}/tasks/{id}', { projectId, id }))
 }
+
+export async function fetchContactOverrides(projectId) {
+	const { data } = await axios.get(generateOcsUrl('apps/erp/api/v1/projects/{projectId}/contact-overrides', { projectId }))
+	return data.ocs.data
+}
+
+export async function setContactOverride(projectId, documentType, contactPersonId) {
+	const { data } = await axios.put(generateOcsUrl('apps/erp/api/v1/projects/{projectId}/contact-overrides/{documentType}', { projectId, documentType }), { contactPersonId })
+	return data.ocs.data
+}

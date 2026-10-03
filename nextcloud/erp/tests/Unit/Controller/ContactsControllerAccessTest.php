@@ -6,7 +6,9 @@ namespace OCA\ERP\Tests\Unit\Controller;
 
 use OCA\ERP\Contacts\ContactRole;
 use OCA\ERP\Controller\ContactsController;
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Permissions\PermissionLevel;
+use OCA\ERP\Service\ContactPersonDefaultService;
 use OCA\ERP\Service\ContactPersonService;
 use OCA\ERP\Service\ContactsService;
 use OCA\ERP\Service\PermissionService;
@@ -27,6 +29,7 @@ use PHPUnit\Framework\TestCase;
 final class ContactsControllerAccessTest extends TestCase {
 	private ContactsService&MockObject $contactsService;
 	private ContactPersonService&MockObject $contactPersonService;
+	private ContactPersonDefaultService&MockObject $contactPersonDefaultService;
 	private PermissionService&MockObject $permissionService;
 	private ContactsController $controller;
 
@@ -34,6 +37,7 @@ final class ContactsControllerAccessTest extends TestCase {
 		parent::setUp();
 		$this->contactsService = $this->createMock(ContactsService::class);
 		$this->contactPersonService = $this->createMock(ContactPersonService::class);
+		$this->contactPersonDefaultService = $this->createMock(ContactPersonDefaultService::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 
 		$user = $this->createMock(IUser::class);
@@ -46,6 +50,7 @@ final class ContactsControllerAccessTest extends TestCase {
 			$this->createMock(IRequest::class),
 			$this->contactsService,
 			$this->contactPersonService,
+			$this->contactPersonDefaultService,
 			$this->permissionService,
 			$userSession,
 		);
@@ -240,5 +245,52 @@ final class ContactsControllerAccessTest extends TestCase {
 		$this->contactsService->expects($this->once())->method('deleteLink')->with(1);
 
 		$this->controller->deleteLink(1);
+	}
+
+	/** Ansprechpartner-Standards je Belegtyp (ADR-0042). */
+	public function testGetPersonDefaultsRejectsUnknownContactLink(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(null);
+		$this->expectException(OCSNotFoundException::class);
+		$this->controller->getPersonDefaults(999);
+	}
+
+	public function testGetPersonDefaultsRejectsWithoutReadPermission(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::None);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->getPersonDefaults(1);
+	}
+
+	public function testGetPersonDefaultsAllowsWithReadPermission(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->contactPersonDefaultService->expects($this->once())->method('getForLink')->with(1)->willReturn(['invoice' => 5]);
+
+		$response = $this->controller->getPersonDefaults(1);
+
+		$this->assertSame(['invoice' => 5], $response->getData());
+	}
+
+	public function testSetPersonDefaultRequiresWriteNotJustRead(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Read);
+		$this->expectException(OCSForbiddenException::class);
+		$this->controller->setPersonDefault(1, 'invoice', 5);
+	}
+
+	public function testSetPersonDefaultSucceedsWithWritePermission(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->contactPersonDefaultService->expects($this->once())->method('set')->with(1, DocumentType::Invoice, 5);
+		$this->contactPersonDefaultService->method('getForLink')->willReturn(['invoice' => 5]);
+
+		$this->controller->setPersonDefault(1, 'invoice', 5);
+	}
+
+	public function testSetPersonDefaultRejectsUnknownDocumentType(): void {
+		$this->contactsService->method('getLinkRole')->willReturn(ContactRole::Customer);
+		$this->permissionService->method('getEffectivePermission')->willReturn(PermissionLevel::Write);
+		$this->expectException(OCSBadRequestException::class);
+		$this->controller->setPersonDefault(1, 'not-a-type', 5);
 	}
 }

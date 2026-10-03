@@ -15,6 +15,7 @@ use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Projects\OrderStatus;
 use OCA\ERP\Quotes\QuoteCalculationService;
 use OCP\IUser;
@@ -43,6 +44,7 @@ class OrderService {
 		private DocumentPdfService $pdfService,
 		private DocumentHtmlBuilder $htmlBuilder,
 		private StockService $stockService,
+		private ?DocumentContactPersonResolver $contactPersonResolver = null,
 	) {
 	}
 
@@ -143,7 +145,8 @@ class OrderService {
 		$order->setDiscountPercent($discountPercent);
 		$order->setUpdatedAt(time());
 		if ($becomesConfirmed) {
-			$order->setLayoutSnapshot($this->htmlBuilder->snapshot('order', sprintf('AU-%05d', $order->getId()), $order->getTitle(), $order->getCreatedAt(), null, $order->getCustomerContactUid()));
+			$contactPersonName = $this->contactPersonResolver?->resolveName($order->getProjectId(), $order->getCustomerContactUid(), DocumentType::Order);
+			$order->setLayoutSnapshot($this->htmlBuilder->snapshot('order', sprintf('AU-%05d', $order->getId()), $order->getTitle(), $order->getCreatedAt(), null, $order->getCustomerContactUid(), null, $contactPersonName));
 		}
 		$order = $this->mapper->update($order);
 

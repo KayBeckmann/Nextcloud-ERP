@@ -25,6 +25,7 @@ use OCA\ERP\Db\OrderPositionMapper;
 use OCA\ERP\Db\QuoteGroupMapper;
 use OCA\ERP\Db\QuoteMapper;
 use OCA\ERP\Db\QuotePositionMapper;
+use OCA\ERP\Documents\DocumentType;
 use OCA\ERP\Invoices\InvoiceNumberFormatter;
 use OCA\ERP\Quotes\QuoteCalculationService;
 use OCP\IDBConnection;
@@ -59,6 +60,7 @@ class InvoiceService {
 		private InvoiceDunningStepMapper $dunningMapper,
 		private CreditNoteMapper $creditNoteMapper,
 		private CreditNotePositionMapper $creditNotePositionMapper,
+		private ?DocumentContactPersonResolver $contactPersonResolver = null,
 	) {
 	}
 
@@ -692,7 +694,8 @@ class InvoiceService {
 		$invoice->setStatus('issued');
 		$invoice->setIssuedAt(time());
 		$invoice->setUpdatedAt(time());
-		$invoice->setLayoutSnapshot($this->htmlBuilder->snapshot('invoice', (string) $invoice->getInvoiceNumber(), $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), $invoice->getDueDate()));
+		$contactPersonName = $this->contactPersonResolver?->resolveName($invoice->getProjectId(), $invoice->getCustomerContactUid(), DocumentType::Invoice);
+		$invoice->setLayoutSnapshot($this->htmlBuilder->snapshot('invoice', (string) $invoice->getInvoiceNumber(), $invoice->getTitle(), $invoice->getCreatedAt(), null, $invoice->getCustomerContactUid(), $invoice->getDueDate(), $contactPersonName));
 		$invoice = $this->mapper->update($invoice);
 
 		$this->tryWriteDocument($invoice, $positions, $issuer);

@@ -29,6 +29,22 @@
 				<p v-if="project.filesFolderId">
 					<a :href="openInFilesUrl(project.filesFolderId)" target="_blank" rel="noopener">Projektordner öffnen</a>
 				</p>
+
+				<template v-if="contactPersons.length">
+					<h3>Ansprechpartner je Belegtyp</h3>
+					<p class="erp-project-detail__hint">Abweichung vom Kundenstandard nur für dieses Projekt — ohne Auswahl gilt der beim Kunden hinterlegte Standard.</p>
+					<ul class="erp-project-detail__contact-overrides">
+						<li v-for="type in documentTypes" :key="type.value">
+							<label>
+								{{ type.label }}
+								<select :value="contactOverrides[type.value] ?? ''" @change="setOverride(type.value, $event.target.value)">
+									<option value="">— Kundenstandard —</option>
+									<option v-for="person in contactPersons" :key="person.id" :value="person.id">{{ person.name }}</option>
+								</select>
+							</label>
+						</li>
+					</ul>
+				</template>
 			</section>
 
 			<section v-else-if="tab === 'Aufgaben'" class="erp-project-detail__section">
@@ -144,10 +160,13 @@ import { generateUrl } from '@nextcloud/router'
 import {
 	fetchProject, updateProject,
 	fetchTasks, createTask, updateTask, deleteTask,
+	fetchContactOverrides, setContactOverride,
 } from '../services/projectsApi.js'
 import { fetchCalendarLinks, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../services/calendarApi.js'
+import { fetchContactLinks, fetchContactPersons } from '../services/contactsApi.js'
 import { fetchCreditNotes } from '../services/invoicesApi.js'
 import { fetchProjectProfitLoss } from '../services/reportingApi.js'
+import { DOCUMENT_TYPES } from '../services/documentTypes.mjs'
 import ContactPicker from '../components/ContactPicker.vue'
 import UserPicker from '../components/UserPicker.vue'
 import AngeboteView from './AngeboteView.vue'
@@ -192,6 +211,9 @@ export default {
 			eventError: null,
 			editingEventId: null,
 			editEvent: { summary: '', start: '', end: '' },
+			contactPersons: [],
+			contactOverrides: {},
+			documentTypes: DOCUMENT_TYPES,
 		}
 	},
 	async mounted() {
@@ -235,6 +257,39 @@ export default {
 				])
 				this.tasks = tasks
 				this.calendarLinks = links
+				await this.loadContactOverrides()
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		/**
+		 * Ansprechpartner-Override je Belegtyp (ADR-0042) — die Personen
+		 * kommen vom Firmenkontakt des Projekt-Kunden, nicht von einer
+		 * eigenen Projekt-Ressource. Ohne Kunde oder ohne erfasste
+		 * Ansprechpartner bleibt der Abschnitt leer/unsichtbar.
+		 */
+		async loadContactOverrides() {
+			this.contactPersons = []
+			if (!this.project?.customerContactUid) {
+				return
+			}
+			try {
+				const [links, overrides] = await Promise.all([
+					fetchContactLinks('customer'),
+					fetchContactOverrides(this.id),
+				])
+				this.contactOverrides = overrides
+				const link = links.find((l) => l.contactUid === this.project.customerContactUid)
+				if (link) {
+					this.contactPersons = await fetchContactPersons(link.id)
+				}
+			} catch (e) {
+				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
+			}
+		},
+		async setOverride(documentType, value) {
+			try {
+				this.contactOverrides = await setContactOverride(this.id, documentType, value === '' ? null : Number(value))
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
@@ -255,6 +310,7 @@ export default {
 		},
 		async save() {
 			try {
+				const previousCustomerContactUid = this.project.customerContactUid
 				this.project = await updateProject(this.id, {
 					title: this.edit.title,
 					status: this.edit.status,
@@ -262,6 +318,11 @@ export default {
 					responsibleUserId: this.edit.responsibleUserId || null,
 					notes: this.edit.notes || null,
 				})
+				// Andere Firma -> die alten Ansprechpartner/Overrides gehören
+				// nicht mehr zum neuen Kunden.
+				if (this.project.customerContactUid !== previousCustomerContactUid) {
+					await this.loadContactOverrides()
+				}
 			} catch (e) {
 				this.loadError = e?.response?.data?.ocs?.meta?.message ?? e.message ?? String(e)
 			}
@@ -408,6 +469,18 @@ header {
 	display: flex;
 	gap: 8px;
 	margin-top: 10px;
+}
+.erp-project-detail__contact-overrides {
+	list-style: none;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+}
+.erp-project-detail__contact-overrides label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }
 .erp-project-detail__credit-notes {
 	border-collapse: collapse;
